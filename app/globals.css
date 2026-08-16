@@ -1,0 +1,73 @@
+@import "tailwindcss";
+
+:root {
+  --background: #F6F5F1;
+  --surface: #FFFFFF;
+  --foreground: #191914;
+  --muted: #6B6B60;
+  --border: #E1DFD6;
+
+  --primary: #1B4D3E;
+  --primary-dark: #0F332A;
+  --primary-light: #DCE9E3;
+
+  --accent: #E0972F;
+  --accent-dark: #B8791F;
+
+  --danger: #B94A3B;
+  --danger-light: #F6E4E0;
+
+  --success: #2E7D4F;
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-surface: var(--surface);
+  --color-foreground: var(--foreground);
+  --color-muted: var(--muted);
+  --color-border: var(--border);
+  --color-primary: var(--primary);
+  --color-primary-dark: var(--primary-dark);
+  --color-primary-light: var(--primary-light);
+  --color-accent: var(--accent);
+  --color-accent-dark: var(--accent-dark);
+  --color-danger: var(--danger);
+  --color-danger-light: var(--danger-light);
+  --color-success: var(--success);
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+}
+
+body {
+  background: var(--background);
+  color: var(--foreground);
+  font-family: var(--font-sans);
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border);
+  background: var(--surface);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.input:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent);
+}
+
+.receipt-dashed {
+  background-image: repeating-linear-gradient(to bottom, var(--border) 0, var(--border) 6px, transparent 6px, transparent 12px);
+  background-size: 1px 100%;
+  background-repeat: no-repeat;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+}
