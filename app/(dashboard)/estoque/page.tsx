@@ -1,12 +1,12 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search } from "lucide-react";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -17,6 +17,7 @@ export default function EstoquePage() {
   const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [produtoEmEdicao, setProdutoEmEdicao] = useState<Produto | null>(null);
+  const [busca, setBusca] = useState("");
 
   async function carregar() {
     setCarregando(true);
@@ -39,6 +40,17 @@ export default function EstoquePage() {
     carregar();
   }
 
+  const produtosFiltrados = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    if (!termo) return produtos;
+    return produtos.filter((produto) => {
+      const nome = produto.nome?.toLowerCase() ?? "";
+      const codigo = produto.codigoBarras?.toLowerCase() ?? "";
+      const categoria = produto.categoria?.nome?.toLowerCase() ?? "";
+      return nome.includes(termo) || codigo.includes(termo) || categoria.includes(termo);
+    });
+  }, [produtos, busca]);
+
   return (
     <div>
       <PageHeader
@@ -60,6 +72,26 @@ export default function EstoquePage() {
       />
 
       <div className="p-8">
+        <div className="mb-4 relative max-w-sm">
+          <input
+            type="text"
+            value={busca}
+            onChange={(e) => setBusca(e.target.value)}
+            placeholder="Buscar por nome, código ou categoria..."
+            className="input pl-3 pr-9 w-full"
+          />
+          {busca ? (
+            <button
+              onClick={() => setBusca("")}
+              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          ) : (
+            <Search className="w-4 h-4 text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+          )}
+        </div>
+
         {carregando ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -77,7 +109,7 @@ export default function EstoquePage() {
                 </tr>
               </thead>
               <tbody>
-                {produtos.map((produto) => {
+                {produtosFiltrados.map((produto) => {
                   const estoqueBaixo =
                     produto.estoqueMinimo != null && produto.quantidadeEstoque <= produto.estoqueMinimo;
                   return (
@@ -92,9 +124,8 @@ export default function EstoquePage() {
                       <td className="px-5 py-3 font-mono">{formatarMoeda(produto.precoVenda)}</td>
                       <td className="px-5 py-3">
                         <span
-                          className={`inline-flex items-center gap-1 font-mono ${
-                            estoqueBaixo ? "text-danger" : "text-foreground"
-                          }`}
+                          className={`inline-flex items-center gap-1 font-mono ${estoqueBaixo ? "text-danger" : "text-foreground"
+                            }`}
                         >
                           {estoqueBaixo && <AlertTriangle className="w-3.5 h-3.5" />}
                           {produto.quantidadeEstoque}
@@ -126,8 +157,10 @@ export default function EstoquePage() {
                 })}
               </tbody>
             </table>
-            {produtos.length === 0 && (
-              <p className="text-center text-sm text-muted py-10">Nenhum produto cadastrado.</p>
+            {produtosFiltrados.length === 0 && (
+              <p className="text-center text-sm text-muted py-10">
+                {busca ? "Nenhum produto encontrado para essa busca." : "Nenhum produto cadastrado."}
+              </p>
             )}
           </div>
         )}
