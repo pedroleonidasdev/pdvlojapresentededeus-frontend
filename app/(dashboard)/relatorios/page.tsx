@@ -4,20 +4,9 @@ import { useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { RelatorioVendas, Venda } from "@/lib/types";
-import { formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import { Loader2, TrendingUp, Receipt, Wallet, Clock, User, Trash2 } from "lucide-react";
-
-function formatarDataHora(iso: string) {
-  const d = new Date(iso);
-  return d.toLocaleString("pt-BR", {
-    day: "2-digit",
-    month: "2-digit",
-    year: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 export default function RelatoriosPage() {
   const { usuario } = useAuth();
