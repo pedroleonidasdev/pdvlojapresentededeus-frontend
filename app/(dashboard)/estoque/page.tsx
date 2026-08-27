@@ -6,7 +6,7 @@ import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2 } from "lucide-react";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -171,8 +171,8 @@ export default function EstoquePage() {
           produto={produtoEmEdicao}
           categorias={categorias}
           onClose={() => setModalAberto(false)}
-          onSaved={() => {
-            setModalAberto(false);
+          onSaved={(manterAberto) => {
+            if (!manterAberto) setModalAberto(false);
             carregar();
           }}
         />
@@ -190,8 +190,18 @@ function ModalProduto({
   produto: Produto | null;
   categorias: Categoria[];
   onClose: () => void;
-  onSaved: () => void;
+  onSaved: (manterAberto?: boolean) => void;
 }) {
+  const vazio = {
+    nome: "",
+    codigoBarras: "",
+    categoriaId: "",
+    precoVenda: "",
+    precoCusto: "",
+    quantidadeEstoque: "0",
+    estoqueMinimo: "",
+  };
+
   const [nome, setNome] = useState(produto?.nome ?? "");
   const [codigoBarras, setCodigoBarras] = useState(produto?.codigoBarras ?? "");
   const [categoriaId, setCategoriaId] = useState<string>(
@@ -205,6 +215,17 @@ function ModalProduto({
   const [estoqueMinimo, setEstoqueMinimo] = useState(produto?.estoqueMinimo?.toString() ?? "");
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [produtoSalvoComSucesso, setProdutoSalvoComSucesso] = useState(false);
+
+  function limparFormulario() {
+    setNome(vazio.nome);
+    setCodigoBarras(vazio.codigoBarras);
+    setCategoriaId(vazio.categoriaId);
+    setPrecoVenda(vazio.precoVenda);
+    setPrecoCusto(vazio.precoCusto);
+    setQuantidadeEstoque(vazio.quantidadeEstoque);
+    setEstoqueMinimo(vazio.estoqueMinimo);
+  }
 
   async function salvar() {
     setSalvando(true);
@@ -221,15 +242,58 @@ function ModalProduto({
     try {
       if (produto) {
         await api.put(`/produtos/${produto.id}`, payload);
+        onSaved();
       } else {
         await api.post("/produtos", payload);
+        setProdutoSalvoComSucesso(true);
       }
-      onSaved();
     } catch {
       setErro("Não foi possível salvar o produto.");
     } finally {
       setSalvando(false);
     }
+  }
+
+  function adicionarOutro() {
+    limparFormulario();
+    setProdutoSalvoComSucesso(false);
+    onSaved(true);
+  }
+
+  function concluir() {
+    onSaved(false);
+  }
+
+  if (produtoSalvoComSucesso) {
+    return (
+      <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+        <div className="bg-surface rounded-2xl w-full max-w-md overflow-hidden">
+          <div className="p-6 text-center space-y-4">
+            <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-6 h-6 text-primary" />
+            </div>
+            <div>
+              <p className="font-semibold text-foreground">Produto adicionado ao estoque!</p>
+              <p className="text-sm text-muted mt-1">Deseja adicionar outro produto?</p>
+            </div>
+            <div className="flex gap-2 pt-2">
+              <button
+                onClick={concluir}
+                className="flex-1 px-4 py-2.5 rounded-lg text-sm text-muted border border-border hover:bg-background transition"
+              >
+                Não, concluir
+              </button>
+              <button
+                onClick={adicionarOutro}
+                className="flex-1 px-4 py-2.5 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-medium transition"
+              >
+                Sim, adicionar outro
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
