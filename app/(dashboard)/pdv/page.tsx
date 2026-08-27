@@ -33,8 +33,8 @@ export default function PdvPage() {
   useEffect(() => {
     async function verificarCaixa() {
       try {
-        const { data } = await api.get<Caixa>("/caixa/atual");
-        setCaixa(data ?? null);
+        const { data, status } = await api.get<Caixa>("/caixa/atual");
+        setCaixa(status === 204 || !data || !("id" in data) ? null : data);
       } catch {
         setCaixa(null);
       }
@@ -215,6 +215,16 @@ export default function PdvPage() {
     } finally {
       setFinalizando(false);
     }
+  }
+
+  function cancelarVenda() {
+    if (carrinho.length === 0) return;
+    if (!confirm("Deseja cancelar esta venda? O carrinho será esvaziado.")) return;
+    setCarrinho([]);
+    setFormaPagamento("PIX");
+    setDescontoPercentual("");
+    setValorRecebido("");
+    setErro(null);
   }
 
   if (vendaConcluida) {
@@ -473,6 +483,14 @@ export default function PdvPage() {
             >
               {finalizando && <Loader2 className="w-4 h-4 animate-spin" />}
               Finalizar venda
+            </button>
+
+            <button
+              onClick={cancelarVenda}
+              disabled={carrinho.length === 0 || finalizando}
+              className="w-full flex items-center justify-center gap-2 bg-danger/10 hover:bg-danger/20 text-danger font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+            >
+              Cancelar venda
             </button>
           </div>
         </div>
