@@ -1,12 +1,31 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import * as XLSX from "xlsx";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { RelatorioVendas, Venda } from "@/lib/types";
-import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { Venda, FormaPagamento } from "@/lib/types";
+import {
+  formatarMoeda,
+  formatarDataHora,
+  dataBrasiliaISO,
+  limiteDiaBrasiliaParaUtc,
+  LABEL_FORMA_PAGAMENTO,
+} from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import { Loader2, TrendingUp, Receipt, Wallet, Clock, User, Trash2 } from "lucide-react";
+import {
+  Loader2,
+  TrendingUp,
+  Receipt,
+  Wallet,
+  Clock,
+  User,
+  Trash2,
+  Download,
+  Filter,
+} from "lucide-react";
+
+const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
 
 export default function RelatoriosPage() {
   const { usuario } = useAuth();
@@ -17,27 +36,31 @@ export default function RelatoriosPage() {
 
   const [inicio, setInicio] = useState(primeiroDiaMes.toISOString().slice(0, 10));
   const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
-  const [relatorio, setRelatorio] = useState<RelatorioVendas | null>(null);
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [carregando, setCarregando] = useState(false);
+  const [jaGerou, setJaGerou] = useState(false);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
   const [excluindoTodas, setExcluindoTodas] = useState(false);
+
+  // filtros aplicados sobre o período já carregado
+  const [formasSelecionadas, setFormasSelecionadas] = useState<Set<FormaPagamento>>(
+    new Set(FORMAS)
+  );
+  const [usuarioSelecionado, setUsuarioSelecionado] = useState<string>("TODOS");
 
   async function gerar() {
     setCarregando(true);
     try {
       const params = {
-        inicio: `${inicio}T00:00:00`,
-        fim: `${fim}T23:59:59`,
+        inicio: limiteDiaBrasiliaParaUtc(inicio, false),
+        fim: limiteDiaBrasiliaParaUtc(fim, true),
       };
-
-      const [resRelatorio, resVendas] = await Promise.all([
-        api.get<RelatorioVendas>("/relatorios/vendas", { params }),
-        api.get<Venda[]>("/vendas", { params }),
-      ]);
-
-      setRelatorio(resRelatorio.data);
-      setVendas(resVendas.data);
+      const { data } = await api.get<Venda[]>("/vendas", { params });
+      setVendas(data);
+      setJaGerou(true);
+      // ao gerar um novo período, reseta os filtros locais
+      setFormasSelecionadas(new Set(FORMAS));
+      setUsuarioSelecionado("TODOS");
     } finally {
       setCarregando(false);
     }
@@ -70,12 +93,115 @@ export default function RelatoriosPage() {
     }
   }
 
+  const usuariosDoPeriodo = useMemo(() => {
+    const nomes = new Set(vendas.map((v) => v.usuarioNome));
+    return Array.from(nomes).sort();
+  }, [vendas]);
+
+  function alternarForma(forma: FormaPagamento) {
+    setFormasSelecionadas((prev) => {
+      const novo = new Set(prev);
+      if (novo.has(forma)) {
+        novo.delete(forma);
+      } else {
+        novo.add(forma);
+      }
+      return novo;
+    });
+  }
+
+  const vendasFiltradas = useMemo(() => {
+    return vendas.filter((v) => {
+      if (!formasSelecionadas.has(v.formaPagamento)) return false;
+      if (usuarioSelecionado !== "TODOS" && v.usuarioNome !== usuarioSelecionado) return false;
+      return true;
+    });
+  }, [vendas, formasSelecionadas, usuarioSelecionado]);
+
+  // métricas calculadas a partir do que está filtrado, garantindo consistência
+  // entre os cards, o gráfico e a lista de vendas exibida
+  const metricas = useMemo(() => {
+    const totalFaturado = vendasFiltradas.reduce((acc, v) => acc + v.total, 0);
+    const quantidadeVendas = vendasFiltradas.length;
+
+    const totalPorFormaPagamento: Record<string, number> = {};
+    for (const v of vendasFiltradas) {
+      totalPorFormaPagamento[v.formaPagamento] =
+        (totalPorFormaPagamento[v.formaPagamento] ?? 0) + v.total;
+    }
+
+    const produtosMap = new Map<string, { quantidadeVendida: number; totalVendido: number }>();
+    for (const v of vendasFiltradas) {
+      for (const item of v.itens) {
+        const atual = produtosMap.get(item.produtoNome) ?? {
+          quantidadeVendida: 0,
+          totalVendido: 0,
+        };
+        atual.quantidadeVendida += item.quantidade;
+        atual.totalVendido += item.subtotal;
+        produtosMap.set(item.produtoNome, atual);
+      }
+    }
+    const produtosMaisVendidos = Array.from(produtosMap.entries())
+      .map(([nome, dados]) => ({ nome, ...dados }))
+      .sort((a, b) => b.quantidadeVendida - a.quantidadeVendida)
+      .slice(0, 10);
+
+    return { totalFaturado, quantidadeVendas, totalPorFormaPagamento, produtosMaisVendidos };
+  }, [vendasFiltradas]);
+
+  // agrupamento por dia (no fuso de Brasília) para o gráfico
+  const vendasPorDia = useMemo(() => {
+    const mapa = new Map<string, number>();
+    for (const v of vendasFiltradas) {
+      const dia = dataBrasiliaISO(v.dataHora);
+      mapa.set(dia, (mapa.get(dia) ?? 0) + v.total);
+    }
+    return Array.from(mapa.entries())
+      .map(([dia, total]) => ({ dia, total }))
+      .sort((a, b) => a.dia.localeCompare(b.dia));
+  }, [vendasFiltradas]);
+
+  const maiorValorDia = useMemo(
+    () => Math.max(1, ...vendasPorDia.map((d) => d.total)),
+    [vendasPorDia]
+  );
+
+  function exportarExcel() {
+    const linhas = vendasFiltradas.map((v) => ({
+      Venda: v.id,
+      "Data/Hora": formatarDataHora(v.dataHora),
+      Vendedor: v.usuarioNome,
+      "Forma de pagamento": LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
+      Subtotal: v.subtotal ?? v.total,
+      Desconto: v.valorDesconto ?? 0,
+      Total: v.total,
+      Itens: v.itens.map((i) => `${i.quantidade}x ${i.produtoNome}`).join("; "),
+    }));
+
+    const planilha = XLSX.utils.json_to_sheet(linhas);
+    planilha["!cols"] = [
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 18 },
+      { wch: 12 },
+      { wch: 10 },
+      { wch: 12 },
+      { wch: 50 },
+    ];
+
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, planilha, "Vendas");
+    XLSX.writeFile(livro, `relatorio-vendas_${inicio}_a_${fim}.xlsx`);
+  }
+
   return (
     <div>
       <PageHeader title="Relatórios" subtitle="Faturamento e desempenho de vendas por período" />
 
       <div className="p-8 space-y-6">
-        <div className="flex items-end gap-3 bg-surface border border-border rounded-xl p-4">
+        <div className="flex flex-wrap items-end gap-3 bg-surface border border-border rounded-xl p-4">
           <div>
             <label className="block text-xs font-medium text-muted mb-1.5">De</label>
             <input
@@ -103,6 +229,16 @@ export default function RelatoriosPage() {
             Gerar relatório
           </button>
 
+          {jaGerou && vendasFiltradas.length > 0 && (
+            <button
+              onClick={exportarExcel}
+              className="flex items-center gap-2 bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition h-fit"
+            >
+              <Download className="w-4 h-4" />
+              Exportar Excel
+            </button>
+          )}
+
           {isAdmin && vendas.length > 0 && (
             <button
               onClick={excluirTodasAsVendas}
@@ -119,41 +255,116 @@ export default function RelatoriosPage() {
           )}
         </div>
 
-        {relatorio && (
+        {jaGerou && (
           <>
+            {/* filtros locais sobre o período já carregado */}
+            <div className="flex flex-wrap items-center gap-4 bg-surface border border-border rounded-xl p-4">
+              <div className="flex items-center gap-2 text-xs text-muted">
+                <Filter className="w-3.5 h-3.5" />
+                Filtros
+              </div>
+
+              <div className="flex flex-wrap gap-2">
+                {FORMAS.map((forma) => {
+                  const ativo = formasSelecionadas.has(forma);
+                  return (
+                    <button
+                      key={forma}
+                      onClick={() => alternarForma(forma)}
+                      className={`text-xs px-3 py-1.5 rounded-lg border transition ${
+                        ativo
+                          ? "border-primary bg-primary-light text-primary-dark font-medium"
+                          : "border-border text-muted hover:border-primary/40"
+                      }`}
+                    >
+                      {LABEL_FORMA_PAGAMENTO[forma]}
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="ml-auto flex items-center gap-2">
+                <label className="text-xs text-muted">Vendedor</label>
+                <select
+                  value={usuarioSelecionado}
+                  onChange={(e) => setUsuarioSelecionado(e.target.value)}
+                  className="input w-auto"
+                >
+                  <option value="TODOS">Todos</option>
+                  {usuariosDoPeriodo.map((nome) => (
+                    <option key={nome} value={nome}>
+                      {nome}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
+
             <div className="grid grid-cols-3 gap-4">
               <CardMetrica
                 icon={TrendingUp}
                 label="Total faturado"
-                valor={formatarMoeda(relatorio.totalFaturado)}
+                valor={formatarMoeda(metricas.totalFaturado)}
               />
               <CardMetrica
                 icon={Receipt}
                 label="Vendas realizadas"
-                valor={relatorio.quantidadeVendas.toString()}
+                valor={metricas.quantidadeVendas.toString()}
               />
               <CardMetrica
                 icon={Wallet}
                 label="Ticket médio"
                 valor={formatarMoeda(
-                  relatorio.quantidadeVendas > 0
-                    ? relatorio.totalFaturado / relatorio.quantidadeVendas
+                  metricas.quantidadeVendas > 0
+                    ? metricas.totalFaturado / metricas.quantidadeVendas
                     : 0
                 )}
               />
+            </div>
+
+            {/* gráfico de vendas por dia */}
+            <div className="bg-surface border border-border rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-4">Vendas por dia</h3>
+              {vendasPorDia.length === 0 ? (
+                <p className="text-sm text-muted">Nenhuma venda no período.</p>
+              ) : (
+                <div className="flex items-end gap-1.5 h-40">
+                  {vendasPorDia.map(({ dia, total }) => {
+                    const alturaPct = Math.max(4, (total / maiorValorDia) * 100);
+                    const [, mes, diaNum] = dia.split("-");
+                    return (
+                      <div
+                        key={dia}
+                        className="flex-1 flex flex-col items-center justify-end h-full group relative"
+                      >
+                        <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition text-[11px] bg-primary-dark text-white px-2 py-1 rounded whitespace-nowrap pointer-events-none z-10">
+                          {formatarMoeda(total)}
+                        </div>
+                        <div
+                          className="w-full bg-primary hover:bg-primary-dark rounded-t transition-all"
+                          style={{ height: `${alturaPct}%` }}
+                        />
+                        <span className="text-[10px] text-muted mt-1.5 font-mono">
+                          {diaNum}/{mes}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-surface border border-border rounded-xl p-5">
                 <h3 className="text-sm font-semibold mb-4">Por forma de pagamento</h3>
                 <ul className="space-y-3">
-                  {Object.entries(relatorio.totalPorFormaPagamento).map(([forma, valor]) => (
+                  {Object.entries(metricas.totalPorFormaPagamento).map(([forma, valor]) => (
                     <li key={forma} className="flex items-center justify-between text-sm">
                       <span className="text-muted">{LABEL_FORMA_PAGAMENTO[forma] ?? forma}</span>
                       <span className="font-mono font-medium">{formatarMoeda(valor)}</span>
                     </li>
                   ))}
-                  {Object.keys(relatorio.totalPorFormaPagamento).length === 0 && (
+                  {Object.keys(metricas.totalPorFormaPagamento).length === 0 && (
                     <p className="text-sm text-muted">Nenhuma venda no período.</p>
                   )}
                 </ul>
@@ -162,7 +373,7 @@ export default function RelatoriosPage() {
               <div className="bg-surface border border-border rounded-xl p-5">
                 <h3 className="text-sm font-semibold mb-4">Produtos mais vendidos</h3>
                 <ul className="space-y-3">
-                  {relatorio.produtosMaisVendidos.map((p, idx) => (
+                  {metricas.produtosMaisVendidos.map((p, idx) => (
                     <li key={p.nome} className="flex items-center justify-between text-sm gap-2">
                       <span className="text-muted truncate">
                         <span className="font-mono text-xs text-primary mr-2">
@@ -175,7 +386,7 @@ export default function RelatoriosPage() {
                       </span>
                     </li>
                   ))}
-                  {relatorio.produtosMaisVendidos.length === 0 && (
+                  {metricas.produtosMaisVendidos.length === 0 && (
                     <p className="text-sm text-muted">Nenhuma venda no período.</p>
                   )}
                 </ul>
@@ -185,11 +396,11 @@ export default function RelatoriosPage() {
             <div className="bg-surface border border-border rounded-xl p-5">
               <h3 className="text-sm font-semibold mb-4">Vendas do período</h3>
 
-              {vendas.length === 0 ? (
+              {vendasFiltradas.length === 0 ? (
                 <p className="text-sm text-muted">Nenhuma venda no período.</p>
               ) : (
                 <ul className="divide-y divide-border">
-                  {vendas.map((venda) => (
+                  {vendasFiltradas.map((venda) => (
                     <li key={venda.id} className="py-4 first:pt-0 last:pb-0">
                       <div className="flex items-start justify-between gap-4 mb-2">
                         <div className="flex flex-col gap-1">
