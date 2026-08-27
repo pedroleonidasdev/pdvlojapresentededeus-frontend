@@ -173,13 +173,11 @@ export default function PdvPage() {
   }, [valorRecebido]);
 
   const troco = useMemo(() => {
-    if (formaPagamento !== "DINHEIRO") return 0;
     const diferenca = valorRecebidoValido - total;
     return diferenca > 0 ? diferenca : 0;
-  }, [formaPagamento, valorRecebidoValido, total]);
+  }, [valorRecebidoValido, total]);
 
-  const pagamentoDinheiroInsuficiente =
-    formaPagamento === "DINHEIRO" && carrinho.length > 0 && valorRecebidoValido < total;
+  const pagamentoInsuficiente = carrinho.length > 0 && valorRecebidoValido > 0 && valorRecebidoValido < total;
 
   function handleValorRecebidoChange(valor: string) {
     if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
@@ -419,22 +417,20 @@ export default function PdvPage() {
               </div>
             </div>
 
-            {formaPagamento === "DINHEIRO" && (
-              <div>
-                <p className="text-xs text-muted mb-2 flex items-center gap-1">
-                  <DollarSign className="w-3 h-3" />
-                  Valor recebido
-                </p>
-                <input
-                  inputMode="decimal"
-                  value={valorRecebido}
-                  onChange={(e) => handleValorRecebidoChange(e.target.value)}
-                  placeholder="0,00"
-                  disabled={carrinho.length === 0}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
-                />
-              </div>
-            )}
+            <div>
+              <p className="text-xs text-muted mb-2 flex items-center gap-1">
+                <DollarSign className="w-3 h-3" />
+                Valor recebido
+              </p>
+              <input
+                inputMode="decimal"
+                value={valorRecebido}
+                onChange={(e) => handleValorRecebidoChange(e.target.value)}
+                placeholder="0,00"
+                disabled={carrinho.length === 0}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+              />
+            </div>
 
             {erro && (
               <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erro}</div>
@@ -457,14 +453,14 @@ export default function PdvPage() {
                 <span className="text-sm text-muted">Total</span>
                 <span className="text-xl font-semibold text-foreground">{formatarMoeda(total)}</span>
               </div>
-              {formaPagamento === "DINHEIRO" && valorRecebidoValido > 0 && (
+              {valorRecebidoValido > 0 && (
                 <div className="flex items-center justify-between pt-1 border-t border-border mt-1">
                   <span className="text-sm text-muted">Troco</span>
                   <span
-                    className={`text-lg font-semibold ${pagamentoDinheiroInsuficiente ? "text-danger" : "text-foreground"
+                    className={`text-lg font-semibold ${pagamentoInsuficiente ? "text-danger" : "text-foreground"
                       }`}
                   >
-                    {pagamentoDinheiroInsuficiente ? "Valor insuficiente" : formatarMoeda(troco)}
+                    {pagamentoInsuficiente ? "Valor insuficiente" : formatarMoeda(troco)}
                   </span>
                 </div>
               )}
@@ -472,7 +468,7 @@ export default function PdvPage() {
 
             <button
               onClick={finalizarVenda}
-              disabled={carrinho.length === 0 || finalizando || pagamentoDinheiroInsuficiente}
+              disabled={carrinho.length === 0 || finalizando || pagamentoInsuficiente}
               className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark text-white font-medium py-3 rounded-lg transition disabled:opacity-50"
             >
               {finalizando && <Loader2 className="w-4 h-4 animate-spin" />}
