@@ -2,10 +2,10 @@
 
 import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
-import { Produto, FormaPagamento, Venda } from "@/lib/types";
+import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock } from "lucide-react";
 
 interface ItemCarrinho {
   produto: Produto;
@@ -20,10 +20,46 @@ export default function PdvPage() {
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("PIX");
   const [descontoPercentual, setDescontoPercentual] = useState<string>("");
+  const [valorRecebido, setValorRecebido] = useState<string>("");
   const [buscando, setBuscando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [vendaConcluida, setVendaConcluida] = useState<Venda | null>(null);
+  const [caixa, setCaixa] = useState<Caixa | null | undefined>(undefined);
+  const [valorInicialCaixa, setValorInicialCaixa] = useState<string>("");
+  const [abrindoCaixa, setAbrindoCaixa] = useState(false);
+  const [erroCaixa, setErroCaixa] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function verificarCaixa() {
+      try {
+        const { data } = await api.get<Caixa>("/caixa/atual");
+        setCaixa(data ?? null);
+      } catch {
+        setCaixa(null);
+      }
+    }
+    verificarCaixa();
+  }, []);
+
+  async function abrirCaixa() {
+    setAbrindoCaixa(true);
+    setErroCaixa(null);
+    try {
+      const { data } = await api.post<Caixa>("/caixa/abrir", {
+        valorInicial: Number(valorInicialCaixa.replace(",", ".")) || 0,
+      });
+      setCaixa(data);
+      setValorInicialCaixa("");
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Não foi possível abrir o caixa.";
+      setErroCaixa(msg);
+    } finally {
+      setAbrindoCaixa(false);
+    }
+  }
 
   useEffect(() => {
     const termo = busca.trim();
@@ -131,6 +167,26 @@ export default function PdvPage() {
 
   const total = useMemo(() => subtotal - valorDesconto, [subtotal, valorDesconto]);
 
+  const valorRecebidoValido = useMemo(() => {
+    const valor = parseFloat(valorRecebido.replace(",", "."));
+    return isNaN(valor) ? 0 : valor;
+  }, [valorRecebido]);
+
+  const troco = useMemo(() => {
+    if (formaPagamento !== "DINHEIRO") return 0;
+    const diferenca = valorRecebidoValido - total;
+    return diferenca > 0 ? diferenca : 0;
+  }, [formaPagamento, valorRecebidoValido, total]);
+
+  const pagamentoDinheiroInsuficiente =
+    formaPagamento === "DINHEIRO" && carrinho.length > 0 && valorRecebidoValido < total;
+
+  function handleValorRecebidoChange(valor: string) {
+    if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
+      setValorRecebido(valor);
+    }
+  }
+
   function handleDescontoChange(valor: string) {
     // Aceita apenas números e um separador decimal (. ou ,)
     if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
@@ -152,6 +208,7 @@ export default function PdvPage() {
       setCarrinho([]);
       setFormaPagamento("PIX");
       setDescontoPercentual("");
+      setValorRecebido("");
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -164,6 +221,61 @@ export default function PdvPage() {
 
   if (vendaConcluida) {
     return <ComprovanteVenda venda={vendaConcluida} onNovaVenda={() => setVendaConcluida(null)} />;
+  }
+
+  if (caixa === undefined) {
+    return (
+      <div className="flex items-center justify-center h-screen">
+        <Loader2 className="w-6 h-6 animate-spin text-primary" />
+      </div>
+    );
+  }
+
+  if (caixa === null) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+        <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden">
+          <div className="bg-primary text-white px-6 py-5 text-center">
+            <Lock className="w-8 h-8 mx-auto mb-2" />
+            <p className="font-semibold">Abrir caixa</p>
+            <p className="text-xs text-white/70 mt-0.5">
+              Informe o valor inicial para começar as vendas
+            </p>
+          </div>
+
+          <div className="p-6 space-y-4">
+            <label className="block">
+              <span className="block text-xs font-medium text-muted mb-1.5">Valor inicial do caixa</span>
+              <input
+                inputMode="decimal"
+                autoFocus
+                value={valorInicialCaixa}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorInicialCaixa(v);
+                }}
+                placeholder="0,00"
+                onKeyDown={(e) => e.key === "Enter" && abrirCaixa()}
+                className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
+              />
+            </label>
+
+            {erroCaixa && (
+              <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erroCaixa}</div>
+            )}
+
+            <button
+              onClick={abrirCaixa}
+              disabled={abrindoCaixa || valorInicialCaixa === ""}
+              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+            >
+              {abrindoCaixa && <Loader2 className="w-4 h-4 animate-spin" />}
+              Abrir caixa e iniciar vendas
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -307,6 +419,23 @@ export default function PdvPage() {
               </div>
             </div>
 
+            {formaPagamento === "DINHEIRO" && (
+              <div>
+                <p className="text-xs text-muted mb-2 flex items-center gap-1">
+                  <DollarSign className="w-3 h-3" />
+                  Valor recebido
+                </p>
+                <input
+                  inputMode="decimal"
+                  value={valorRecebido}
+                  onChange={(e) => handleValorRecebidoChange(e.target.value)}
+                  placeholder="0,00"
+                  disabled={carrinho.length === 0}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                />
+              </div>
+            )}
+
             {erro && (
               <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erro}</div>
             )}
@@ -328,11 +457,22 @@ export default function PdvPage() {
                 <span className="text-sm text-muted">Total</span>
                 <span className="text-xl font-semibold text-foreground">{formatarMoeda(total)}</span>
               </div>
+              {formaPagamento === "DINHEIRO" && valorRecebidoValido > 0 && (
+                <div className="flex items-center justify-between pt-1 border-t border-border mt-1">
+                  <span className="text-sm text-muted">Troco</span>
+                  <span
+                    className={`text-lg font-semibold ${pagamentoDinheiroInsuficiente ? "text-danger" : "text-foreground"
+                      }`}
+                  >
+                    {pagamentoDinheiroInsuficiente ? "Valor insuficiente" : formatarMoeda(troco)}
+                  </span>
+                </div>
+              )}
             </div>
 
             <button
               onClick={finalizarVenda}
-              disabled={carrinho.length === 0 || finalizando}
+              disabled={carrinho.length === 0 || finalizando || pagamentoDinheiroInsuficiente}
               className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark text-white font-medium py-3 rounded-lg transition disabled:opacity-50"
             >
               {finalizando && <Loader2 className="w-4 h-4 animate-spin" />}

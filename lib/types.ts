@@ -72,3 +72,14 @@ export interface UsuarioAdmin {
   perfil: Perfil;
   ativo: boolean;
 }
+
+export interface Caixa {
+  id: number;
+  usuarioAberturaNome: string;
+  valorInicial: number;
+  dataAbertura: string;
+  usuarioFechamentoNome: string | null;
+  valorFinal: number | null;
+  dataFechamento: string | null;
+  aberto: boolean;
+}
