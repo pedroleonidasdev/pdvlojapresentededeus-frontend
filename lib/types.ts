@@ -47,6 +47,9 @@ export interface Venda {
   usuarioNome: string;
   dataHora: string;
   formaPagamento: FormaPagamento;
+  subtotal?: number;
+  percentualDesconto?: number;
+  valorDesconto?: number;
   total: number;
   itens: ItemVendaResponse[];
 }

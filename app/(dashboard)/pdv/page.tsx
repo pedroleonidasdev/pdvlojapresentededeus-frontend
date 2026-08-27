@@ -5,7 +5,7 @@ import api from "@/lib/api";
 import { Produto, FormaPagamento, Venda } from "@/lib/types";
 import { formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2 } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag } from "lucide-react";
 
 interface ItemCarrinho {
   produto: Produto;
@@ -19,6 +19,7 @@ export default function PdvPage() {
   const [resultados, setResultados] = useState<Produto[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("PIX");
+  const [descontoPercentual, setDescontoPercentual] = useState<string>("");
   const [buscando, setBuscando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
@@ -111,10 +112,31 @@ export default function PdvPage() {
     setCarrinho((prev) => prev.filter((i) => i.produto.id !== produtoId));
   }
 
-  const total = useMemo(
+  const subtotal = useMemo(
     () => carrinho.reduce((acc, i) => acc + i.produto.precoVenda * i.quantidade, 0),
     [carrinho]
   );
+
+  const descontoPercentualValido = useMemo(() => {
+    const valor = parseFloat(descontoPercentual.replace(",", "."));
+    if (isNaN(valor) || valor < 0) return 0;
+    if (valor > 100) return 100;
+    return valor;
+  }, [descontoPercentual]);
+
+  const valorDesconto = useMemo(
+    () => (subtotal * descontoPercentualValido) / 100,
+    [subtotal, descontoPercentualValido]
+  );
+
+  const total = useMemo(() => subtotal - valorDesconto, [subtotal, valorDesconto]);
+
+  function handleDescontoChange(valor: string) {
+    // Aceita apenas números e um separador decimal (. ou ,)
+    if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
+      setDescontoPercentual(valor);
+    }
+  }
 
   async function finalizarVenda() {
     if (carrinho.length === 0) return;
@@ -123,11 +145,13 @@ export default function PdvPage() {
     try {
       const { data } = await api.post<Venda>("/vendas", {
         formaPagamento,
+        percentualDesconto: descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
         itens: carrinho.map((i) => ({ produtoId: i.produto.id, quantidade: i.quantidade })),
       });
       setVendaConcluida(data);
       setCarrinho([]);
       setFormaPagamento("PIX");
+      setDescontoPercentual("");
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -265,13 +289,45 @@ export default function PdvPage() {
               </div>
             </div>
 
+            <div>
+              <p className="text-xs text-muted mb-2 flex items-center gap-1">
+                <Tag className="w-3 h-3" />
+                Desconto (%)
+              </p>
+              <div className="relative">
+                <input
+                  inputMode="decimal"
+                  value={descontoPercentual}
+                  onChange={(e) => handleDescontoChange(e.target.value)}
+                  placeholder="0"
+                  disabled={carrinho.length === 0}
+                  className="w-full pl-3 pr-8 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
+              </div>
+            </div>
+
             {erro && (
               <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erro}</div>
             )}
 
-            <div className="flex items-center justify-between font-mono">
-              <span className="text-sm text-muted">Total</span>
-              <span className="text-xl font-semibold text-foreground">{formatarMoeda(total)}</span>
+            <div className="space-y-1 font-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-xs text-muted">Subtotal</span>
+                <span className="text-sm text-foreground">{formatarMoeda(subtotal)}</span>
+              </div>
+              {descontoPercentualValido > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-xs text-muted">
+                    Desconto ({descontoPercentualValido.toLocaleString("pt-BR")}%)
+                  </span>
+                  <span className="text-sm text-danger">- {formatarMoeda(valorDesconto)}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-sm text-muted">Total</span>
+                <span className="text-xl font-semibold text-foreground">{formatarMoeda(total)}</span>
+              </div>
             </div>
 
             <button
@@ -310,9 +366,23 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
               </li>
             ))}
           </ul>
-          <div className="border-t border-border mt-4 pt-4 flex justify-between font-semibold">
-            <span>Total</span>
-            <span>{formatarMoeda(venda.total)}</span>
+          <div className="border-t border-border mt-4 pt-4 space-y-1">
+            {venda.subtotal !== undefined && venda.valorDesconto !== undefined && venda.valorDesconto > 0 && (
+              <>
+                <div className="flex justify-between text-muted text-xs">
+                  <span>Subtotal</span>
+                  <span>{formatarMoeda(venda.subtotal)}</span>
+                </div>
+                <div className="flex justify-between text-muted text-xs">
+                  <span>Desconto {venda.percentualDesconto ? `(${venda.percentualDesconto}%)` : ""}</span>
+                  <span>- {formatarMoeda(venda.valorDesconto)}</span>
+                </div>
+              </>
+            )}
+            <div className="flex justify-between font-semibold pt-1">
+              <span>Total</span>
+              <span>{formatarMoeda(venda.total)}</span>
+            </div>
           </div>
           <p className="text-xs text-muted mt-2">
             Pagamento: {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}
