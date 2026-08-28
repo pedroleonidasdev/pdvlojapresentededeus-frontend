@@ -6,7 +6,7 @@ import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2 } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown } from "lucide-react";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -18,6 +18,7 @@ export default function EstoquePage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [produtoEmEdicao, setProdutoEmEdicao] = useState<Produto | null>(null);
   const [busca, setBusca] = useState("");
+  const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "padrao">("nome-asc");
 
   async function carregar() {
     setCarregando(true);
@@ -42,14 +43,22 @@ export default function EstoquePage() {
 
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    if (!termo) return produtos;
-    return produtos.filter((produto) => {
-      const nome = produto.nome?.toLowerCase() ?? "";
-      const codigo = produto.codigoBarras?.toLowerCase() ?? "";
-      const categoria = produto.categoria?.nome?.toLowerCase() ?? "";
-      return nome.includes(termo) || codigo.includes(termo) || categoria.includes(termo);
-    });
-  }, [produtos, busca]);
+    const lista = !termo
+      ? produtos
+      : produtos.filter((produto) => {
+          const nome = produto.nome?.toLowerCase() ?? "";
+          const codigo = produto.codigoBarras?.toLowerCase() ?? "";
+          const categoria = produto.categoria?.nome?.toLowerCase() ?? "";
+          return nome.includes(termo) || codigo.includes(termo) || categoria.includes(termo);
+        });
+
+    if (ordenacao === "padrao") return lista;
+
+    const ordenada = [...lista].sort((a, b) =>
+      (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
+    );
+    return ordenacao === "nome-desc" ? ordenada.reverse() : ordenada;
+  }, [produtos, busca, ordenacao]);
 
   return (
     <div>
@@ -71,25 +80,40 @@ export default function EstoquePage() {
         }
       />
 
-      <div className="p-8">
-        <div className="mb-4 relative max-w-sm">
-          <input
-            type="text"
-            value={busca}
-            onChange={(e) => setBusca(e.target.value)}
-            placeholder="Buscar por nome, código ou categoria..."
-            className="input pl-3 pr-9 w-full"
-          />
-          {busca ? (
-            <button
-              onClick={() => setBusca("")}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+      <div className="p-4 md:p-8">
+        <div className="mb-4 flex flex-wrap items-center gap-3">
+          <div className="relative w-full max-w-sm">
+            <input
+              type="text"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+              placeholder="Buscar por nome, código ou categoria..."
+              className="input pl-3 pr-9 w-full"
+            />
+            {busca ? (
+              <button
+                onClick={() => setBusca("")}
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            ) : (
+              <Search className="w-4 h-4 text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+            )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <ArrowUpDown className="w-4 h-4 text-muted shrink-0" />
+            <select
+              value={ordenacao}
+              onChange={(e) => setOrdenacao(e.target.value as typeof ordenacao)}
+              className="input py-2"
             >
-              <X className="w-4 h-4" />
-            </button>
-          ) : (
-            <Search className="w-4 h-4 text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-          )}
+              <option value="nome-asc">Nome (A-Z)</option>
+              <option value="nome-desc">Nome (Z-A)</option>
+              <option value="padrao">Ordem de cadastro</option>
+            </select>
+          </div>
         </div>
 
         {carregando ? (
@@ -97,8 +121,8 @@ export default function EstoquePage() {
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         ) : (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+          <div className="bg-surface border border-border rounded-xl overflow-x-auto">
+            <table className="w-full text-sm min-w-[640px]">
               <thead className="bg-background border-b border-border">
                 <tr className="text-left text-muted">
                   <th className="px-5 py-3 font-medium">Produto</th>
