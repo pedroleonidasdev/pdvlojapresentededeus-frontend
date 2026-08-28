@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
@@ -29,6 +29,10 @@ export default function PdvPage() {
   const [valorInicialCaixa, setValorInicialCaixa] = useState<string>("");
   const [abrindoCaixa, setAbrindoCaixa] = useState(false);
   const [erroCaixa, setErroCaixa] = useState<string | null>(null);
+  // guarda síncrona contra duplo-clique/duplo-toque: o estado `finalizando` já desabilita o
+  // botão, mas a atualização de estado só reflete no DOM após o re-render, e dois cliques
+  // muito próximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
+  const enviandoVendaRef = useRef(false);
 
   useEffect(() => {
     async function verificarCaixa() {
@@ -194,6 +198,8 @@ export default function PdvPage() {
 
   async function finalizarVenda() {
     if (carrinho.length === 0) return;
+    if (enviandoVendaRef.current) return;
+    enviandoVendaRef.current = true;
     setFinalizando(true);
     setErro(null);
     try {
@@ -213,6 +219,7 @@ export default function PdvPage() {
         "Não foi possível concluir a venda.";
       setErro(msg);
     } finally {
+      enviandoVendaRef.current = false;
       setFinalizando(false);
     }
   }

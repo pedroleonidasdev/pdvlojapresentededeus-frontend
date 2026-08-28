@@ -3,15 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { LayoutGrid, Package, Tag, BarChart3, Users, LogOut, ShoppingCart } from "lucide-react";
-
-const NAV_ITEMS = [
-  { href: "/pdv", label: "Venda", icon: ShoppingCart, perfis: ["ADMIN", "CAIXA"] },
-  { href: "/estoque", label: "Estoque", icon: Package, perfis: ["ADMIN", "CAIXA"] },
-  { href: "/categorias", label: "Categorias", icon: Tag, perfis: ["ADMIN"] },
-  { href: "/relatorios", label: "Relatórios", icon: BarChart3, perfis: ["ADMIN"] },
-  { href: "/usuarios", label: "Usuários", icon: Users, perfis: ["ADMIN"] },
-];
+import { LogOut } from "lucide-react";
+import { NAV_ITEMS, LayoutGrid } from "@/lib/nav-items";
 
 export default function Sidebar() {
   const pathname = usePathname();
