@@ -1,10 +1,10 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Venda, FormaPagamento } from "@/lib/types";
+import { Venda, FormaPagamento, Caixa } from "@/lib/types";
 import {
   formatarMoeda,
   formatarDataHora,
@@ -23,6 +23,9 @@ import {
   Trash2,
   Download,
   Filter,
+  Lock,
+  Unlock,
+  Vault,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
@@ -42,6 +45,49 @@ export default function RelatoriosPage() {
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
   const [excluindoTodas, setExcluindoTodas] = useState(false);
 
+  // caixa aberto no momento (independe do período filtrado)
+  const [caixaAtual, setCaixaAtual] = useState<Caixa | null | undefined>(undefined);
+  // histórico de aberturas/fechamentos de caixa dentro do período filtrado
+  const [historicoCaixas, setHistoricoCaixas] = useState<Caixa[]>([]);
+  // fechamento do caixa atual (somente ADMIN)
+  const [valorFinalCaixa, setValorFinalCaixa] = useState<string>("");
+  const [fechandoCaixa, setFechandoCaixa] = useState(false);
+  const [erroFechamento, setErroFechamento] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function buscarCaixaAtual() {
+      try {
+        const { data, status } = await api.get<Caixa>("/caixa/atual");
+        setCaixaAtual(status === 204 || !data || !("id" in data) ? null : data);
+      } catch {
+        setCaixaAtual(null);
+      }
+    }
+    buscarCaixaAtual();
+  }, []);
+
+  async function fecharCaixa() {
+    if (valorFinalCaixa === "") return;
+    setFechandoCaixa(true);
+    setErroFechamento(null);
+    try {
+      await api.post("/caixa/fechar", {
+        valorFinal: Number(valorFinalCaixa.replace(",", ".")) || 0,
+      });
+      setCaixaAtual(null);
+      setValorFinalCaixa("");
+      // se já havia um relatório gerado, atualiza o histórico de caixas exibido
+      if (jaGerou) await gerar();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Não foi possível fechar o caixa.";
+      setErroFechamento(msg);
+    } finally {
+      setFechandoCaixa(false);
+    }
+  }
+
   // filtros aplicados sobre o período já carregado
   const [formasSelecionadas, setFormasSelecionadas] = useState<Set<FormaPagamento>>(
     new Set(FORMAS)
@@ -55,8 +101,12 @@ export default function RelatoriosPage() {
         inicio: limiteDiaBrasiliaParaUtc(inicio, false),
         fim: limiteDiaBrasiliaParaUtc(fim, true),
       };
-      const { data } = await api.get<Venda[]>("/vendas", { params });
-      setVendas(data);
+      const [resVendas, resCaixas] = await Promise.all([
+        api.get<Venda[]>("/vendas", { params }),
+        api.get<Caixa[]>("/caixa", { params }),
+      ]);
+      setVendas(resVendas.data);
+      setHistoricoCaixas(resCaixas.data);
       setJaGerou(true);
       // ao gerar um novo período, reseta os filtros locais
       setFormasSelecionadas(new Set(FORMAS));
@@ -201,6 +251,79 @@ export default function RelatoriosPage() {
       <PageHeader title="Relatórios" subtitle="Faturamento e desempenho de vendas por período" />
 
       <div className="p-8 space-y-6">
+        {/* caixa aberto no momento, em destaque, independente do período filtrado */}
+        {caixaAtual !== undefined && (
+          <div
+            className={`flex flex-wrap items-center gap-4 rounded-xl border p-4 ${
+              caixaAtual
+                ? "bg-primary-light border-primary/30"
+                : "bg-danger-light border-danger/30"
+            }`}
+          >
+            <div
+              className={`w-10 h-10 rounded-lg flex items-center justify-center shrink-0 ${
+                caixaAtual ? "bg-primary text-white" : "bg-danger text-white"
+              }`}
+            >
+              {caixaAtual ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
+            </div>
+            {caixaAtual ? (
+              <>
+                <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+                  <div>
+                    <p className="text-[11px] text-primary-dark/70 uppercase tracking-wide font-medium">
+                      Caixa aberto — saldo inicial
+                    </p>
+                    <p className="text-lg font-semibold font-mono text-primary-dark">
+                      {formatarMoeda(caixaAtual.valorInicial)}
+                    </p>
+                  </div>
+                  <div className="text-xs text-primary-dark/80 flex items-center gap-1.5">
+                    <User className="w-3.5 h-3.5" />
+                    Aberto por {caixaAtual.usuarioAberturaNome}
+                  </div>
+                  <div className="text-xs text-primary-dark/80 flex items-center gap-1.5">
+                    <Clock className="w-3.5 h-3.5" />
+                    {formatarDataHora(caixaAtual.dataAbertura)}
+                  </div>
+                </div>
+
+                {isAdmin && (
+                  <div className="ml-auto flex flex-wrap items-center gap-2">
+                    <input
+                      inputMode="decimal"
+                      value={valorFinalCaixa}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorFinalCaixa(v);
+                      }}
+                      onKeyDown={(e) => e.key === "Enter" && fecharCaixa()}
+                      placeholder="Valor final"
+                      className="w-32 px-3 py-2 rounded-lg border border-primary/30 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm"
+                    />
+                    <button
+                      onClick={fecharCaixa}
+                      disabled={fechandoCaixa || valorFinalCaixa === ""}
+                      className="flex items-center gap-2 bg-primary-dark hover:bg-primary text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
+                    >
+                      {fechandoCaixa && <Loader2 className="w-4 h-4 animate-spin" />}
+                      Fechar caixa
+                    </button>
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-sm text-danger font-medium">Nenhum caixa aberto no momento.</p>
+            )}
+          </div>
+        )}
+
+        {erroFechamento && (
+          <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">
+            {erroFechamento}
+          </div>
+        )}
+
         <div className="flex flex-wrap items-end gap-3 bg-surface border border-border rounded-xl p-4">
           <div>
             <label className="block text-xs font-medium text-muted mb-1.5">De</label>
@@ -391,6 +514,62 @@ export default function RelatoriosPage() {
                   )}
                 </ul>
               </div>
+            </div>
+
+            <div className="bg-surface border border-border rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <Vault className="w-4 h-4 text-primary" />
+                Histórico de caixas do período
+              </h3>
+
+              {historicoCaixas.length === 0 ? (
+                <p className="text-sm text-muted">Nenhuma abertura de caixa no período.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {historicoCaixas.map((caixa) => (
+                    <li
+                      key={caixa.id}
+                      className="py-3 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-3"
+                    >
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                        <span
+                          className={`px-1.5 py-0.5 rounded font-medium ${
+                            caixa.aberto
+                              ? "bg-primary-light text-primary-dark"
+                              : "bg-border text-foreground"
+                          }`}
+                        >
+                          {caixa.aberto ? "Aberto" : "Fechado"}
+                        </span>
+                        <span className="flex items-center gap-1">
+                          <User className="w-3 h-3" />
+                          Aberto por {caixa.usuarioAberturaNome} em{" "}
+                          {formatarDataHora(caixa.dataAbertura)}
+                        </span>
+                        {!caixa.aberto && caixa.dataFechamento && (
+                          <span className="flex items-center gap-1">
+                            <Clock className="w-3 h-3" />
+                            Fechado por {caixa.usuarioFechamentoNome} em{" "}
+                            {formatarDataHora(caixa.dataFechamento)}
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-4 font-mono text-sm">
+                        <span title="Saldo inicial">
+                          <span className="text-muted text-xs">Inicial: </span>
+                          {formatarMoeda(caixa.valorInicial)}
+                        </span>
+                        {caixa.valorFinal !== null && (
+                          <span title="Saldo final">
+                            <span className="text-muted text-xs">Final: </span>
+                            {formatarMoeda(caixa.valorFinal)}
+                          </span>
+                        )}
+                      </div>
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div className="bg-surface border border-border rounded-xl p-5">
