@@ -54,6 +54,32 @@ export interface Venda {
   itens: ItemVendaResponse[];
 }
 
+export type TipoItemTroca = "DEVOLVIDO" | "NOVO";
+
+export interface ItemTrocaResponse {
+  id: number;
+  produtoId: number;
+  produtoNome: string;
+  tipo: TipoItemTroca;
+  quantidade: number;
+  precoUnitario: number;
+  subtotal: number;
+}
+
+export interface Troca {
+  id: number;
+  usuarioNome: string;
+  dataHora: string;
+  vendaOrigemId: number | null;
+  observacao: string | null;
+  valorDevolvido: number;
+  valorNovo: number;
+  diferenca: number;
+  formaPagamentoDiferenca: FormaPagamento | null;
+  itensDevolvidos: ItemTrocaResponse[];
+  itensNovos: ItemTrocaResponse[];
+}
+
 export interface RelatorioVendas {
   totalFaturado: number;
   quantidadeVendas: number;
