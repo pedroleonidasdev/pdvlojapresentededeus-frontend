@@ -3,9 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
-import { formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer } from "lucide-react";
 
 interface ItemCarrinho {
   produto: Produto;
@@ -28,6 +28,12 @@ export default function PdvPage() {
   const [caixa, setCaixa] = useState<Caixa | null | undefined>(undefined);
   const [valorInicialCaixa, setValorInicialCaixa] = useState<string>("");
   const [abrindoCaixa, setAbrindoCaixa] = useState(false);
+  // referência do campo de busca: leitores de código de barras baratos funcionam como
+  // um teclado (digitam o código + Enter em quem estiver com foco no momento). Se o
+  // foco escapar do campo — por exemplo depois de clicar num produto com o mouse — o
+  // próximo disparo do leitor se perde. Por isso devolvemos o foco a este campo após
+  // cada produto adicionado.
+  const buscaInputRef = useRef<HTMLInputElement>(null);
   const [erroCaixa, setErroCaixa] = useState<string | null>(null);
   // guarda síncrona contra duplo-clique/duplo-toque: o estado `finalizando` já desabilita o
   // botão, mas a atualização de estado só reflete no DOM após o re-render, e dois cliques
@@ -102,6 +108,8 @@ export default function PdvPage() {
       setResultados([]);
     } catch {
       setErro(`Produto não encontrado para o código ${codigo}`);
+    } finally {
+      buscaInputRef.current?.focus();
     }
   }
 
@@ -297,13 +305,14 @@ export default function PdvPage() {
     <div className="flex flex-col h-screen">
       <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" />
 
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
         {/* Coluna de busca de produtos */}
-        <div className="flex-1 flex flex-col p-6 overflow-hidden">
+        <div className="w-full md:flex-1 flex flex-col p-4 md:p-6 md:overflow-hidden">
           <div className="relative mb-4">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               autoFocus
+              ref={buscaInputRef}
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={handleBuscaKeyDown}
@@ -315,7 +324,7 @@ export default function PdvPage() {
             )}
           </div>
 
-          <div className="flex-1 overflow-y-auto">
+          <div className="md:flex-1 md:overflow-y-auto">
             {resultados.length === 0 && busca.trim().length >= 2 && !buscando && (
               <p className="text-sm text-muted px-1">Nenhum produto encontrado.</p>
             )}
@@ -323,7 +332,10 @@ export default function PdvPage() {
               {resultados.map((produto) => (
                 <button
                   key={produto.id}
-                  onClick={() => adicionarAoCarrinho(produto)}
+                  onClick={() => {
+                    adicionarAoCarrinho(produto);
+                    buscaInputRef.current?.focus();
+                  }}
                   disabled={produto.quantidadeEstoque < 1}
                   className="text-left p-4 rounded-xl border border-border bg-surface hover:border-primary hover:shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -345,8 +357,8 @@ export default function PdvPage() {
           </div>
         </div>
 
-        {/* Coluna do carrinho / recibo */}
-        <div className="w-[380px] shrink-0 bg-surface border-l border-border flex flex-col">
+        {/* Coluna do carrinho / recibo — empilha abaixo da busca no celular, fica ao lado em telas md+ */}
+        <div className="w-full md:w-[380px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border flex flex-col">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <ShoppingCart className="w-4 h-4 text-primary" />
             <h2 className="font-semibold text-sm">Carrinho</h2>
@@ -355,7 +367,7 @@ export default function PdvPage() {
             </span>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-5 py-4 receipt-dashed">
+          <div className="md:flex-1 md:overflow-y-auto px-5 py-4 receipt-dashed">
             {carrinho.length === 0 ? (
               <p className="text-sm text-muted text-center mt-10">
                 Nenhum produto adicionado ainda.
@@ -509,11 +521,18 @@ export default function PdvPage() {
 function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: () => void }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
-      <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />
           <p className="font-semibold">Venda concluída</p>
           <p className="text-xs text-white/70 mt-0.5">Venda #{venda.id}</p>
+        </div>
+
+        {/* cabeçalho só visível na impressão: a tela já mostra "Venda concluída" acima */}
+        <div className="hidden print:block text-center px-6 pt-4">
+          <p className="font-semibold">Casa da Fé</p>
+          <p className="text-xs text-muted">Comprovante de venda #{venda.id}</p>
+          <p className="text-xs text-muted">{formatarDataHora(venda.dataHora)}</p>
         </div>
 
         <div className="p-6 font-mono text-sm receipt-dashed">
@@ -549,15 +568,22 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
             Pagamento: {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}
           </p>
         </div>
+      </div>
 
-        <div className="p-4 border-t border-border">
-          <button
-            onClick={onNovaVenda}
-            className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
-          >
-            Nova venda
-          </button>
-        </div>
+      <div className="w-full max-w-sm flex gap-2 mt-4 no-print">
+        <button
+          onClick={() => window.print()}
+          className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border hover:bg-background text-foreground font-medium py-2.5 rounded-lg transition"
+        >
+          <Printer className="w-4 h-4" />
+          Imprimir
+        </button>
+        <button
+          onClick={onNovaVenda}
+          className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
+        >
+          Nova venda
+        </button>
       </div>
     </div>
   );

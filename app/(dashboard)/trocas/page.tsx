@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Produto, FormaPagamento, Troca } from "@/lib/types";
-import { formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import {
   Search,
@@ -16,6 +16,7 @@ import {
   ArrowLeftRight,
   Undo2,
   PackagePlus,
+  Printer,
 } from "lucide-react";
 
 interface ItemLista {
@@ -44,6 +45,9 @@ export default function TrocasPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [trocaConcluida, setTrocaConcluida] = useState<Troca | null>(null);
   const enviandoRef = useRef(false);
+  // mesmo motivo do PDV: leitor de código de barras digita no campo com foco no
+  // momento, então devolvemos o foco a este campo após cada produto adicionado.
+  const buscaInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const termo = busca.trim();
@@ -88,6 +92,8 @@ export default function TrocasPage() {
       setResultados([]);
     } catch {
       setErro(`Produto não encontrado para o código ${codigo}`);
+    } finally {
+      buscaInputRef.current?.focus();
     }
   }
 
@@ -230,6 +236,7 @@ export default function TrocasPage() {
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
             <input
               autoFocus
+              ref={buscaInputRef}
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={handleBuscaKeyDown}
@@ -251,7 +258,10 @@ export default function TrocasPage() {
               {resultados.map((produto) => (
                 <button
                   key={produto.id}
-                  onClick={() => adicionarItem(produto)}
+                  onClick={() => {
+                    adicionarItem(produto);
+                    buscaInputRef.current?.focus();
+                  }}
                   disabled={modo === "NOVO" && produto.quantidadeEstoque < 1}
                   className="text-left p-4 rounded-xl border border-border bg-surface hover:border-primary hover:shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
                 >
@@ -464,11 +474,18 @@ function ItemLinha({
 function ComprovanteTroca({ troca, onNovaTroca }: { troca: Troca; onNovaTroca: () => void }) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
-      <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden">
+      <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />
           <p className="font-semibold">Troca registrada</p>
           <p className="text-xs text-white/70 mt-0.5">Troca #{troca.id}</p>
+        </div>
+
+        {/* cabeçalho só visível na impressão: a tela já mostra "Troca registrada" acima */}
+        <div className="hidden print:block text-center px-6 pt-4">
+          <p className="font-semibold">Casa da Fé</p>
+          <p className="text-xs text-muted">Comprovante de troca #{troca.id}</p>
+          <p className="text-xs text-muted">{formatarDataHora(troca.dataHora)}</p>
         </div>
 
         <div className="p-6 font-mono text-sm receipt-dashed space-y-4">
@@ -523,15 +540,22 @@ function ComprovanteTroca({ troca, onNovaTroca }: { troca: Troca; onNovaTroca: (
           )}
           {troca.observacao && <p className="text-xs text-muted">Obs: {troca.observacao}</p>}
         </div>
+      </div>
 
-        <div className="p-4 border-t border-border">
-          <button
-            onClick={onNovaTroca}
-            className="w-full bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
-          >
-            Nova troca
-          </button>
-        </div>
+      <div className="w-full max-w-sm flex gap-2 mt-4 no-print">
+        <button
+          onClick={() => window.print()}
+          className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border hover:bg-background text-foreground font-medium py-2.5 rounded-lg transition"
+        >
+          <Printer className="w-4 h-4" />
+          Imprimir
+        </button>
+        <button
+          onClick={onNovaTroca}
+          className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
+        >
+          Nova troca
+        </button>
       </div>
     </div>
   );

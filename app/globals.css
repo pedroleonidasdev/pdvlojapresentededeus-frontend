@@ -66,8 +66,42 @@ body {
   background-repeat: no-repeat;
 }
 
+/* impressoras térmicas não fiscais de 80mm usam bobina com essa largura;
+   "auto" na altura deixa o comprovante ter o tamanho que precisar. A regra @page
+   precisa ficar fora do @media print — aninhada, alguns navegadores/PDFs ignoram. */
+@page {
+  size: 80mm auto;
+  margin: 0;
+}
+
 @media print {
   .no-print {
     display: none !important;
+  }
+
+  /* isola só o recibo na impressão: some com o resto da página (menu, cabeçalhos,
+     botões) mesmo que fiquem fora do fluxo normal (sidebar fixa, sticky, etc.) */
+  body * {
+    visibility: hidden;
+  }
+
+  .receipt-print,
+  .receipt-print * {
+    visibility: visible;
+  }
+
+  .receipt-print {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 76mm;
+    padding: 2mm 0;
+    color: #000;
+    font-size: 11px;
+  }
+
+  html,
+  body {
+    background: #fff !important;
   }
 }
