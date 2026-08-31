@@ -6,7 +6,8 @@ import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer } from "lucide-react";
+import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -19,6 +20,10 @@ export default function EstoquePage() {
   const [produtoEmEdicao, setProdutoEmEdicao] = useState<Produto | null>(null);
   const [busca, setBusca] = useState("");
   const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "padrao">("nome-asc");
+  const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
+  const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
+  const [gerandoCodigos, setGerandoCodigos] = useState(false);
+  const [mensagem, setMensagem] = useState<string | null>(null);
 
   async function carregar() {
     setCarregando(true);
@@ -41,6 +46,31 @@ export default function EstoquePage() {
     carregar();
   }
 
+  async function gerarCodigosFaltantes() {
+    setGerandoCodigos(true);
+    try {
+      const { data } = await api.post<{ produtosAtualizados: number }>("/produtos/gerar-codigos-em-lote");
+      await carregar();
+      setMensagem(
+        data.produtosAtualizados > 0
+          ? `${data.produtosAtualizados} produto(s) receberam código de barras novo.`
+          : "Todos os produtos já tinham código de barras."
+      );
+      setTimeout(() => setMensagem(null), 5000);
+    } finally {
+      setGerandoCodigos(false);
+    }
+  }
+
+  function alternarSelecao(id: number) {
+    setSelecionados((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
+
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     const lista = !termo
@@ -59,6 +89,11 @@ export default function EstoquePage() {
     );
     return ordenacao === "nome-desc" ? ordenada.reverse() : ordenada;
   }, [produtos, busca, ordenacao]);
+
+  const semCodigoCount = useMemo(
+    () => produtos.filter((p) => !p.codigoBarras).length,
+    [produtos]
+  );
 
   return (
     <div>
@@ -116,6 +151,39 @@ export default function EstoquePage() {
           </div>
         </div>
 
+        {mensagem && (
+          <div className="mb-4 rounded-lg bg-primary-light text-primary-dark text-sm px-4 py-2.5 flex items-center gap-2">
+            <CheckCircle2 className="w-4 h-4 shrink-0" />
+            {mensagem}
+          </div>
+        )}
+
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          {isAdmin && semCodigoCount > 0 && (
+            <button
+              onClick={gerarCodigosFaltantes}
+              disabled={gerandoCodigos}
+              className="flex items-center gap-2 bg-surface border border-border hover:bg-background text-foreground text-sm font-medium px-3 py-2 rounded-lg transition disabled:opacity-50"
+            >
+              {gerandoCodigos ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Barcode className="w-4 h-4" />
+              )}
+              Gerar códigos faltantes ({semCodigoCount})
+            </button>
+          )}
+          {selecionados.size > 0 && (
+            <button
+              onClick={() => setFolhaEtiquetasAberta(true)}
+              className="flex items-center gap-2 bg-surface border border-border hover:bg-background text-foreground text-sm font-medium px-3 py-2 rounded-lg transition"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir etiquetas ({selecionados.size})
+            </button>
+          )}
+        </div>
+
         {carregando ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
@@ -125,6 +193,27 @@ export default function EstoquePage() {
             <table className="w-full text-sm min-w-[640px]">
               <thead className="bg-background border-b border-border">
                 <tr className="text-left text-muted">
+                  <th className="px-5 py-3 font-medium w-8">
+                    <input
+                      type="checkbox"
+                      checked={
+                        produtosFiltrados.length > 0 &&
+                        produtosFiltrados.every((p) => selecionados.has(p.id))
+                      }
+                      onChange={(e) => {
+                        setSelecionados((atual) => {
+                          const novo = new Set(atual);
+                          if (e.target.checked) {
+                            produtosFiltrados.forEach((p) => novo.add(p.id));
+                          } else {
+                            produtosFiltrados.forEach((p) => novo.delete(p.id));
+                          }
+                          return novo;
+                        });
+                      }}
+                      className="w-4 h-4 rounded border-border"
+                    />
+                  </th>
                   <th className="px-5 py-3 font-medium">Produto</th>
                   <th className="px-5 py-3 font-medium">Categoria</th>
                   <th className="px-5 py-3 font-medium">Preço</th>
@@ -138,6 +227,14 @@ export default function EstoquePage() {
                     produto.estoqueMinimo != null && produto.quantidadeEstoque <= produto.estoqueMinimo;
                   return (
                     <tr key={produto.id} className="border-b border-border last:border-0">
+                      <td className="px-5 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selecionados.has(produto.id)}
+                          onChange={() => alternarSelecao(produto.id)}
+                          className="w-4 h-4 rounded border-border"
+                        />
+                      </td>
                       <td className="px-5 py-3">
                         <p className="font-medium text-foreground">{produto.nome}</p>
                         {produto.codigoBarras && (
@@ -199,6 +296,13 @@ export default function EstoquePage() {
             if (!manterAberto) setModalAberto(false);
             carregar();
           }}
+        />
+      )}
+
+      {folhaEtiquetasAberta && (
+        <FolhaEtiquetas
+          produtos={produtos.filter((p) => selecionados.has(p.id))}
+          onFechar={() => setFolhaEtiquetasAberta(false)}
         />
       )}
     </div>
@@ -343,6 +447,7 @@ function ModalProduto({
             <input
               value={codigoBarras}
               onChange={(e) => setCodigoBarras(e.target.value)}
+              placeholder="Deixe em branco para gerar automaticamente"
               className="input"
             />
           </Campo>
