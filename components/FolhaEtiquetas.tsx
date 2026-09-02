@@ -1,16 +1,24 @@
 "use client";
 
 import { useState } from "react";
-import api from "@/lib/api";
 import { Produto } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import BarcodeSvg from "@/components/BarcodeSvg";
 import { X, Printer, Loader2, CheckCircle2 } from "lucide-react";
 
+// O agente de impressão roda no mesmo computador da loja que tem a impressora
+// Goldensky conectada — o navegador chama ele DIRETO em localhost, sem passar
+// pelo backend na nuvem (que não tem como acessar uma impressora USB local).
+// Navegadores tratam http://localhost como contexto seguro mesmo estando o
+// site em HTTPS, então essa chamada funciona normalmente em produção,
+// desde que o PDV seja usado no computador que tem a impressora instalada.
+const AGENTE_IMPRESSORA_URL =
+  process.env.NEXT_PUBLIC_GOLDENSKY_AGENTE_URL ?? "http://localhost:9100/imprimir-etiquetas";
+
 /**
  * Tela de etiquetas para impressão: cada produto selecionado vira uma etiqueta
  * (nome + preço + código de barras). A pré-visualização abaixo é só para
- * conferência — o botão envia os dados para o agente local goldensky-etiquetas.py,
+ * conferência — o botão envia os dados para o agente local goldensky-agente.py,
  * que imprime direto na impressora térmica Goldensky-80 (fila CUPS), respeitando
  * o tamanho físico da etiqueta de 60x30mm e o espaçamento de 8mm entre elas.
  */
@@ -37,16 +45,29 @@ export default function FolhaEtiquetas({
           codigoBarras: produto.codigoBarras,
         })),
       };
-      await api.post("/impressora/etiquetas", payload);
+
+      const resposta = await fetch(AGENTE_IMPRESSORA_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const dados = await resposta.json().catch(() => null);
+
+      if (!resposta.ok) {
+        throw new Error(dados?.mensagem ?? "Não foi possível imprimir as etiquetas.");
+      }
+
       setEnviadoComSucesso(true);
       setTimeout(() => {
         onFechar();
       }, 1500);
-    } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Não foi possível enviar as etiquetas para a impressora.";
-      setErro(msg);
+    } catch {
+      setErro(
+        "Não foi possível conectar ao agente de impressão neste computador. " +
+          "Verifique se o serviço goldensky-agente está rodando " +
+          "(sudo systemctl status goldensky-agente)."
+      );
     } finally {
       setEnviando(false);
     }
