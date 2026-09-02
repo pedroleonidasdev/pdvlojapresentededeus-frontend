@@ -79,8 +79,8 @@ body {
     display: none !important;
   }
 
-  /* isola só o recibo na impressão: some com o resto da página (menu, cabeçalhos,
-     botões) mesmo que fiquem fora do fluxo normal (sidebar fixa, sticky, etc.) */
+  /* isola só o conteúdo marcado para impressão: some com o resto da página (menu,
+     cabeçalhos, botões) mesmo que fiquem fora do fluxo normal (sidebar fixa, sticky, etc.) */
   body * {
     visibility: hidden;
   }
@@ -90,18 +90,35 @@ body {
     visibility: visible;
   }
 
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* Comprovante (cupom) não fiscal — bobina de 80mm, área útil de 76mm.
+     Zera o padding em rem do layout de tela (px-6/py-5/p-6) e usa unidades
+     físicas (mm) para o tamanho ficar correto na impressora térmica. */
   .receipt-print {
     position: absolute;
     top: 0;
     left: 0;
     width: 76mm;
-    padding: 2mm 0;
+    padding: 0 0 8mm 0; /* 8mm de folga no final, para sobrar papel para o corte */
     color: #000;
-    font-size: 11px;
+    font-size: 12px;
+    line-height: 1.4;
   }
 
-  html,
-  body {
-    background: #fff !important;
+  .receipt-print > * {
+    padding-left: 3mm !important;
+    padding-right: 3mm !important;
+  }
+
+  .receipt-print > *:first-child {
+    padding-top: 3mm !important;
+  }
+
+  .receipt-print > *:last-child {
+    padding-bottom: 0 !important;
   }
 }

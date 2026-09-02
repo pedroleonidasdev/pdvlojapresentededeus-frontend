@@ -143,9 +143,9 @@ function ModalCategoria({
     setErro(null);
     try {
       if (categoria) {
-        await api.put(`/categorias/${categoria.id}`, { nome });
+        await api.put(`/categorias/${categoria.id}`, { nome: nome.trim() });
       } else {
-        await api.post("/categorias", { nome });
+        await api.post("/categorias", { nome: nome.trim() });
       }
       onSaved();
     } catch (e: unknown) {
@@ -192,6 +192,7 @@ function ModalCategoria({
           <button
             onClick={salvar}
             disabled={salvando || !nome.trim()}
+            title={!nome.trim() ? "Informe um nome" : undefined}
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-medium transition disabled:opacity-50"
           >
             {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
