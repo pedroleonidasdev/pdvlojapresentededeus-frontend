@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Loader2, Lock, User, Church } from "lucide-react";
+import { Loader2, Lock, User } from "lucide-react";
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -28,12 +28,17 @@ export default function LoginPage() {
     <div className="min-h-screen flex">
       {/* Painel de marca */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary text-white flex-col justify-between p-12 relative overflow-hidden">
-        <div className="absolute -right-24 -top-24 w-96 h-96 rounded-full bg-primary-dark/40" />
-        <div className="absolute -left-16 bottom-0 w-64 h-64 rounded-full bg-white/5" />
+        <img
+          src="/images/sao-miguel-arcanjo.jpg"
+          alt="São Miguel Arcanjo"
+          className="absolute inset-0 w-full h-full object-cover object-top opacity-90"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-primary-dark via-primary-dark/80 to-primary-dark/20" />
+        <div className="absolute inset-0 bg-gradient-to-r from-primary-dark/60 via-transparent to-transparent" />
 
         <div className="relative z-10">
-          <div className="w-10 h-10 rounded-md bg-accent flex items-center justify-center text-primary-dark">
-            <Church className="w-5 h-5" />
+          <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-accent">
+            <img src="/images/sao-miguel-arcanjo-icone.jpg" alt="" className="w-full h-full object-cover" />
           </div>
         </div>
 
@@ -59,10 +64,10 @@ export default function LoginPage() {
       <div className="flex-1 flex items-center justify-center bg-background px-6 py-12">
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden flex items-center gap-2">
-            <div className="w-8 h-8 rounded-md bg-primary flex items-center justify-center text-white">
-              <Church className="w-4 h-4" />
+            <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-border">
+              <img src="/images/sao-miguel-arcanjo-icone.jpg" alt="São Miguel Arcanjo" className="w-full h-full object-cover" />
             </div>
-            <span className="font-semibold text-lg">Casa da Fé</span>
+            <span className="font-semibold text-lg">Presente de Deus</span>
           </div>
 
           <h2 className="text-2xl font-semibold tracking-tight text-foreground">
