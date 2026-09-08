@@ -12,6 +12,8 @@ import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 export default function EstoquePage() {
   const { usuario } = useAuth();
   const isAdmin = usuario?.perfil === "ADMIN";
+  // CAIXA pode cadastrar produto novo, mas não editar nem excluir — só ADMIN.
+  const podeIncluirProduto = isAdmin || usuario?.perfil === "CAIXA";
 
   const [produtos, setProdutos] = useState<Produto[]>([]);
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -101,7 +103,7 @@ export default function EstoquePage() {
         title="Estoque"
         subtitle={`${produtos.length} produtos cadastrados`}
         action={
-          isAdmin && (
+          podeIncluirProduto && (
             <button
               onClick={() => {
                 setProdutoEmEdicao(null);

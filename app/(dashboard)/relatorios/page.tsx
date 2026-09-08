@@ -13,6 +13,7 @@ import {
   LABEL_FORMA_PAGAMENTO,
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
+import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import {
   Loader2,
   TrendingUp,
@@ -21,6 +22,7 @@ import {
   Clock,
   User,
   Trash2,
+  Pencil,
   Download,
   Filter,
   Lock,
@@ -44,6 +46,7 @@ export default function RelatoriosPage() {
   const [jaGerou, setJaGerou] = useState(false);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
   const [excluindoTodas, setExcluindoTodas] = useState(false);
+  const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
 
   // caixa aberto no momento (independe do período filtrado)
   const [caixaAtual, setCaixaAtual] = useState<Caixa | null | undefined>(undefined);
@@ -606,6 +609,15 @@ export default function RelatoriosPage() {
                           </span>
                           {isAdmin && (
                             <button
+                              onClick={() => setVendaEmEdicao(venda)}
+                              className="text-muted hover:text-primary"
+                              title="Editar forma de pagamento"
+                            >
+                              <Pencil className="w-4 h-4" />
+                            </button>
+                          )}
+                          {isAdmin && (
+                            <button
                               onClick={() => excluirVenda(venda.id)}
                               disabled={excluindoId === venda.id}
                               className="text-danger/60 hover:text-danger disabled:opacity-40"
@@ -639,6 +651,14 @@ export default function RelatoriosPage() {
           </>
         )}
       </div>
+
+      {vendaEmEdicao && (
+        <EditarFormaPagamentoModal
+          venda={vendaEmEdicao}
+          onFechar={() => setVendaEmEdicao(null)}
+          onSalvo={gerar}
+        />
+      )}
     </div>
   );
 }
