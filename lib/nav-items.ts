@@ -1,4 +1,4 @@
-import { LayoutGrid, Package, Tag, BarChart3, Users, ShoppingCart, Repeat, Receipt, type LucideIcon } from "lucide-react";
+import { LayoutGrid, Package, Tag, BarChart3, Users, ShoppingCart, Repeat, Receipt, Vault, type LucideIcon } from "lucide-react";
 import { Perfil } from "./types";
 
 export interface NavItem {
@@ -12,6 +12,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/pdv", label: "Venda", icon: ShoppingCart, perfis: ["ADMIN", "CAIXA"] },
   { href: "/trocas", label: "Trocas", icon: Repeat, perfis: ["ADMIN", "CAIXA"] },
   { href: "/vendas", label: "Vendas", icon: Receipt, perfis: ["ADMIN", "CAIXA"] },
+  { href: "/fechar-caixa", label: "Fechar Caixa", icon: Vault, perfis: ["ADMIN", "CAIXA"] },
   { href: "/estoque", label: "Estoque", icon: Package, perfis: ["ADMIN", "CAIXA"] },
   { href: "/categorias", label: "Categorias", icon: Tag, perfis: ["ADMIN"] },
   { href: "/relatorios", label: "Relatórios", icon: BarChart3, perfis: ["ADMIN"] },
