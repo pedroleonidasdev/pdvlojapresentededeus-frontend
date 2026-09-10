@@ -21,6 +21,7 @@ export default function EstoquePage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [produtoEmEdicao, setProdutoEmEdicao] = useState<Produto | null>(null);
   const [busca, setBusca] = useState("");
+  const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
   const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "padrao">("nome-asc");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
@@ -75,7 +76,7 @@ export default function EstoquePage() {
 
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
-    const lista = !termo
+    let lista = !termo
       ? produtos
       : produtos.filter((produto) => {
           const nome = produto.nome?.toLowerCase() ?? "";
@@ -84,13 +85,19 @@ export default function EstoquePage() {
           return nome.includes(termo) || codigo.includes(termo) || categoria.includes(termo);
         });
 
+    if (categoriaFiltro === "sem-categoria") {
+      lista = lista.filter((produto) => !produto.categoria);
+    } else if (categoriaFiltro !== "todas") {
+      lista = lista.filter((produto) => String(produto.categoria?.id) === categoriaFiltro);
+    }
+
     if (ordenacao === "padrao") return lista;
 
     const ordenada = [...lista].sort((a, b) =>
       (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
     );
     return ordenacao === "nome-desc" ? ordenada.reverse() : ordenada;
-  }, [produtos, busca, ordenacao]);
+  }, [produtos, busca, categoriaFiltro, ordenacao]);
 
   const semCodigoCount = useMemo(
     () => produtos.filter((p) => !p.codigoBarras).length,
@@ -101,7 +108,11 @@ export default function EstoquePage() {
     <div>
       <PageHeader
         title="Estoque"
-        subtitle={`${produtos.length} produtos cadastrados`}
+        subtitle={
+          produtosFiltrados.length !== produtos.length
+            ? `${produtosFiltrados.length} de ${produtos.length} produtos`
+            : `${produtos.length} produtos cadastrados`
+        }
         action={
           podeIncluirProduto && (
             <button
@@ -137,6 +148,24 @@ export default function EstoquePage() {
             ) : (
               <Search className="w-4 h-4 text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
             )}
+          </div>
+
+          <div className="flex items-center gap-2">
+            <select
+              value={categoriaFiltro}
+              onChange={(e) => setCategoriaFiltro(e.target.value)}
+              className="input py-2"
+            >
+              <option value="todas">Todas as categorias</option>
+              <option value="sem-categoria">Sem categoria</option>
+              {[...categorias]
+                .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }))
+                .map((categoria) => (
+                  <option key={categoria.id} value={String(categoria.id)}>
+                    {categoria.nome}
+                  </option>
+                ))}
+            </select>
           </div>
 
           <div className="flex items-center gap-2">
