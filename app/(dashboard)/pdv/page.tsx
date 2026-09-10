@@ -22,7 +22,6 @@ export default function PdvPage() {
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("PIX");
   const [descontoPercentual, setDescontoPercentual] = useState<string>("");
   const [descontoDinheiro, setDescontoDinheiro] = useState<string>("");
-  const [tipoDesconto, setTipoDesconto] = useState<"percentual" | "dinheiro">("percentual");
   const [valorRecebido, setValorRecebido] = useState<string>("");
   const [buscando, setBuscando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
@@ -182,9 +181,9 @@ export default function PdvPage() {
   }, [descontoDinheiro]);
 
   const valorDesconto = useMemo(() => {
-    if (tipoDesconto === "dinheiro") return Math.min(descontoDinheiroValido, subtotal);
-    return (subtotal * descontoPercentualValido) / 100;
-  }, [tipoDesconto, subtotal, descontoPercentualValido, descontoDinheiroValido]);
+    const percentual = (subtotal * descontoPercentualValido) / 100;
+    return Math.min(percentual + descontoDinheiroValido, subtotal);
+  }, [subtotal, descontoPercentualValido, descontoDinheiroValido]);
 
   const total = useMemo(() => subtotal - valorDesconto, [subtotal, valorDesconto]);
 
@@ -228,10 +227,8 @@ export default function PdvPage() {
     try {
       const { data } = await api.post<Venda>("/vendas", {
         formaPagamento,
-        percentualDesconto:
-          tipoDesconto === "percentual" && descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
-        valorDescontoInformado:
-          tipoDesconto === "dinheiro" && descontoDinheiroValido > 0 ? descontoDinheiroValido : undefined,
+        percentualDesconto: descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
+        valorDescontoInformado: descontoDinheiroValido > 0 ? descontoDinheiroValido : undefined,
         itens: carrinho.map((i) => ({ produtoId: i.produto.id, quantidade: i.quantidade })),
       });
       setVendaConcluida(data);
@@ -239,7 +236,6 @@ export default function PdvPage() {
       setFormaPagamento("PIX");
       setDescontoPercentual("");
       setDescontoDinheiro("");
-      setTipoDesconto("percentual");
       setValorRecebido("");
     } catch (e: unknown) {
       const msg =
@@ -259,7 +255,6 @@ export default function PdvPage() {
     setFormaPagamento("PIX");
     setDescontoPercentual("");
     setDescontoDinheiro("");
-    setTipoDesconto("percentual");
     setValorRecebido("");
     setErro(null);
   }
@@ -451,36 +446,12 @@ export default function PdvPage() {
             </div>
 
             <div>
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-xs text-muted flex items-center gap-1">
-                  <Tag className="w-3 h-3" />
-                  Desconto
-                </p>
-                <div className="flex rounded-md border border-border overflow-hidden text-xs">
-                  <button
-                    type="button"
-                    onClick={() => setTipoDesconto("percentual")}
-                    className={`px-2 py-0.5 transition ${tipoDesconto === "percentual"
-                        ? "bg-primary text-white"
-                        : "text-muted hover:bg-background"
-                      }`}
-                  >
-                    %
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setTipoDesconto("dinheiro")}
-                    className={`px-2 py-0.5 transition ${tipoDesconto === "dinheiro"
-                        ? "bg-primary text-white"
-                        : "text-muted hover:bg-background"
-                      }`}
-                  >
-                    R$
-                  </button>
-                </div>
-              </div>
-              {tipoDesconto === "percentual" ? (
-                <div className="relative">
+              <p className="text-xs text-muted mb-2 flex items-center gap-1">
+                <Tag className="w-3 h-3" />
+                Desconto
+              </p>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
                   <input
                     inputMode="decimal"
                     value={descontoPercentual}
@@ -491,8 +462,7 @@ export default function PdvPage() {
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
                 </div>
-              ) : (
-                <div className="relative">
+                <div className="relative flex-1">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted">R$</span>
                   <input
                     inputMode="decimal"
@@ -503,7 +473,8 @@ export default function PdvPage() {
                     className="w-full pl-8 pr-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
                   />
                 </div>
-              )}
+              </div>
+              <p className="text-[11px] text-muted mt-1">Pode usar os dois juntos, se precisar.</p>
             </div>
 
             <div>
@@ -532,9 +503,7 @@ export default function PdvPage() {
               </div>
               {valorDesconto > 0 && (
                 <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted">
-                    Desconto{tipoDesconto === "percentual" ? ` (${descontoPercentualValido.toLocaleString("pt-BR")}%)` : ""}
-                  </span>
+                  <span className="text-xs text-muted">Desconto</span>
                   <span className="text-sm text-danger">- {formatarMoeda(valorDesconto)}</span>
                 </div>
               )}
@@ -636,7 +605,7 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
                   <span>{formatarMoeda(venda.subtotal)}</span>
                 </div>
                 <div className="flex justify-between text-muted text-xs">
-                  <span>Desconto {venda.percentualDesconto ? `(${venda.percentualDesconto}%)` : ""}</span>
+                  <span>Desconto</span>
                   <span>- {formatarMoeda(venda.valorDesconto)}</span>
                 </div>
               </>
