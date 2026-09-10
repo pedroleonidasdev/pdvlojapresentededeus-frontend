@@ -16,13 +16,13 @@ export default function Sidebar() {
 
   return (
     <aside className="w-60 shrink-0 bg-primary text-white flex flex-col h-screen sticky top-0">
-      <div className="p-5 flex items-center gap-3 border-b border-white/10">
-        <div className="w-9 h-9 rounded-full overflow-hidden ring-1 ring-accent/60 shrink-0">
-          <img src="/images/sao-miguel-arcanjo-icone.jpg" alt="" className="w-full h-full object-cover" />
+      <div className="p-5 flex items-center gap-2 border-b border-white/10">
+        <div className="w-8 h-8 rounded-md bg-accent flex items-center justify-center font-mono font-bold text-primary-dark text-sm">
+          $
         </div>
-        <div className="min-w-0">
-          <p className="font-serif leading-none text-[15px] truncate">Presente de Deus</p>
-          <p className="text-[11px] text-white/50 mt-1 flex items-center gap-1">
+        <div>
+          <p className="font-semibold leading-none text-sm">Sistema PDV</p>
+          <p className="text-[11px] text-white/50 mt-0.5 flex items-center gap-1">
             <LayoutGrid className="w-3 h-3" /> Painel de controle
           </p>
         </div>
@@ -36,15 +36,12 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`relative flex items-center gap-3 pl-3 pr-3 py-2.5 rounded-lg text-sm transition ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
                 ativo
-                  ? "bg-white/10 text-white font-medium"
-                  : "text-white/65 hover:bg-white/5 hover:text-white"
+                  ? "bg-white/15 text-white font-medium"
+                  : "text-white/70 hover:bg-white/10 hover:text-white"
               }`}
             >
-              {ativo && (
-                <span className="absolute left-0 top-1/2 -translate-y-1/2 h-4 w-[3px] rounded-full bg-accent" />
-              )}
               <Icon className="w-4 h-4" />
               {item.label}
             </Link>

@@ -5,25 +5,7 @@ import api from "@/lib/api";
 import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import {
-  Search,
-  Trash2,
-  Plus,
-  Minus,
-  ShoppingCart,
-  CheckCircle2,
-  Loader2,
-  Tag,
-  DollarSign,
-  Lock,
-  Printer,
-  QrCode,
-  Banknote,
-  CreditCard,
-  PackageSearch,
-  PackageX,
-  AlertTriangle,
-} from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer } from "lucide-react";
 
 interface ItemCarrinho {
   produto: Produto;
@@ -32,19 +14,14 @@ interface ItemCarrinho {
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
 
-const ICONE_FORMA_PAGAMENTO: Record<FormaPagamento, React.ElementType> = {
-  PIX: QrCode,
-  DINHEIRO: Banknote,
-  CARTAO_CREDITO: CreditCard,
-  CARTAO_DEBITO: CreditCard,
-};
-
 export default function PdvPage() {
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<Produto[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("PIX");
   const [descontoPercentual, setDescontoPercentual] = useState<string>("");
+  const [descontoDinheiro, setDescontoDinheiro] = useState<string>("");
+  const [tipoDesconto, setTipoDesconto] = useState<"percentual" | "dinheiro">("percentual");
   const [valorRecebido, setValorRecebido] = useState<string>("");
   const [buscando, setBuscando] = useState(false);
   const [finalizando, setFinalizando] = useState(false);
@@ -197,10 +174,16 @@ export default function PdvPage() {
     return valor;
   }, [descontoPercentual]);
 
-  const valorDesconto = useMemo(
-    () => (subtotal * descontoPercentualValido) / 100,
-    [subtotal, descontoPercentualValido]
-  );
+  const descontoDinheiroValido = useMemo(() => {
+    const valor = parseFloat(descontoDinheiro.replace(",", "."));
+    if (isNaN(valor) || valor < 0) return 0;
+    return valor;
+  }, [descontoDinheiro]);
+
+  const valorDesconto = useMemo(() => {
+    if (tipoDesconto === "dinheiro") return Math.min(descontoDinheiroValido, subtotal);
+    return (subtotal * descontoPercentualValido) / 100;
+  }, [tipoDesconto, subtotal, descontoPercentualValido, descontoDinheiroValido]);
 
   const total = useMemo(() => subtotal - valorDesconto, [subtotal, valorDesconto]);
 
@@ -229,6 +212,12 @@ export default function PdvPage() {
     }
   }
 
+  function handleDescontoDinheiroChange(valor: string) {
+    if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
+      setDescontoDinheiro(valor);
+    }
+  }
+
   async function finalizarVenda() {
     if (carrinho.length === 0) return;
     if (enviandoVendaRef.current) return;
@@ -238,13 +227,18 @@ export default function PdvPage() {
     try {
       const { data } = await api.post<Venda>("/vendas", {
         formaPagamento,
-        percentualDesconto: descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
+        percentualDesconto:
+          tipoDesconto === "percentual" && descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
+        valorDescontoInformado:
+          tipoDesconto === "dinheiro" && descontoDinheiroValido > 0 ? descontoDinheiroValido : undefined,
         itens: carrinho.map((i) => ({ produtoId: i.produto.id, quantidade: i.quantidade })),
       });
       setVendaConcluida(data);
       setCarrinho([]);
       setFormaPagamento("PIX");
       setDescontoPercentual("");
+      setDescontoDinheiro("");
+      setTipoDesconto("percentual");
       setValorRecebido("");
     } catch (e: unknown) {
       const msg =
@@ -263,6 +257,8 @@ export default function PdvPage() {
     setCarrinho([]);
     setFormaPagamento("PIX");
     setDescontoPercentual("");
+    setDescontoDinheiro("");
+    setTipoDesconto("percentual");
     setValorRecebido("");
     setErro(null);
   }
@@ -285,7 +281,7 @@ export default function PdvPage() {
         <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden">
           <div className="bg-primary text-white px-6 py-5 text-center">
             <Lock className="w-8 h-8 mx-auto mb-2" />
-            <p className="font-serif text-lg">Abrir caixa</p>
+            <p className="font-semibold">Abrir caixa</p>
             <p className="text-xs text-white/70 mt-0.5">
               Informe o valor inicial para começar as vendas
             </p>
@@ -350,70 +346,34 @@ export default function PdvPage() {
           </div>
 
           <div className="md:flex-1 md:overflow-y-auto">
-            {busca.trim().length < 2 && (
-              <div className="flex flex-col items-center justify-center text-center gap-2 mt-16 text-muted">
-                <PackageSearch className="w-9 h-9 opacity-40" />
-                <p className="text-sm">Digite o nome do produto ou escaneie o código de barras</p>
-              </div>
-            )}
-
             {resultados.length === 0 && busca.trim().length >= 2 && !buscando && (
-              <div className="flex flex-col items-center justify-center text-center gap-2 mt-16 text-muted">
-                <PackageX className="w-9 h-9 opacity-40" />
-                <p className="text-sm">Nenhum produto encontrado para &ldquo;{busca.trim()}&rdquo;</p>
-              </div>
+              <p className="text-sm text-muted px-1">Nenhum produto encontrado.</p>
             )}
-
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
-              {resultados.map((produto) => {
-                const itemNoCarrinho = carrinho.find((i) => i.produto.id === produto.id);
-                const semEstoque = produto.quantidadeEstoque < 1;
-                const estoqueBaixo =
-                  !semEstoque &&
-                  produto.estoqueMinimo != null &&
-                  produto.quantidadeEstoque <= produto.estoqueMinimo;
-
-                return (
-                  <button
-                    key={produto.id}
-                    onClick={() => {
-                      adicionarAoCarrinho(produto);
-                      buscaInputRef.current?.focus();
-                    }}
-                    disabled={semEstoque}
-                    className="group relative text-left p-4 rounded-xl border border-border bg-surface hover:border-primary hover:shadow-md hover:-translate-y-0.5 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none"
-                  >
-                    {itemNoCarrinho && (
-                      <span className="absolute -top-2 -right-2 min-w-[1.25rem] h-5 px-1 flex items-center justify-center rounded-full bg-accent text-white text-[11px] font-semibold shadow-sm">
-                        {itemNoCarrinho.quantidade}
-                      </span>
-                    )}
-                    <p className="font-medium text-sm text-foreground leading-tight line-clamp-2">
-                      {produto.nome}
-                    </p>
-                    <p className="text-xs text-muted mt-1">
-                      {produto.categoria?.nome ?? "Sem categoria"}
-                    </p>
-                    <div className="flex items-center justify-between mt-3">
-                      <span className="font-mono font-semibold text-primary">
-                        {formatarMoeda(produto.precoVenda)}
-                      </span>
-                      <span
-                        className={`text-[11px] flex items-center gap-1 ${
-                          semEstoque
-                            ? "text-danger"
-                            : estoqueBaixo
-                            ? "text-accent-dark"
-                            : "text-muted"
-                        }`}
-                      >
-                        {estoqueBaixo && <AlertTriangle className="w-3 h-3" />}
-                        {semEstoque ? "Sem estoque" : `${produto.quantidadeEstoque} em estoque`}
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
+              {resultados.map((produto) => (
+                <button
+                  key={produto.id}
+                  onClick={() => {
+                    adicionarAoCarrinho(produto);
+                    buscaInputRef.current?.focus();
+                  }}
+                  disabled={produto.quantidadeEstoque < 1}
+                  className="text-left p-4 rounded-xl border border-border bg-surface hover:border-primary hover:shadow-sm transition disabled:opacity-40 disabled:cursor-not-allowed"
+                >
+                  <p className="font-medium text-sm text-foreground leading-tight">{produto.nome}</p>
+                  <p className="text-xs text-muted mt-1">
+                    {produto.categoria?.nome ?? "Sem categoria"}
+                  </p>
+                  <div className="flex items-center justify-between mt-3">
+                    <span className="font-mono font-semibold text-primary">
+                      {formatarMoeda(produto.precoVenda)}
+                    </span>
+                    <span className="text-[11px] text-muted">
+                      {produto.quantidadeEstoque} em estoque
+                    </span>
+                  </div>
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -423,54 +383,45 @@ export default function PdvPage() {
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <ShoppingCart className="w-4 h-4 text-primary" />
             <h2 className="font-semibold text-sm">Carrinho</h2>
-            <span className="ml-auto text-xs font-mono font-medium px-2 py-0.5 rounded-full bg-primary-light text-primary-dark">
+            <span className="ml-auto text-xs text-muted font-mono">
               {carrinho.length} {carrinho.length === 1 ? "item" : "itens"}
             </span>
           </div>
 
           <div className="md:flex-1 md:overflow-y-auto px-5 py-4 receipt-dashed">
             {carrinho.length === 0 ? (
-              <div className="flex flex-col items-center justify-center text-center gap-2 mt-10 text-muted">
-                <ShoppingCart className="w-8 h-8 opacity-30" />
-                <p className="text-sm">Nenhum produto adicionado ainda.</p>
-              </div>
+              <p className="text-sm text-muted text-center mt-10">
+                Nenhum produto adicionado ainda.
+              </p>
             ) : (
-              <ul className="space-y-1 font-mono text-sm">
+              <ul className="space-y-3 font-mono text-sm">
                 {carrinho.map((item) => (
-                  <li
-                    key={item.produto.id}
-                    className="flex items-start justify-between gap-2 py-2 -mx-2 px-2 rounded-lg hover:bg-background transition"
-                  >
+                  <li key={item.produto.id} className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
-                      <p className="truncate text-foreground font-sans font-medium text-[13px]">
-                        {item.produto.nome}
-                      </p>
-                      <p className="text-[11px] text-muted mt-0.5">
-                        {formatarMoeda(item.produto.precoVenda)} / un.
-                      </p>
-                      <div className="flex items-center gap-1.5 mt-1.5">
+                      <p className="truncate text-foreground">{item.produto.nome}</p>
+                      <div className="flex items-center gap-2 mt-1">
                         <button
                           onClick={() => alterarQuantidade(item.produto.id, -1)}
-                          className="w-6 h-6 flex items-center justify-center rounded-md border border-border text-muted hover:bg-surface hover:border-primary/40 transition"
+                          className="w-5 h-5 flex items-center justify-center rounded border border-border text-muted hover:bg-background"
                         >
                           <Minus className="w-3 h-3" />
                         </button>
-                        <span className="w-6 text-center text-xs font-semibold">{item.quantidade}</span>
+                        <span className="w-5 text-center text-xs">{item.quantidade}</span>
                         <button
                           onClick={() => alterarQuantidade(item.produto.id, 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded-md border border-border text-muted hover:bg-surface hover:border-primary/40 transition"
+                          className="w-5 h-5 flex items-center justify-center rounded border border-border text-muted hover:bg-background"
                         >
                           <Plus className="w-3 h-3" />
                         </button>
                         <button
                           onClick={() => removerItem(item.produto.id)}
-                          className="ml-1.5 p-1 rounded-md text-danger/70 hover:text-danger hover:bg-danger-light transition"
+                          className="ml-1 text-danger/70 hover:text-danger"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
-                    <span className="text-foreground font-semibold whitespace-nowrap pt-0.5">
+                    <span className="text-foreground whitespace-nowrap">
                       {formatarMoeda(item.produto.precoVenda * item.quantidade)}
                     </span>
                   </li>
@@ -481,45 +432,77 @@ export default function PdvPage() {
 
           <div className="border-t border-border px-5 py-4 space-y-4">
             <div>
-              <p className="text-xs font-medium text-muted mb-2 uppercase tracking-wide">Forma de pagamento</p>
+              <p className="text-xs text-muted mb-2">Forma de pagamento</p>
               <div className="grid grid-cols-2 gap-2">
-                {FORMAS.map((forma) => {
-                  const Icone = ICONE_FORMA_PAGAMENTO[forma];
-                  const ativo = formaPagamento === forma;
-                  return (
-                    <button
-                      key={forma}
-                      onClick={() => setFormaPagamento(forma)}
-                      className={`flex items-center justify-center gap-1.5 text-xs py-2.5 rounded-lg border transition ${
-                        ativo
-                          ? "border-primary bg-primary-light text-primary-dark font-semibold shadow-sm"
-                          : "border-border text-muted hover:border-primary/40 hover:bg-background"
+                {FORMAS.map((forma) => (
+                  <button
+                    key={forma}
+                    onClick={() => setFormaPagamento(forma)}
+                    className={`text-xs py-2 rounded-lg border transition ${formaPagamento === forma
+                        ? "border-primary bg-primary-light text-primary-dark font-medium"
+                        : "border-border text-muted hover:border-primary/40"
                       }`}
-                    >
-                      <Icone className="w-3.5 h-3.5" />
-                      {LABEL_FORMA_PAGAMENTO[forma]}
-                    </button>
-                  );
-                })}
+                  >
+                    {LABEL_FORMA_PAGAMENTO[forma]}
+                  </button>
+                ))}
               </div>
             </div>
 
             <div>
-              <p className="text-xs text-muted mb-2 flex items-center gap-1">
-                <Tag className="w-3 h-3" />
-                Desconto (%)
-              </p>
-              <div className="relative">
-                <input
-                  inputMode="decimal"
-                  value={descontoPercentual}
-                  onChange={(e) => handleDescontoChange(e.target.value)}
-                  placeholder="0"
-                  disabled={carrinho.length === 0}
-                  className="w-full pl-3 pr-8 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted flex items-center gap-1">
+                  <Tag className="w-3 h-3" />
+                  Desconto
+                </p>
+                <div className="flex rounded-md border border-border overflow-hidden text-xs">
+                  <button
+                    type="button"
+                    onClick={() => setTipoDesconto("percentual")}
+                    className={`px-2 py-0.5 transition ${tipoDesconto === "percentual"
+                        ? "bg-primary text-white"
+                        : "text-muted hover:bg-background"
+                      }`}
+                  >
+                    %
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setTipoDesconto("dinheiro")}
+                    className={`px-2 py-0.5 transition ${tipoDesconto === "dinheiro"
+                        ? "bg-primary text-white"
+                        : "text-muted hover:bg-background"
+                      }`}
+                  >
+                    R$
+                  </button>
+                </div>
               </div>
+              {tipoDesconto === "percentual" ? (
+                <div className="relative">
+                  <input
+                    inputMode="decimal"
+                    value={descontoPercentual}
+                    onChange={(e) => handleDescontoChange(e.target.value)}
+                    placeholder="0"
+                    disabled={carrinho.length === 0}
+                    className="w-full pl-3 pr-8 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                  />
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
+                </div>
+              ) : (
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted">R$</span>
+                  <input
+                    inputMode="decimal"
+                    value={descontoDinheiro}
+                    onChange={(e) => handleDescontoDinheiroChange(e.target.value)}
+                    placeholder="0,00"
+                    disabled={carrinho.length === 0}
+                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                  />
+                </div>
+              )}
             </div>
 
             <div>
@@ -541,32 +524,28 @@ export default function PdvPage() {
               <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erro}</div>
             )}
 
-            <div className="space-y-1.5 font-mono">
+            <div className="space-y-1 font-mono">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted">Subtotal</span>
                 <span className="text-sm text-foreground">{formatarMoeda(subtotal)}</span>
               </div>
-              {descontoPercentualValido > 0 && (
+              {valorDesconto > 0 && (
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-muted">
-                    Desconto ({descontoPercentualValido.toLocaleString("pt-BR")}%)
+                    Desconto{tipoDesconto === "percentual" ? ` (${descontoPercentualValido.toLocaleString("pt-BR")}%)` : ""}
                   </span>
                   <span className="text-sm text-danger">- {formatarMoeda(valorDesconto)}</span>
                 </div>
               )}
-              <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
-                <span className="text-sm font-sans font-medium text-muted">Total</span>
-                <span className="font-serif text-[1.7rem] font-semibold text-primary-dark">{formatarMoeda(total)}</span>
+              <div className="flex items-center justify-between pt-1">
+                <span className="text-sm text-muted">Total</span>
+                <span className="text-xl font-semibold text-foreground">{formatarMoeda(total)}</span>
               </div>
               {valorRecebidoValido > 0 && (
-                <div
-                  className={`flex items-center justify-between px-3 py-2 rounded-lg ${
-                    pagamentoInsuficiente ? "bg-danger-light" : "bg-primary-light"
-                  }`}
-                >
-                  <span className="text-sm font-sans text-muted">Troco</span>
+                <div className="flex items-center justify-between pt-1 border-t border-border mt-1">
+                  <span className="text-sm text-muted">Troco</span>
                   <span
-                    className={`text-lg font-semibold ${pagamentoInsuficiente ? "text-danger" : "text-primary-dark"
+                    className={`text-lg font-semibold ${pagamentoInsuficiente ? "text-danger" : "text-foreground"
                       }`}
                   >
                     {pagamentoInsuficiente ? "Valor insuficiente" : formatarMoeda(troco)}
@@ -578,9 +557,9 @@ export default function PdvPage() {
             <button
               onClick={finalizarVenda}
               disabled={carrinho.length === 0 || finalizando || pagamentoInsuficiente}
-              className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark active:scale-[0.99] text-white font-semibold py-3.5 rounded-lg shadow-sm hover:shadow transition disabled:opacity-50 disabled:shadow-none"
+              className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark text-white font-medium py-3 rounded-lg transition disabled:opacity-50"
             >
-              {finalizando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {finalizando && <Loader2 className="w-4 h-4 animate-spin" />}
               Finalizar venda
             </button>
 
@@ -604,7 +583,7 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />
-          <p className="font-serif text-lg">Venda concluída</p>
+          <p className="font-semibold">Venda concluída</p>
           <p className="text-xs text-white/70 mt-0.5">Venda #{venda.id}</p>
         </div>
 

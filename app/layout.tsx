@@ -1,18 +1,7 @@
 import type { Metadata, Viewport } from "next";
-import { Fraunces } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import RegistrarServiceWorker from "@/components/RegistrarServiceWorker";
-
-// Serifada usada só em títulos e valores de destaque (ver --font-serif em globals.css) —
-// dá identidade de "livro/missal" à marca sem afetar a legibilidade da UI no dia a dia.
-const fraunces = Fraunces({
-  subsets: ["latin"],
-  variable: "--font-fraunces",
-  weight: ["500", "600"],
-  style: ["normal", "italic"],
-  display: "swap",
-});
 
 export const metadata: Metadata = {
   title: "PDV | Sistema de Vendas e Estoque",
@@ -36,12 +25,12 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   maximumScale: 1,
-  themeColor: "#163C30",
+  themeColor: "#1B4D3E",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="pt-BR" className={`h-full antialiased ${fraunces.variable}`}>
+    <html lang="pt-BR" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <RegistrarServiceWorker />
         <AuthProvider>{children}</AuthProvider>
