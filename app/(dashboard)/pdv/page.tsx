@@ -285,7 +285,7 @@ export default function PdvPage() {
         <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden">
           <div className="bg-primary text-white px-6 py-5 text-center">
             <Lock className="w-8 h-8 mx-auto mb-2" />
-            <p className="font-semibold">Abrir caixa</p>
+            <p className="font-serif text-lg">Abrir caixa</p>
             <p className="text-xs text-white/70 mt-0.5">
               Informe o valor inicial para começar as vendas
             </p>
@@ -556,7 +556,7 @@ export default function PdvPage() {
               )}
               <div className="flex items-center justify-between pt-2 mt-1 border-t border-border">
                 <span className="text-sm font-sans font-medium text-muted">Total</span>
-                <span className="text-2xl font-bold text-primary-dark">{formatarMoeda(total)}</span>
+                <span className="font-serif text-[1.7rem] font-semibold text-primary-dark">{formatarMoeda(total)}</span>
               </div>
               {valorRecebidoValido > 0 && (
                 <div
@@ -604,7 +604,7 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />
-          <p className="font-semibold">Venda concluída</p>
+          <p className="font-serif text-lg">Venda concluída</p>
           <p className="text-xs text-white/70 mt-0.5">Venda #{venda.id}</p>
         </div>
 

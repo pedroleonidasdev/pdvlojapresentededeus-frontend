@@ -1,28 +1,34 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F6F5F1;
+  /* Pergaminho quente em vez de cinza neutro — remete a papel, vela, altar */
+  --background: #F7F3E9;
   --surface: #FFFFFF;
-  --foreground: #191914;
-  --muted: #6B6B60;
-  --border: #E1DFD6;
+  --surface-alt: #FBF8F1;
+  --foreground: #211C14;
+  --muted: #7C7461;
+  --border: #E7DFCC;
 
-  --primary: #1B4D3E;
-  --primary-dark: #0F332A;
-  --primary-light: #DCE9E3;
+  /* Verde de missal — mais profundo e menos "SaaS teal" que o tom anterior */
+  --primary: #163C30;
+  --primary-dark: #0A241C;
+  --primary-light: #E2E9E1;
 
-  --accent: #E0972F;
-  --accent-dark: #B8791F;
+  /* Dourado de ex-voto/moldura, não laranja de app de delivery */
+  --accent: #AD7F2B;
+  --accent-dark: #85611F;
+  --accent-light: #F1E6CC;
 
-  --danger: #B94A3B;
-  --danger-light: #F6E4E0;
+  --danger: #A8402F;
+  --danger-light: #F5E3DD;
 
-  --success: #2E7D4F;
+  --success: #2E6B4C;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
@@ -31,10 +37,12 @@
   --color-primary-light: var(--primary-light);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
+  --color-accent-light: var(--accent-light);
   --color-danger: var(--danger);
   --color-danger-light: var(--danger-light);
   --color-success: var(--success);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-serif: var(--font-fraunces), "Iowan Old Style", "Palatino Linotype", Georgia, serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
 }
 
@@ -42,6 +50,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+}
+
+/* Textura sutil de papel no fundo — só visível em áreas grandes e vazias
+   (fundo do app, painel de marca do login), nunca sobre texto ou cartões. */
+.textura-papel {
+  background-image: radial-gradient(circle at 1px 1px, color-mix(in srgb, var(--foreground) 6%, transparent) 1px, transparent 0);
+  background-size: 22px 22px;
 }
 
 .input {

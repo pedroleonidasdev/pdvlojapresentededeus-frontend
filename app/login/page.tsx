@@ -33,8 +33,10 @@ export default function LoginPage() {
           alt="São Miguel Arcanjo"
           className="absolute inset-0 w-full h-full object-cover object-top opacity-90"
         />
-        <div className="absolute inset-0 bg-gradient-to-t from-primary-dark via-primary-dark/80 to-primary-dark/20" />
+        <div className="absolute inset-0 bg-gradient-to-t from-primary-dark via-primary-dark/85 to-primary-dark/25" />
         <div className="absolute inset-0 bg-gradient-to-r from-primary-dark/60 via-transparent to-transparent" />
+        {/* leve véu dourado, ecoa o acento da marca sem competir com a foto */}
+        <div className="absolute inset-0 bg-gradient-to-br from-accent/15 via-transparent to-transparent mix-blend-overlay" />
 
         <div className="relative z-10">
           <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-accent">
@@ -43,10 +45,8 @@ export default function LoginPage() {
         </div>
 
         <div className="relative z-10 max-w-md">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-white/60 mb-4">
-            LOJA PRESENTE DE DEUS
-          </p>
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight">
+          <p className="font-serif italic text-accent/90 text-lg mb-3">Loja Presente de Deus</p>
+          <h1 className="font-serif text-4xl font-semibold leading-[1.1] tracking-tight">
             Fé, tradição e cuidado em cada detalhe.
           </h1>
           <p className="mt-4 text-white/70 leading-relaxed">
@@ -55,8 +55,8 @@ export default function LoginPage() {
           </p>
         </div>
 
-        <div className="relative z-10 font-mono text-xs text-white/40">
-          Acesso restrito &middot; uso interno
+        <div className="relative z-10 text-xs text-white/40">
+          Acesso restrito · uso interno
         </div>
       </div>
 
@@ -67,10 +67,10 @@ export default function LoginPage() {
             <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-border">
               <img src="/images/sao-miguel-arcanjo-icone.jpg" alt="São Miguel Arcanjo" className="w-full h-full object-cover" />
             </div>
-            <span className="font-semibold text-lg">Presente de Deus</span>
+            <span className="font-serif text-lg">Presente de Deus</span>
           </div>
 
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
+          <h2 className="font-serif text-2xl font-semibold tracking-tight text-foreground">
             Entrar no sistema
           </h2>
           <p className="mt-1 text-sm text-muted">
