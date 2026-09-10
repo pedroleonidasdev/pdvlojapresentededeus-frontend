@@ -22,6 +22,12 @@ const CHAVE_ALTURA = "goldensky_etiqueta_altura_mm";
 const LARGURA_PADRAO = "60";
 const ALTURA_PADRAO = "30";
 
+// mesmo limite do agente Goldensky (MAX_ETIQUETAS_POR_LOTE em goldensky_core.py)
+// — validar aqui também evita mandar a requisição pro agente só pra ele recusar
+const MAX_ETIQUETAS_POR_LOTE = 100;
+const QUANTIDADE_PADRAO = 1;
+const QUANTIDADE_MAXIMA_POR_PRODUTO = 99;
+
 /**
  * Tela de etiquetas para impressão: cada produto selecionado vira uma etiqueta
  * (nome + preço + código de barras). A pré-visualização abaixo é só para
@@ -45,6 +51,27 @@ export default function FolhaEtiquetas({
   const [largura, setLargura] = useState(LARGURA_PADRAO);
   const [altura, setAltura] = useState(ALTURA_PADRAO);
 
+  // quantas etiquetas imprimir de cada produto (padrão: 1 por produto selecionado)
+  const [quantidades, setQuantidades] = useState<Record<number, number>>(() =>
+    Object.fromEntries(comCodigo.map((produto) => [produto.id, QUANTIDADE_PADRAO]))
+  );
+
+  function alterarQuantidade(produtoId: number, valor: string) {
+    if (valor === "") {
+      setQuantidades((atual) => ({ ...atual, [produtoId]: QUANTIDADE_PADRAO }));
+      return;
+    }
+    const numero = Math.trunc(Number(valor));
+    if (!Number.isFinite(numero)) return;
+    const limitado = Math.min(QUANTIDADE_MAXIMA_POR_PRODUTO, Math.max(1, numero));
+    setQuantidades((atual) => ({ ...atual, [produtoId]: limitado }));
+  }
+
+  const totalEtiquetas = comCodigo.reduce(
+    (soma, produto) => soma + (quantidades[produto.id] ?? QUANTIDADE_PADRAO),
+    0
+  );
+
   // carrega a última dimensão usada nesse computador (se houver)
   useEffect(() => {
     const larguraSalva = localStorage.getItem(CHAVE_LARGURA);
@@ -58,18 +85,32 @@ export default function FolhaEtiquetas({
   }
 
   async function enviarParaImpressora() {
+    if (totalEtiquetas > MAX_ETIQUETAS_POR_LOTE) {
+      setErro(
+        `O lote aceita no máximo ${MAX_ETIQUETAS_POR_LOTE} etiquetas por impressão. ` +
+          `Reduza as quantidades ou imprima em mais de uma vez.`
+      );
+      return;
+    }
+
     setEnviando(true);
     setErro(null);
     try {
       const larguraNum = Number(largura.replace(",", ".")) || Number(LARGURA_PADRAO);
       const alturaNum = Number(altura.replace(",", ".")) || Number(ALTURA_PADRAO);
 
-      const payload = {
-        etiquetas: comCodigo.map((produto) => ({
+      // cada produto vira N etiquetas repetidas, de acordo com a quantidade escolhida
+      const etiquetas = comCodigo.flatMap((produto) => {
+        const quantidade = quantidades[produto.id] ?? QUANTIDADE_PADRAO;
+        return Array.from({ length: quantidade }, () => ({
           nome: produto.nome,
           precoVenda: produto.precoVenda,
           codigoBarras: produto.codigoBarras,
-        })),
+        }));
+      });
+
+      const payload = {
+        etiquetas,
         largura: larguraNum,
         altura: alturaNum,
       };
@@ -113,7 +154,7 @@ export default function FolhaEtiquetas({
       <div className="bg-surface rounded-2xl w-full max-w-md max-h-[85vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="font-semibold text-sm">
-            Etiquetas para impressão ({comCodigo.length})
+            Etiquetas para impressão ({totalEtiquetas})
           </h2>
           <button onClick={onFechar} className="p-1 rounded-md hover:bg-background text-muted">
             <X className="w-4 h-4" />
@@ -167,18 +208,35 @@ export default function FolhaEtiquetas({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-2">
+          <div className="space-y-3">
             {comCodigo.map((produto) => (
-              <div key={produto.id} className="text-center border-b border-dashed border-border pb-2 last:border-0">
-                <p className="text-[11px] font-medium leading-tight px-1">{produto.nome}</p>
-                <p className="text-[11px] font-mono">{formatarMoeda(produto.precoVenda)}</p>
-                <BarcodeSvg
-                  valor={produto.codigoBarras!}
-                  altura={28}
-                  largura={1.2}
-                  fontSize={9}
-                  className="mx-auto mt-0.5"
-                />
+              <div key={produto.id} className="border-b border-dashed border-border pb-3 last:border-0">
+                <div className="flex items-center justify-center gap-2 mb-1.5">
+                  <label className="text-[11px] text-muted" htmlFor={`qtd-etiqueta-${produto.id}`}>
+                    Qtde.
+                  </label>
+                  <input
+                    id={`qtd-etiqueta-${produto.id}`}
+                    type="number"
+                    min={1}
+                    max={QUANTIDADE_MAXIMA_POR_PRODUTO}
+                    inputMode="numeric"
+                    value={quantidades[produto.id] ?? QUANTIDADE_PADRAO}
+                    onChange={(e) => alterarQuantidade(produto.id, e.target.value)}
+                    className="w-14 px-2 py-1 rounded-md border border-border bg-background text-sm text-center focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition"
+                  />
+                </div>
+                <div className="text-center">
+                  <p className="text-[11px] font-medium leading-tight px-1">{produto.nome}</p>
+                  <p className="text-[11px] font-mono">{formatarMoeda(produto.precoVenda)}</p>
+                  <BarcodeSvg
+                    valor={produto.codigoBarras!}
+                    altura={28}
+                    largura={1.2}
+                    fontSize={9}
+                    className="mx-auto mt-0.5"
+                  />
+                </div>
               </div>
             ))}
           </div>
@@ -195,7 +253,7 @@ export default function FolhaEtiquetas({
           ) : (
             <button
               onClick={enviarParaImpressora}
-              disabled={comCodigo.length === 0 || enviando}
+              disabled={totalEtiquetas === 0 || enviando}
               className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
             >
               {enviando ? (
@@ -206,7 +264,7 @@ export default function FolhaEtiquetas({
               ) : (
                 <>
                   <Printer className="w-4 h-4" />
-                  Imprimir {comCodigo.length} etiqueta{comCodigo.length === 1 ? "" : "s"}
+                  Imprimir {totalEtiquetas} etiqueta{totalEtiquetas === 1 ? "" : "s"}
                 </>
               )}
             </button>

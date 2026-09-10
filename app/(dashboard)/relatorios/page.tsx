@@ -28,6 +28,7 @@ import {
   Lock,
   Unlock,
   Vault,
+  RotateCcw,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
@@ -56,6 +57,9 @@ export default function RelatoriosPage() {
   const [valorFinalCaixa, setValorFinalCaixa] = useState<string>("");
   const [fechandoCaixa, setFechandoCaixa] = useState(false);
   const [erroFechamento, setErroFechamento] = useState<string | null>(null);
+  // reabertura de caixa (somente ADMIN, e só do caixa fechado mais recente)
+  const [reabrindoCaixaId, setReabrindoCaixaId] = useState<number | null>(null);
+  const [erroReabertura, setErroReabertura] = useState<string | null>(null);
 
   useEffect(() => {
     async function buscarCaixaAtual() {
@@ -88,6 +92,25 @@ export default function RelatoriosPage() {
       setErroFechamento(msg);
     } finally {
       setFechandoCaixa(false);
+    }
+  }
+
+  async function reabrirCaixa(id: number) {
+    if (!confirm("Reabrir este caixa? O fechamento atual dele será desfeito.")) return;
+    setReabrindoCaixaId(id);
+    setErroReabertura(null);
+    try {
+      const { data } = await api.post<Caixa>(`/caixa/${id}/reabrir`);
+      setCaixaAtual(data);
+      // reflete a reabertura no histórico já carregado, sem precisar buscar tudo de novo
+      setHistoricoCaixas((atual) => atual.map((c) => (c.id === id ? data : c)));
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Não foi possível reabrir o caixa.";
+      setErroReabertura(msg);
+    } finally {
+      setReabrindoCaixaId(null);
     }
   }
 
@@ -220,6 +243,18 @@ export default function RelatoriosPage() {
     [vendasPorDia]
   );
 
+  // só o caixa fechado mais recente pode ser reaberto (mesma regra do backend) —
+  // e só faz sentido oferecer isso quando não há caixa aberto agora
+  const caixaReabrivelId = useMemo(() => {
+    if (caixaAtual) return null;
+    const fechados = historicoCaixas.filter((c) => !c.aberto && c.dataFechamento);
+    if (fechados.length === 0) return null;
+    const maisRecente = fechados.reduce((a, b) =>
+      new Date(a.dataFechamento!) > new Date(b.dataFechamento!) ? a : b
+    );
+    return maisRecente.id;
+  }, [caixaAtual, historicoCaixas]);
+
   function exportarExcel() {
     const linhas = vendasFiltradas.map((v) => ({
       Venda: v.id,
@@ -324,6 +359,12 @@ export default function RelatoriosPage() {
         {erroFechamento && (
           <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">
             {erroFechamento}
+          </div>
+        )}
+
+        {erroReabertura && (
+          <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">
+            {erroReabertura}
           </div>
         )}
 
@@ -556,6 +597,13 @@ export default function RelatoriosPage() {
                             {formatarDataHora(caixa.dataFechamento)}
                           </span>
                         )}
+                        {caixa.usuarioReaberturaNome && caixa.dataReabertura && (
+                          <span className="flex items-center gap-1 text-accent">
+                            <RotateCcw className="w-3 h-3" />
+                            Reaberto por {caixa.usuarioReaberturaNome} em{" "}
+                            {formatarDataHora(caixa.dataReabertura)}
+                          </span>
+                        )}
                       </div>
                       <div className="flex items-center gap-4 font-mono text-sm">
                         <span title="Saldo inicial">
@@ -567,6 +615,21 @@ export default function RelatoriosPage() {
                             <span className="text-muted text-xs">Final: </span>
                             {formatarMoeda(caixa.valorFinal)}
                           </span>
+                        )}
+                        {isAdmin && caixaReabrivelId === caixa.id && (
+                          <button
+                            onClick={() => reabrirCaixa(caixa.id)}
+                            disabled={reabrindoCaixaId === caixa.id}
+                            className="flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent-dark disabled:opacity-50 border border-accent/30 hover:bg-accent/10 rounded-lg px-2.5 py-1.5 transition"
+                            title="Reabrir este caixa"
+                          >
+                            {reabrindoCaixaId === caixa.id ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <RotateCcw className="w-3.5 h-3.5" />
+                            )}
+                            Reabrir caixa
+                          </button>
                         )}
                       </div>
                     </li>
