@@ -688,15 +688,21 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
             disabled={imprimindo}
             className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border hover:bg-background text-foreground font-medium py-2.5 rounded-lg transition disabled:opacity-50"
           >
-            {imprimindo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+            {imprimindo ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4" />
+            )}
             {imprimindo ? "Imprimindo..." : "Imprimir"}
           </button>
-        <button
-          onClick={onNovaVenda}
-          className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
-        >
-          Nova venda
-        </button>
+
+          <button
+            onClick={onNovaVenda}
+            className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
+          >
+            Nova venda
+          </button>
+        </div>
       </div>
     </div>
   );
