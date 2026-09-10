@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
+import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer } from "lucide-react";
@@ -578,6 +579,25 @@ export default function PdvPage() {
 }
 
 function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: () => void }) {
+  const [imprimindo, setImprimindo] = useState(false);
+  const [erroImpressao, setErroImpressao] = useState<string | null>(null);
+  const [impressaoOk, setImpressaoOk] = useState(false);
+
+  async function imprimir() {
+    if (imprimindo) return;
+    setImprimindo(true);
+    setErroImpressao(null);
+    setImpressaoOk(false);
+    try {
+      await imprimirCupom(venda);
+      setImpressaoOk(true);
+    } catch (error) {
+      setErroImpressao(error instanceof Error ? error.message : "Não foi possível imprimir o cupom.");
+    } finally {
+      setImprimindo(false);
+    }
+  }
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
@@ -632,20 +652,36 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
         </div>
       </div>
 
-      <div className="w-full max-w-sm flex gap-2 mt-4 no-print">
-        <button
-          onClick={() => window.print()}
-          className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border hover:bg-background text-foreground font-medium py-2.5 rounded-lg transition"
-        >
-          <Printer className="w-4 h-4" />
-          Imprimir
-        </button>
-        <button
-          onClick={onNovaVenda}
-          className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
-        >
-          Nova venda
-        </button>
+      <div className="w-full max-w-sm mt-4 no-print space-y-2">
+        {erroImpressao && (
+          <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erroImpressao}</div>
+        )}
+        {impressaoOk && (
+          <div className="rounded-lg bg-primary-light text-primary-dark text-sm px-3 py-2">
+            Cupom enviado para a Goldensky.
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={imprimir}
+            disabled={imprimindo}
+            className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border hover:bg-background text-foreground font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+          >
+            {imprimindo ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : (
+              <Printer className="w-4 h-4" />
+            )}
+            {imprimindo ? "Imprimindo..." : "Imprimir"}
+          </button>
+
+          <button
+            onClick={onNovaVenda}
+            className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
+          >
+            Nova venda
+          </button>
+        </div>
       </div>
     </div>
   );

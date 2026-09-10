@@ -92,13 +92,19 @@ export default function FolhaEtiquetas({
           </p>
         )}
 
-        <div className="flex-1 overflow-y-auto p-5">
-          <div className="space-y-3">
+        <div className="flex-1 overflow-y-auto p-4">
+          <div className="space-y-2">
             {comCodigo.map((produto) => (
-              <div key={produto.id} className="text-center border-b border-dashed border-border pb-3 last:border-0">
-                <p className="text-xs font-medium leading-tight px-1">{produto.nome}</p>
-                <p className="text-xs font-mono">{formatarMoeda(produto.precoVenda)}</p>
-                <BarcodeSvg valor={produto.codigoBarras!} className="mx-auto mt-1" />
+              <div key={produto.id} className="text-center border-b border-dashed border-border pb-2 last:border-0">
+                <p className="text-[11px] font-medium leading-tight px-1">{produto.nome}</p>
+                <p className="text-[11px] font-mono">{formatarMoeda(produto.precoVenda)}</p>
+                <BarcodeSvg
+                  valor={produto.codigoBarras!}
+                  altura={28}
+                  largura={1.2}
+                  fontSize={9}
+                  className="mx-auto mt-0.5"
+                />
               </div>
             ))}
           </div>

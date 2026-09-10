@@ -8,11 +8,13 @@ export default function BarcodeSvg({
   valor,
   altura = 40,
   largura = 1.6,
+  fontSize = 12,
   className,
 }: {
   valor: string;
   altura?: number;
   largura?: number;
+  fontSize?: number;
   className?: string;
 }) {
   const ref = useRef<SVGSVGElement>(null);
@@ -24,7 +26,7 @@ export default function BarcodeSvg({
         format: "EAN13",
         height: altura,
         width: largura,
-        fontSize: 12,
+        fontSize,
         margin: 0,
         displayValue: true,
       });
@@ -32,7 +34,7 @@ export default function BarcodeSvg({
       // código de barras inválido para o formato EAN-13 (ex: cadastrado manualmente
       // com outro padrão) — não quebra a tela, só não desenha as barras
     }
-  }, [valor, altura, largura]);
+  }, [valor, altura, largura, fontSize]);
 
   return <svg ref={ref} className={className} />;
 }
