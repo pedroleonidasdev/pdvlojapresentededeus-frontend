@@ -1,4 +1,4 @@
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
@@ -32,16 +32,16 @@ export default function PdvPage() {
   const [caixa, setCaixa] = useState<Caixa | null | undefined>(undefined);
   const [valorInicialCaixa, setValorInicialCaixa] = useState<string>("");
   const [abrindoCaixa, setAbrindoCaixa] = useState(false);
-  // referência do campo de busca: leitores de código de barras baratos funcionam como
-  // um teclado (digitam o código + Enter em quem estiver com foco no momento). Se o
-  // foco escapar do campo — por exemplo depois de clicar num produto com o mouse — o
-  // próximo disparo do leitor se perde. Por isso devolvemos o foco a este campo após
+  // refer├¬ncia do campo de busca: leitores de c├│digo de barras baratos funcionam como
+  // um teclado (digitam o c├│digo + Enter em quem estiver com foco no momento). Se o
+  // foco escapar do campo ÔÇö por exemplo depois de clicar num produto com o mouse ÔÇö o
+  // pr├│ximo disparo do leitor se perde. Por isso devolvemos o foco a este campo ap├│s
   // cada produto adicionado.
   const buscaInputRef = useRef<HTMLInputElement>(null);
   const [erroCaixa, setErroCaixa] = useState<string | null>(null);
-  // guarda síncrona contra duplo-clique/duplo-toque: o estado `finalizando` já desabilita o
-  // botão, mas a atualização de estado só reflete no DOM após o re-render, e dois cliques
-  // muito próximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
+  // guarda s├¡ncrona contra duplo-clique/duplo-toque: o estado `finalizando` j├í desabilita o
+  // bot├úo, mas a atualiza├º├úo de estado s├│ reflete no DOM ap├│s o re-render, e dois cliques
+  // muito pr├│ximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
   const enviandoVendaRef = useRef(false);
 
   useEffect(() => {
@@ -68,7 +68,7 @@ export default function PdvPage() {
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Não foi possível abrir o caixa.";
+        "N├úo foi poss├¡vel abrir o caixa.";
       setErroCaixa(msg);
     } finally {
       setAbrindoCaixa(false);
@@ -111,7 +111,7 @@ export default function PdvPage() {
       setBusca("");
       setResultados([]);
     } catch {
-      setErro(`Produto não encontrado para o código ${codigo}`);
+      setErro(`Produto n├úo encontrado para o c├│digo ${codigo}`);
     } finally {
       buscaInputRef.current?.focus();
     }
@@ -137,7 +137,7 @@ export default function PdvPage() {
         );
       }
       if (produto.quantidadeEstoque < 1) {
-        setErro(`${produto.nome} está sem estoque`);
+        setErro(`${produto.nome} est├í sem estoque`);
         return prev;
       }
       return [...prev, { produto, quantidade: 1 }];
@@ -220,7 +220,7 @@ export default function PdvPage() {
   }
 
   function handleDescontoChange(valor: string) {
-    // Aceita apenas números e um separador decimal (. ou ,)
+    // Aceita apenas n├║meros e um separador decimal (. ou ,)
     if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
       setDescontoPercentual(valor);
     }
@@ -295,7 +295,7 @@ export default function PdvPage() {
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Não foi possível concluir a venda.";
+        "N├úo foi poss├¡vel concluir a venda.";
       setErro(msg);
     } finally {
       enviandoVendaRef.current = false;
@@ -312,7 +312,7 @@ export default function PdvPage() {
 
   function cancelarVenda() {
     if (carrinho.length === 0) return;
-    if (!confirm("Deseja cancelar esta venda? O carrinho será esvaziado.")) return;
+    if (!confirm("Deseja cancelar esta venda? O carrinho ser├í esvaziado.")) return;
     setCarrinho([]);
     setFormaPagamento("PIX");
     setDescontoPercentual("");
@@ -341,7 +341,7 @@ export default function PdvPage() {
             <Lock className="w-8 h-8 mx-auto mb-2" />
             <p className="font-semibold">Abrir caixa</p>
             <p className="text-xs text-white/70 mt-0.5">
-              Informe o valor inicial para começar as vendas
+              Informe o valor inicial para come├ºar as vendas
             </p>
           </div>
 
@@ -387,10 +387,10 @@ export default function PdvPage() {
 
   return (
     <div className="flex flex-col h-screen bg-background">
-      <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" />
+      <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou c├│digo de barras" />
 
       <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
-        {/* Área principal do PDV */}
+        {/* ├ürea principal do PDV */}
         <div className="w-full md:flex-1 flex flex-col p-4 md:p-6 md:overflow-hidden">
           <div className="flex items-center gap-3 mb-5">
             <div className="relative flex-1">
@@ -401,7 +401,7 @@ export default function PdvPage() {
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
                 onKeyDown={handleBuscaKeyDown}
-                placeholder="Nome do produto ou código de barras + Enter"
+                placeholder="Nome do produto ou c├│digo de barras + Enter"
                 className="w-full pl-12 pr-12 py-4 rounded-xl border-2 border-border bg-surface focus:outline-none focus:ring-4 focus:ring-primary/10 focus:border-primary transition text-base md:text-lg shadow-sm"
               />
               {buscando && (
@@ -541,7 +541,7 @@ export default function PdvPage() {
                     onClick={desativarPagamentoMultiplo}
                     className="text-sm font-semibold text-danger hover:text-danger/80"
                   >
-                    Usar pagamento único
+                    Usar pagamento ├║nico
                   </button>
                 )}
               </div>
@@ -733,7 +733,7 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
       await imprimirCupom(venda);
       setImpressaoOk(true);
     } catch (error) {
-      setErroImpressao(error instanceof Error ? error.message : "Não foi possível imprimir o cupom.");
+      setErroImpressao(error instanceof Error ? error.message : "N├úo foi poss├¡vel imprimir o cupom.");
     } finally {
       setImprimindo(false);
     }
@@ -744,16 +744,16 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />
-          <p className="font-semibold">Venda concluída</p>
+          <p className="font-semibold">Venda conclu├¡da</p>
           <p className="text-xs text-white/70 mt-0.5">Venda #{venda.id}</p>
         </div>
 
-        {/* cabeçalho só visível na impressão: a tela já mostra "Venda concluída" acima */}
+        {/* cabe├ºalho s├│ vis├¡vel na impress├úo: a tela j├í mostra "Venda conclu├¡da" acima */}
         <div className="hidden print:block text-center px-6 pt-4">
           <p className="font-semibold">PRESENTE DE DEUS</p>
-          <p className="text-xs text-muted">Artigos Religiosos Católicos e Presentes</p>
-          <p className="text-xs text-muted">CLN 07 Bloco B, Lote 1, Loja 04 — Riacho Fundo I, Brasília-DF</p>
-          <p className="text-xs text-muted">(61) 3264087 · @presentededeusartigosreligiososcatolicos</p>
+          <p className="text-xs text-muted">Artigos Religiosos Cat├│licos e Presentes</p>
+          <p className="text-xs text-muted">CLN 07 Bloco B, Lote 1, Loja 04 ÔÇö Riacho Fundo I, Bras├¡lia-DF</p>
+          <p className="text-xs text-muted">(61) 3264087 ┬À @presentededeusartigosreligiososcatolicos</p>
           <p className="text-xs text-muted mt-2">Comprovante de venda #{venda.id}</p>
           <p className="text-xs text-muted">{formatarDataHora(venda.dataHora)}</p>
         </div>
