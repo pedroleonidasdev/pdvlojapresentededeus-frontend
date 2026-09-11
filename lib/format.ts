@@ -58,3 +58,25 @@ export const LABEL_FORMA_PAGAMENTO: Record<string, string> = {
   CARTAO_CREDITO: "Cartão de crédito",
   CARTAO_DEBITO: "Cartão de débito",
 };
+
+export const LABEL_TIPO_DESPESA: Record<string, string> = {
+  DESPESA: "Despesa",
+  SANGRIA: "Sangria (retirada)",
+  SUPRIMENTO: "Suprimento (reforço)",
+};
+
+// sugestões de categoria pro autocomplete/datalist na tela de Finanças — o
+// campo aceita texto livre, isso é só pra agilizar o lançamento mais comum
+export const CATEGORIAS_DESPESA_SUGERIDAS = [
+  "Aluguel",
+  "Fornecedor",
+  "Energia",
+  "Água",
+  "Internet/Telefone",
+  "Salários",
+  "Manutenção",
+  "Embalagens",
+  "Marketing",
+  "Impostos/Taxas",
+  "Outros",
+];

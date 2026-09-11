@@ -109,3 +109,17 @@ export interface Caixa {
   dataFechamento: string | null;
   aberto: boolean;
 }
+
+export type TipoDespesa = "DESPESA" | "SANGRIA" | "SUPRIMENTO";
+
+export interface Despesa {
+  id: number;
+  tipo: TipoDespesa;
+  categoria: string | null;
+  descricao: string;
+  valor: number;
+  formaPagamento: FormaPagamento;
+  dataHora: string;
+  usuarioNome: string;
+  caixaId: number | null;
+}

@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Venda, FormaPagamento, Caixa, Troca } from "@/lib/types";
+import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
 import {
   formatarMoeda,
   formatarDataHora,
@@ -45,6 +45,7 @@ export default function RelatoriosPage() {
   const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [trocas, setTrocas] = useState<Troca[]>([]);
+  const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [jaGerou, setJaGerou] = useState(false);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
@@ -109,14 +110,16 @@ export default function RelatoriosPage() {
         inicio: limiteDiaBrasiliaParaUtc(inicio, false),
         fim: limiteDiaBrasiliaParaUtc(fim, true),
       };
-      const [resVendas, resCaixas, resTrocas] = await Promise.all([
+      const [resVendas, resCaixas, resTrocas, resDespesas] = await Promise.all([
         api.get<Venda[]>("/vendas", { params }),
         api.get<Caixa[]>("/caixa", { params }),
         api.get<Troca[]>("/trocas", { params }),
+        api.get<Despesa[]>("/despesas", { params }),
       ]);
       setVendas(resVendas.data);
       setHistoricoCaixas(resCaixas.data);
       setTrocas(resTrocas.data);
+      setDespesas(resDespesas.data);
       setJaGerou(true);
       // ao gerar um novo período, reseta os filtros locais
       setFormasSelecionadas(new Set(FORMAS));
@@ -259,14 +262,17 @@ export default function RelatoriosPage() {
     [vendasPorDia]
   );
 
-  // conferência de cada caixa: quanto em dinheiro entrou (vendas + trocas) durante
-  // a janela em que ele ficou aberto, comparado com o valor final informado no fechamento.
+  // conferência de cada caixa: quanto em dinheiro entrou (vendas + trocas + suprimento)
+  // e saiu (sangria + despesas pagas em dinheiro) durante a janela em que ele ficou
+  // aberto, comparado com o valor final informado no fechamento.
   const conferenciaCaixas = useMemo(() => {
     const mapa = new Map<
       number,
       {
         vendasDinheiro: number;
         trocasDinheiro: number;
+        suprimentos: number;
+        saidasDinheiro: number; // sangria + despesa paga em dinheiro
         saldoEsperado: number;
         diferencaAbertura: number | null;
         diferencaEsperado: number | null;
@@ -289,14 +295,33 @@ export default function RelatoriosPage() {
         .filter((t) => t.formaPagamentoDiferenca === "DINHEIRO" && dentro(t.dataHora))
         .reduce((acc, t) => acc + t.diferenca, 0);
 
-      const saldoEsperado = caixa.valorInicial + vendasDinheiro + trocasDinheiro;
+      // despesas já vêm vinculadas ao caixa exato (caixaId) quando são em dinheiro,
+      // então usamos o vínculo direto em vez da janela de tempo — é mais preciso
+      const despesasDoCaixa = despesas.filter((d) => d.caixaId === caixa.id);
+      const suprimentos = despesasDoCaixa
+        .filter((d) => d.tipo === "SUPRIMENTO")
+        .reduce((acc, d) => acc + d.valor, 0);
+      const saidasDinheiro = despesasDoCaixa
+        .filter((d) => d.tipo === "SANGRIA" || d.tipo === "DESPESA")
+        .reduce((acc, d) => acc + d.valor, 0);
+
+      const saldoEsperado =
+        caixa.valorInicial + vendasDinheiro + trocasDinheiro + suprimentos - saidasDinheiro;
       const diferencaAbertura = caixa.valorFinal !== null ? caixa.valorFinal - caixa.valorInicial : null;
       const diferencaEsperado = caixa.valorFinal !== null ? caixa.valorFinal - saldoEsperado : null;
 
-      mapa.set(caixa.id, { vendasDinheiro, trocasDinheiro, saldoEsperado, diferencaAbertura, diferencaEsperado });
+      mapa.set(caixa.id, {
+        vendasDinheiro,
+        trocasDinheiro,
+        suprimentos,
+        saidasDinheiro,
+        saldoEsperado,
+        diferencaAbertura,
+        diferencaEsperado,
+      });
     }
     return mapa;
-  }, [historicoCaixas, vendas, trocas]);
+  }, [historicoCaixas, vendas, trocas, despesas]);
 
   function exportarExcel() {
     const linhas = vendasFiltradas.map((v) => ({
@@ -715,6 +740,16 @@ export default function RelatoriosPage() {
                                 <LinhaConciliacao
                                   label="Ajuste de trocas em dinheiro"
                                   valor={conf.trocasDinheiro}
+                                  comSinal
+                                />
+                              )}
+                              {conf.suprimentos !== 0 && (
+                                <LinhaConciliacao label="Suprimento (reforço)" valor={conf.suprimentos} comSinal />
+                              )}
+                              {conf.saidasDinheiro !== 0 && (
+                                <LinhaConciliacao
+                                  label="Sangria / despesas em dinheiro"
+                                  valor={-conf.saidasDinheiro}
                                   comSinal
                                 />
                               )}
