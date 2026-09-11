@@ -6,7 +6,7 @@ import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer } from "lucide-react";
 
 interface ItemCarrinho {
   produto: Produto;
@@ -106,20 +106,13 @@ export default function PdvPage() {
     try {
       const { data } = await api.get<Produto>(`/produtos/codigo-barras/${codigo}`);
       adicionarAoCarrinho(data);
-      limparBusca();
+      setBusca("");
+      setResultados([]);
     } catch {
       setErro(`Produto não encontrado para o código ${codigo}`);
     } finally {
       buscaInputRef.current?.focus();
     }
-  }
-
-  // limpa o campo de busca e os resultados — usada pelo botão "Limpar" e depois de
-  // ações que encerram o fluxo atual (adicionar por código de barras, cancelar/
-  // finalizar a venda), pra não deixar a busca antiga aparecendo pro próximo cliente
-  function limparBusca() {
-    setBusca("");
-    setResultados([]);
   }
 
   function handleBuscaKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -244,7 +237,6 @@ export default function PdvPage() {
       setDescontoPercentual("");
       setDescontoDinheiro("");
       setValorRecebido("");
-      limparBusca();
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -265,7 +257,6 @@ export default function PdvPage() {
     setDescontoDinheiro("");
     setValorRecebido("");
     setErro(null);
-    limparBusca();
   }
 
   if (vendaConcluida) {
@@ -343,24 +334,10 @@ export default function PdvPage() {
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={handleBuscaKeyDown}
               placeholder="Nome do produto ou código de barras + Enter"
-              className="w-full pl-10 pr-10 py-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
+              className="w-full pl-10 pr-4 py-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
             />
-            {buscando ? (
+            {buscando && (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted" />
-            ) : (
-              busca !== "" && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    limparBusca();
-                    buscaInputRef.current?.focus();
-                  }}
-                  title="Limpar busca"
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )
             )}
           </div>
 

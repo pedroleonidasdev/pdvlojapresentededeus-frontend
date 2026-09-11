@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Venda, FormaPagamento, Caixa } from "@/lib/types";
+import { Venda, FormaPagamento, Caixa, Troca } from "@/lib/types";
 import {
   formatarMoeda,
   formatarDataHora,
@@ -28,7 +28,7 @@ import {
   Lock,
   Unlock,
   Vault,
-  RotateCcw,
+  Repeat,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
@@ -43,6 +43,7 @@ export default function RelatoriosPage() {
   const [inicio, setInicio] = useState(primeiroDiaMes.toISOString().slice(0, 10));
   const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
   const [vendas, setVendas] = useState<Venda[]>([]);
+  const [trocas, setTrocas] = useState<Troca[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [jaGerou, setJaGerou] = useState(false);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
@@ -57,9 +58,6 @@ export default function RelatoriosPage() {
   const [valorFinalCaixa, setValorFinalCaixa] = useState<string>("");
   const [fechandoCaixa, setFechandoCaixa] = useState(false);
   const [erroFechamento, setErroFechamento] = useState<string | null>(null);
-  // reabertura de caixa (somente ADMIN, e só do caixa fechado mais recente)
-  const [reabrindoCaixaId, setReabrindoCaixaId] = useState<number | null>(null);
-  const [erroReabertura, setErroReabertura] = useState<string | null>(null);
 
   useEffect(() => {
     async function buscarCaixaAtual() {
@@ -95,25 +93,6 @@ export default function RelatoriosPage() {
     }
   }
 
-  async function reabrirCaixa(id: number) {
-    if (!confirm("Reabrir este caixa? O fechamento atual dele será desfeito.")) return;
-    setReabrindoCaixaId(id);
-    setErroReabertura(null);
-    try {
-      const { data } = await api.post<Caixa>(`/caixa/${id}/reabrir`);
-      setCaixaAtual(data);
-      // reflete a reabertura no histórico já carregado, sem precisar buscar tudo de novo
-      setHistoricoCaixas((atual) => atual.map((c) => (c.id === id ? data : c)));
-    } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Não foi possível reabrir o caixa.";
-      setErroReabertura(msg);
-    } finally {
-      setReabrindoCaixaId(null);
-    }
-  }
-
   // filtros aplicados sobre o período já carregado
   const [formasSelecionadas, setFormasSelecionadas] = useState<Set<FormaPagamento>>(
     new Set(FORMAS)
@@ -127,12 +106,14 @@ export default function RelatoriosPage() {
         inicio: limiteDiaBrasiliaParaUtc(inicio, false),
         fim: limiteDiaBrasiliaParaUtc(fim, true),
       };
-      const [resVendas, resCaixas] = await Promise.all([
+      const [resVendas, resCaixas, resTrocas] = await Promise.all([
         api.get<Venda[]>("/vendas", { params }),
         api.get<Caixa[]>("/caixa", { params }),
+        api.get<Troca[]>("/trocas", { params }),
       ]);
       setVendas(resVendas.data);
       setHistoricoCaixas(resCaixas.data);
+      setTrocas(resTrocas.data);
       setJaGerou(true);
       // ao gerar um novo período, reseta os filtros locais
       setFormasSelecionadas(new Set(FORMAS));
@@ -170,9 +151,12 @@ export default function RelatoriosPage() {
   }
 
   const usuariosDoPeriodo = useMemo(() => {
-    const nomes = new Set(vendas.map((v) => v.usuarioNome));
+    const nomes = new Set([
+      ...vendas.map((v) => v.usuarioNome),
+      ...trocas.map((t) => t.usuarioNome),
+    ]);
     return Array.from(nomes).sort();
-  }, [vendas]);
+  }, [vendas, trocas]);
 
   function alternarForma(forma: FormaPagamento) {
     setFormasSelecionadas((prev) => {
@@ -194,16 +178,37 @@ export default function RelatoriosPage() {
     });
   }, [vendas, formasSelecionadas, usuarioSelecionado]);
 
+  // trocas sem diferença (formaPagamentoDiferenca nula) sempre entram — não têm
+  // forma de pagamento pra filtrar. As com diferença seguem o mesmo filtro das vendas.
+  const trocasFiltradas = useMemo(() => {
+    return trocas.filter((t) => {
+      if (t.formaPagamentoDiferenca && !formasSelecionadas.has(t.formaPagamentoDiferenca)) return false;
+      if (usuarioSelecionado !== "TODOS" && t.usuarioNome !== usuarioSelecionado) return false;
+      return true;
+    });
+  }, [trocas, formasSelecionadas, usuarioSelecionado]);
+
   // métricas calculadas a partir do que está filtrado, garantindo consistência
   // entre os cards, o gráfico e a lista de vendas exibida
   const metricas = useMemo(() => {
     const totalFaturado = vendasFiltradas.reduce((acc, v) => acc + v.total, 0);
     const quantidadeVendas = vendasFiltradas.length;
 
+    // diferença de troca: positiva = cliente pagou a mais (entra dinheiro),
+    // negativa = loja devolveu troco (sai dinheiro) — soma líquida das duas.
+    const totalTrocas = trocasFiltradas.reduce((acc, t) => acc + t.diferenca, 0);
+    const quantidadeTrocas = trocasFiltradas.length;
+    const totalLiquido = totalFaturado + totalTrocas;
+
     const totalPorFormaPagamento: Record<string, number> = {};
     for (const v of vendasFiltradas) {
       totalPorFormaPagamento[v.formaPagamento] =
         (totalPorFormaPagamento[v.formaPagamento] ?? 0) + v.total;
+    }
+    for (const t of trocasFiltradas) {
+      if (!t.formaPagamentoDiferenca || t.diferenca === 0) continue;
+      totalPorFormaPagamento[t.formaPagamentoDiferenca] =
+        (totalPorFormaPagamento[t.formaPagamentoDiferenca] ?? 0) + t.diferenca;
     }
 
     const produtosMap = new Map<string, { quantidadeVendida: number; totalVendido: number }>();
@@ -223,8 +228,16 @@ export default function RelatoriosPage() {
       .sort((a, b) => b.quantidadeVendida - a.quantidadeVendida)
       .slice(0, 10);
 
-    return { totalFaturado, quantidadeVendas, totalPorFormaPagamento, produtosMaisVendidos };
-  }, [vendasFiltradas]);
+    return {
+      totalFaturado,
+      quantidadeVendas,
+      totalTrocas,
+      quantidadeTrocas,
+      totalLiquido,
+      totalPorFormaPagamento,
+      produtosMaisVendidos,
+    };
+  }, [vendasFiltradas, trocasFiltradas]);
 
   // agrupamento por dia (no fuso de Brasília) para o gráfico
   const vendasPorDia = useMemo(() => {
@@ -243,17 +256,38 @@ export default function RelatoriosPage() {
     [vendasPorDia]
   );
 
-  // só o caixa fechado mais recente pode ser reaberto (mesma regra do backend) —
-  // e só faz sentido oferecer isso quando não há caixa aberto agora
-  const caixaReabrivelId = useMemo(() => {
-    if (caixaAtual) return null;
-    const fechados = historicoCaixas.filter((c) => !c.aberto && c.dataFechamento);
-    if (fechados.length === 0) return null;
-    const maisRecente = fechados.reduce((a, b) =>
-      new Date(a.dataFechamento!) > new Date(b.dataFechamento!) ? a : b
-    );
-    return maisRecente.id;
-  }, [caixaAtual, historicoCaixas]);
+  // conferência de cada caixa: quanto em dinheiro entrou (vendas + trocas) durante
+  // a janela em que ele ficou aberto, comparado com o valor final informado no fechamento.
+  const conferenciaCaixas = useMemo(() => {
+    const mapa = new Map<
+      number,
+      { saldoEsperado: number; diferencaAbertura: number | null; diferencaEsperado: number | null }
+    >();
+
+    for (const caixa of historicoCaixas) {
+      const inicioMs = new Date(caixa.dataAbertura).getTime();
+      const fimMs = caixa.dataFechamento ? new Date(caixa.dataFechamento).getTime() : Date.now();
+      const dentro = (dataHora: string) => {
+        const t = new Date(dataHora).getTime();
+        return t >= inicioMs && t <= fimMs;
+      };
+
+      const vendasDinheiro = vendas
+        .filter((v) => v.formaPagamento === "DINHEIRO" && dentro(v.dataHora))
+        .reduce((acc, v) => acc + v.total, 0);
+
+      const trocasDinheiro = trocas
+        .filter((t) => t.formaPagamentoDiferenca === "DINHEIRO" && dentro(t.dataHora))
+        .reduce((acc, t) => acc + t.diferenca, 0);
+
+      const saldoEsperado = caixa.valorInicial + vendasDinheiro + trocasDinheiro;
+      const diferencaAbertura = caixa.valorFinal !== null ? caixa.valorFinal - caixa.valorInicial : null;
+      const diferencaEsperado = caixa.valorFinal !== null ? caixa.valorFinal - saldoEsperado : null;
+
+      mapa.set(caixa.id, { saldoEsperado, diferencaAbertura, diferencaEsperado });
+    }
+    return mapa;
+  }, [historicoCaixas, vendas, trocas]);
 
   function exportarExcel() {
     const linhas = vendasFiltradas.map((v) => ({
@@ -279,8 +313,38 @@ export default function RelatoriosPage() {
       { wch: 50 },
     ];
 
+    const linhasTrocas = trocasFiltradas.map((t) => ({
+      Troca: t.id,
+      "Data/Hora": formatarDataHora(t.dataHora),
+      Vendedor: t.usuarioNome,
+      "Venda de origem": t.vendaOrigemId ?? "",
+      "Valor devolvido": t.valorDevolvido,
+      "Valor novo": t.valorNovo,
+      Diferença: t.diferenca,
+      "Forma de pagamento da diferença": t.formaPagamentoDiferenca
+        ? LABEL_FORMA_PAGAMENTO[t.formaPagamentoDiferenca]
+        : "",
+      "Itens devolvidos": t.itensDevolvidos.map((i) => `${i.quantidade}x ${i.produtoNome}`).join("; "),
+      "Itens novos": t.itensNovos.map((i) => `${i.quantidade}x ${i.produtoNome}`).join("; "),
+    }));
+
+    const planilhaTrocas = XLSX.utils.json_to_sheet(linhasTrocas);
+    planilhaTrocas["!cols"] = [
+      { wch: 8 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 12 },
+      { wch: 26 },
+      { wch: 40 },
+      { wch: 40 },
+    ];
+
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Vendas");
+    XLSX.utils.book_append_sheet(livro, planilhaTrocas, "Trocas");
     XLSX.writeFile(livro, `relatorio-vendas_${inicio}_a_${fim}.xlsx`);
   }
 
@@ -359,12 +423,6 @@ export default function RelatoriosPage() {
         {erroFechamento && (
           <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">
             {erroFechamento}
-          </div>
-        )}
-
-        {erroReabertura && (
-          <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">
-            {erroReabertura}
           </div>
         )}
 
@@ -467,16 +525,31 @@ export default function RelatoriosPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <CardMetrica
                 icon={TrendingUp}
-                label="Total faturado"
-                valor={formatarMoeda(metricas.totalFaturado)}
+                label="Faturamento líquido"
+                valor={formatarMoeda(metricas.totalLiquido)}
+                subtitulo={
+                  metricas.totalTrocas !== 0
+                    ? `${formatarMoeda(metricas.totalFaturado)} em vendas ${metricas.totalTrocas > 0 ? "+" : "-"} ${formatarMoeda(Math.abs(metricas.totalTrocas))} em trocas`
+                    : undefined
+                }
               />
               <CardMetrica
                 icon={Receipt}
                 label="Vendas realizadas"
                 valor={metricas.quantidadeVendas.toString()}
+              />
+              <CardMetrica
+                icon={Repeat}
+                label="Trocas no período"
+                valor={metricas.quantidadeTrocas.toString()}
+                subtitulo={
+                  metricas.quantidadeTrocas > 0
+                    ? `${metricas.totalTrocas >= 0 ? "+" : "-"}${formatarMoeda(Math.abs(metricas.totalTrocas))} de ajuste`
+                    : undefined
+                }
               />
               <CardMetrica
                 icon={Wallet}
@@ -523,7 +596,8 @@ export default function RelatoriosPage() {
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-surface border border-border rounded-xl p-5">
-                <h3 className="text-sm font-semibold mb-4">Por forma de pagamento</h3>
+                <h3 className="text-sm font-semibold mb-1">Por forma de pagamento</h3>
+                <p className="text-[11px] text-muted mb-3">Vendas e ajuste de trocas já somados</p>
                 <ul className="space-y-3">
                   {Object.entries(metricas.totalPorFormaPagamento).map(([forma, valor]) => (
                     <li key={forma} className="flex items-center justify-between text-sm">
@@ -570,66 +644,133 @@ export default function RelatoriosPage() {
                 <p className="text-sm text-muted">Nenhuma abertura de caixa no período.</p>
               ) : (
                 <ul className="divide-y divide-border">
-                  {historicoCaixas.map((caixa) => (
-                    <li
-                      key={caixa.id}
-                      className="py-3 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-3"
-                    >
+                  {historicoCaixas.map((caixa) => {
+                    const conf = conferenciaCaixas.get(caixa.id);
+                    return (
+                      <li
+                        key={caixa.id}
+                        className="py-3 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-3"
+                      >
+                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
+                          <span
+                            className={`px-1.5 py-0.5 rounded font-medium ${
+                              caixa.aberto
+                                ? "bg-primary-light text-primary-dark"
+                                : "bg-border text-foreground"
+                            }`}
+                          >
+                            {caixa.aberto ? "Aberto" : "Fechado"}
+                          </span>
+                          <span className="flex items-center gap-1">
+                            <User className="w-3 h-3" />
+                            Aberto por {caixa.usuarioAberturaNome} em{" "}
+                            {formatarDataHora(caixa.dataAbertura)}
+                          </span>
+                          {!caixa.aberto && caixa.dataFechamento && (
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3 h-3" />
+                              Fechado por {caixa.usuarioFechamentoNome} em{" "}
+                              {formatarDataHora(caixa.dataFechamento)}
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
+                          <span title="Saldo inicial">
+                            <span className="text-muted text-xs">Inicial: </span>
+                            {formatarMoeda(caixa.valorInicial)}
+                          </span>
+                          {caixa.valorFinal !== null && (
+                            <>
+                              <span title="Saldo final">
+                                <span className="text-muted text-xs">Final: </span>
+                                {formatarMoeda(caixa.valorFinal)}
+                              </span>
+                              {conf?.diferencaAbertura !== null && conf?.diferencaAbertura !== undefined && (
+                                <span title="Final menos o valor inicial">
+                                  <span className="text-muted text-xs">Δ desde abertura: </span>
+                                  <span
+                                    className={
+                                      conf.diferencaAbertura >= 0 ? "text-primary-dark" : "text-danger"
+                                    }
+                                  >
+                                    {conf.diferencaAbertura >= 0 ? "+" : ""}
+                                    {formatarMoeda(conf.diferencaAbertura)}
+                                  </span>
+                                </span>
+                              )}
+                              {conf?.diferencaEsperado !== null && conf?.diferencaEsperado !== undefined && (
+                                <span
+                                  title="Final informado menos o esperado (inicial + vendas e trocas em dinheiro no período aberto)"
+                                >
+                                  <span className="text-muted text-xs">Sobra/falta: </span>
+                                  <span
+                                    className={
+                                      Math.abs(conf.diferencaEsperado) < 0.01
+                                        ? "text-primary-dark"
+                                        : "text-danger font-semibold"
+                                    }
+                                  >
+                                    {conf.diferencaEsperado >= 0 ? "+" : ""}
+                                    {formatarMoeda(conf.diferencaEsperado)}
+                                  </span>
+                                </span>
+                              )}
+                            </>
+                          )}
+                        </div>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
+
+            <div className="bg-surface border border-border rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+                <Repeat className="w-4 h-4 text-primary" />
+                Trocas do período
+              </h3>
+
+              {trocasFiltradas.length === 0 ? (
+                <p className="text-sm text-muted">Nenhuma troca no período.</p>
+              ) : (
+                <ul className="divide-y divide-border">
+                  {trocasFiltradas.map((troca) => (
+                    <li key={troca.id} className="py-3 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-3">
                       <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-                        <span
-                          className={`px-1.5 py-0.5 rounded font-medium ${
-                            caixa.aberto
-                              ? "bg-primary-light text-primary-dark"
-                              : "bg-border text-foreground"
-                          }`}
-                        >
-                          {caixa.aberto ? "Aberto" : "Fechado"}
+                        <span className="font-mono text-primary">Troca #{troca.id}</span>
+                        <span className="flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatarDataHora(troca.dataHora)}
                         </span>
                         <span className="flex items-center gap-1">
                           <User className="w-3 h-3" />
-                          Aberto por {caixa.usuarioAberturaNome} em{" "}
-                          {formatarDataHora(caixa.dataAbertura)}
+                          {troca.usuarioNome}
                         </span>
-                        {!caixa.aberto && caixa.dataFechamento && (
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3 h-3" />
-                            Fechado por {caixa.usuarioFechamentoNome} em{" "}
-                            {formatarDataHora(caixa.dataFechamento)}
-                          </span>
-                        )}
-                        {caixa.usuarioReaberturaNome && caixa.dataReabertura && (
-                          <span className="flex items-center gap-1 text-accent">
-                            <RotateCcw className="w-3 h-3" />
-                            Reaberto por {caixa.usuarioReaberturaNome} em{" "}
-                            {formatarDataHora(caixa.dataReabertura)}
-                          </span>
-                        )}
+                        {troca.vendaOrigemId && <span>Ref. venda #{troca.vendaOrigemId}</span>}
                       </div>
                       <div className="flex items-center gap-4 font-mono text-sm">
-                        <span title="Saldo inicial">
-                          <span className="text-muted text-xs">Inicial: </span>
-                          {formatarMoeda(caixa.valorInicial)}
+                        <span title="Valor dos produtos devolvidos">
+                          <span className="text-muted text-xs">Devolvido: </span>
+                          {formatarMoeda(troca.valorDevolvido)}
                         </span>
-                        {caixa.valorFinal !== null && (
-                          <span title="Saldo final">
-                            <span className="text-muted text-xs">Final: </span>
-                            {formatarMoeda(caixa.valorFinal)}
+                        <span title="Valor dos produtos novos levados">
+                          <span className="text-muted text-xs">Novo: </span>
+                          {formatarMoeda(troca.valorNovo)}
+                        </span>
+                        {troca.diferenca !== 0 && (
+                          <span>
+                            <span className="text-muted text-xs">
+                              {troca.diferenca > 0 ? "Cliente pagou" : "Loja devolveu"}
+                              {troca.formaPagamentoDiferenca
+                                ? ` (${LABEL_FORMA_PAGAMENTO[troca.formaPagamentoDiferenca]})`
+                                : ""}
+                              :{" "}
+                            </span>
+                            <span className={troca.diferenca > 0 ? "text-primary-dark" : "text-danger"}>
+                              {formatarMoeda(Math.abs(troca.diferenca))}
+                            </span>
                           </span>
-                        )}
-                        {isAdmin && caixaReabrivelId === caixa.id && (
-                          <button
-                            onClick={() => reabrirCaixa(caixa.id)}
-                            disabled={reabrindoCaixaId === caixa.id}
-                            className="flex items-center gap-1.5 text-xs font-medium text-accent hover:text-accent-dark disabled:opacity-50 border border-accent/30 hover:bg-accent/10 rounded-lg px-2.5 py-1.5 transition"
-                            title="Reabrir este caixa"
-                          >
-                            {reabrindoCaixaId === caixa.id ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <RotateCcw className="w-3.5 h-3.5" />
-                            )}
-                            Reabrir caixa
-                          </button>
                         )}
                       </div>
                     </li>
@@ -730,10 +871,12 @@ function CardMetrica({
   icon: Icon,
   label,
   valor,
+  subtitulo,
 }: {
   icon: React.ElementType;
   label: string;
   valor: string;
+  subtitulo?: string;
 }) {
   return (
     <div className="bg-surface border border-border rounded-xl p-5">
@@ -742,6 +885,7 @@ function CardMetrica({
       </div>
       <p className="text-xs text-muted">{label}</p>
       <p className="text-2xl font-semibold font-mono mt-1 tracking-tight">{valor}</p>
+      {subtitulo && <p className="text-[11px] text-muted mt-1">{subtitulo}</p>}
     </div>
   );
 }
