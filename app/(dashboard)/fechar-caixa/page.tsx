@@ -5,7 +5,8 @@ import api from "@/lib/api";
 import { Caixa } from "@/lib/types";
 import { formatarMoeda, formatarDataHora } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import { Loader2, Unlock, User, Clock, CheckCircle2, Vault } from "lucide-react";
+import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
+import { Loader2, Unlock, User, Clock, CheckCircle2, Vault, AlertTriangle } from "lucide-react";
 
 /**
  * Tela simples de fechamento de caixa para o operador: ele informa quanto tem
@@ -20,6 +21,9 @@ export default function FecharCaixaPage() {
   const [fechando, setFechando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [fechadoComSucesso, setFechadoComSucesso] = useState(false);
+  // exige um passo de confirmação explícito antes de mandar pro backend,
+  // pra reduzir o erro comum de digitar o faturamento em vez do dinheiro contado
+  const [confirmando, setConfirmando] = useState(false);
 
   async function carregar() {
     try {
@@ -35,7 +39,6 @@ export default function FecharCaixaPage() {
   }, []);
 
   async function fecharCaixa() {
-    if (valorFinal === "") return;
     setFechando(true);
     setErro(null);
     try {
@@ -45,6 +48,7 @@ export default function FecharCaixaPage() {
       setFechadoComSucesso(true);
       setCaixa(null);
       setValorFinal("");
+      setConfirmando(false);
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -106,9 +110,18 @@ export default function FecharCaixaPage() {
             </div>
 
             <div className="p-5 space-y-4">
+              <div className="flex gap-2 rounded-lg bg-danger-light text-danger text-xs px-3 py-2.5">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+                <p>
+                  Conte <strong>apenas o dinheiro em espécie</strong> (cédulas e moedas) que está na
+                  gaveta agora. Não é o faturamento do dia — vendas em PIX, cartão de crédito e cartão
+                  de débito não entram aqui.
+                </p>
+              </div>
+
               <div>
                 <label className="block text-xs font-medium text-muted mb-1.5">
-                  Quanto tem fisicamente em caixa agora?
+                  Quanto tem fisicamente (em espécie) em caixa agora?
                 </label>
                 <input
                   inputMode="decimal"
@@ -117,7 +130,7 @@ export default function FecharCaixaPage() {
                     const v = e.target.value;
                     if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorFinal(v);
                   }}
-                  onKeyDown={(e) => e.key === "Enter" && fecharCaixa()}
+                  onKeyDown={(e) => e.key === "Enter" && valorFinal !== "" && setConfirmando(true)}
                   placeholder="R$ 0,00"
                   className="input w-full text-lg font-mono"
                   autoFocus
@@ -127,7 +140,7 @@ export default function FecharCaixaPage() {
               {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
 
               <button
-                onClick={fecharCaixa}
+                onClick={() => setConfirmando(true)}
                 disabled={fechando || valorFinal === ""}
                 className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium py-2.5 rounded-lg transition disabled:opacity-50"
               >
@@ -138,6 +151,16 @@ export default function FecharCaixaPage() {
           </div>
         )}
       </div>
+
+      {confirmando && (
+        <ConfirmarFechamentoCaixaModal
+          valor={Number(valorFinal.replace(",", ".")) || 0}
+          confirmando={fechando}
+          erro={erro}
+          onCancelar={() => setConfirmando(false)}
+          onConfirmar={fecharCaixa}
+        />
+      )}
     </div>
   );
 }

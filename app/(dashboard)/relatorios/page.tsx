@@ -14,6 +14,7 @@ import {
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
+import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
 import {
   Loader2,
   TrendingUp,
@@ -58,6 +59,8 @@ export default function RelatoriosPage() {
   const [valorFinalCaixa, setValorFinalCaixa] = useState<string>("");
   const [fechandoCaixa, setFechandoCaixa] = useState(false);
   const [erroFechamento, setErroFechamento] = useState<string | null>(null);
+  // exige confirmação explícita (valor em espécie, não faturamento) antes de fechar
+  const [confirmandoFechamento, setConfirmandoFechamento] = useState(false);
 
   useEffect(() => {
     async function buscarCaixaAtual() {
@@ -72,7 +75,6 @@ export default function RelatoriosPage() {
   }, []);
 
   async function fecharCaixa() {
-    if (valorFinalCaixa === "") return;
     setFechandoCaixa(true);
     setErroFechamento(null);
     try {
@@ -81,6 +83,7 @@ export default function RelatoriosPage() {
       });
       setCaixaAtual(null);
       setValorFinalCaixa("");
+      setConfirmandoFechamento(false);
       // se já havia um relatório gerado, atualiza o histórico de caixas exibido
       if (jaGerou) await gerar();
     } catch (e: unknown) {
@@ -405,12 +408,13 @@ export default function RelatoriosPage() {
                         const v = e.target.value;
                         if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorFinalCaixa(v);
                       }}
-                      onKeyDown={(e) => e.key === "Enter" && fecharCaixa()}
-                      placeholder="Valor final"
-                      className="w-32 px-3 py-2 rounded-lg border border-primary/30 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm"
+                      onKeyDown={(e) => e.key === "Enter" && valorFinalCaixa !== "" && setConfirmandoFechamento(true)}
+                      placeholder="Dinheiro contado"
+                      title="Só o dinheiro em espécie contado na gaveta — não é o faturamento do dia"
+                      className="w-36 px-3 py-2 rounded-lg border border-primary/30 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm"
                     />
                     <button
-                      onClick={fecharCaixa}
+                      onClick={() => setConfirmandoFechamento(true)}
                       disabled={fechandoCaixa || valorFinalCaixa === ""}
                       className="flex items-center gap-2 bg-primary-dark hover:bg-primary text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
                     >
@@ -883,6 +887,16 @@ export default function RelatoriosPage() {
           venda={vendaEmEdicao}
           onFechar={() => setVendaEmEdicao(null)}
           onSalvo={gerar}
+        />
+      )}
+
+      {confirmandoFechamento && (
+        <ConfirmarFechamentoCaixaModal
+          valor={Number(valorFinalCaixa.replace(",", ".")) || 0}
+          confirmando={fechandoCaixa}
+          erro={erroFechamento}
+          onCancelar={() => setConfirmandoFechamento(false)}
+          onConfirmar={fecharCaixa}
         />
       )}
     </div>
