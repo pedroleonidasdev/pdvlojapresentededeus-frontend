@@ -261,7 +261,13 @@ export default function RelatoriosPage() {
   const conferenciaCaixas = useMemo(() => {
     const mapa = new Map<
       number,
-      { saldoEsperado: number; diferencaAbertura: number | null; diferencaEsperado: number | null }
+      {
+        vendasDinheiro: number;
+        trocasDinheiro: number;
+        saldoEsperado: number;
+        diferencaAbertura: number | null;
+        diferencaEsperado: number | null;
+      }
     >();
 
     for (const caixa of historicoCaixas) {
@@ -284,7 +290,7 @@ export default function RelatoriosPage() {
       const diferencaAbertura = caixa.valorFinal !== null ? caixa.valorFinal - caixa.valorInicial : null;
       const diferencaEsperado = caixa.valorFinal !== null ? caixa.valorFinal - saldoEsperado : null;
 
-      mapa.set(caixa.id, { saldoEsperado, diferencaAbertura, diferencaEsperado });
+      mapa.set(caixa.id, { vendasDinheiro, trocasDinheiro, saldoEsperado, diferencaAbertura, diferencaEsperado });
     }
     return mapa;
   }, [historicoCaixas, vendas, trocas]);
@@ -635,93 +641,109 @@ export default function RelatoriosPage() {
             </div>
 
             <div className="bg-surface border border-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
+              <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
                 <Vault className="w-4 h-4 text-primary" />
-                Histórico de caixas do período
+                Conciliação de caixa
               </h3>
+              <p className="text-[11px] text-muted mb-4">
+                Compara o que deveria estar na gaveta com o que foi contado no fechamento
+              </p>
 
               {historicoCaixas.length === 0 ? (
                 <p className="text-sm text-muted">Nenhuma abertura de caixa no período.</p>
               ) : (
-                <ul className="divide-y divide-border">
+                <div className="space-y-3">
                   {historicoCaixas.map((caixa) => {
                     const conf = conferenciaCaixas.get(caixa.id);
+                    const diferenca = conf?.diferencaEsperado ?? null;
+                    const confere = diferenca !== null ? Math.abs(diferenca) < 0.01 : null;
+                    const sobra = diferenca !== null && diferenca > 0;
+
                     return (
-                      <li
-                        key={caixa.id}
-                        className="py-3 first:pt-0 last:pb-0 flex flex-wrap items-center justify-between gap-3"
-                      >
-                        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted">
-                          <span
-                            className={`px-1.5 py-0.5 rounded font-medium ${
-                              caixa.aberto
-                                ? "bg-primary-light text-primary-dark"
-                                : "bg-border text-foreground"
-                            }`}
-                          >
-                            {caixa.aberto ? "Aberto" : "Fechado"}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <User className="w-3 h-3" />
-                            Aberto por {caixa.usuarioAberturaNome} em{" "}
-                            {formatarDataHora(caixa.dataAbertura)}
-                          </span>
-                          {!caixa.aberto && caixa.dataFechamento && (
+                      <div key={caixa.id} className="border border-border rounded-lg overflow-hidden">
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-background">
+                          <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+                            <span
+                              className={`px-1.5 py-0.5 rounded font-medium ${
+                                caixa.aberto
+                                  ? "bg-primary-light text-primary-dark"
+                                  : "bg-border text-foreground"
+                              }`}
+                            >
+                              {caixa.aberto ? "Aberto" : "Fechado"}
+                            </span>
                             <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              Fechado por {caixa.usuarioFechamentoNome} em{" "}
-                              {formatarDataHora(caixa.dataFechamento)}
+                              <User className="w-3 h-3" />
+                              Aberto por {caixa.usuarioAberturaNome}, {formatarDataHora(caixa.dataAbertura)}
+                            </span>
+                            {!caixa.aberto && caixa.dataFechamento && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="w-3 h-3" />
+                                Fechado por {caixa.usuarioFechamentoNome}, {formatarDataHora(caixa.dataFechamento)}
+                              </span>
+                            )}
+                          </div>
+                          {confere !== null && (
+                            <span
+                              className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                                confere
+                                  ? "bg-primary-light text-primary-dark"
+                                  : sobra
+                                    ? "bg-accent-light text-accent-dark"
+                                    : "bg-danger-light text-danger"
+                              }`}
+                            >
+                              {confere ? "Confere" : sobra ? "Sobra em caixa" : "Falta em caixa"}
                             </span>
                           )}
                         </div>
-                        <div className="flex flex-wrap items-center gap-4 font-mono text-sm">
-                          <span title="Saldo inicial">
-                            <span className="text-muted text-xs">Inicial: </span>
-                            {formatarMoeda(caixa.valorInicial)}
-                          </span>
-                          {caixa.valorFinal !== null && (
-                            <>
-                              <span title="Saldo final">
-                                <span className="text-muted text-xs">Final: </span>
-                                {formatarMoeda(caixa.valorFinal)}
+
+                        {caixa.valorFinal !== null && conf ? (
+                          <div className="px-4 py-3">
+                            <div className="space-y-1.5">
+                              <LinhaConciliacao label="Saldo inicial" valor={caixa.valorInicial} />
+                              <LinhaConciliacao
+                                label="Vendas em dinheiro"
+                                valor={conf.vendasDinheiro}
+                                comSinal
+                              />
+                              {conf.trocasDinheiro !== 0 && (
+                                <LinhaConciliacao
+                                  label="Ajuste de trocas em dinheiro"
+                                  valor={conf.trocasDinheiro}
+                                  comSinal
+                                />
+                              )}
+                            </div>
+                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-dashed border-border text-xs">
+                              <span className="text-muted">Esperado na gaveta</span>
+                              <span className="font-mono">{formatarMoeda(conf.saldoEsperado)}</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-muted">Contado no fechamento</span>
+                              <span className="font-mono">{formatarMoeda(caixa.valorFinal)}</span>
+                            </div>
+                            <div className="flex items-center justify-between pt-2 mt-2 border-t border-border">
+                              <span className="text-sm font-medium">Diferença</span>
+                              <span
+                                className={`font-mono text-base font-semibold ${
+                                  confere ? "text-primary-dark" : sobra ? "text-accent-dark" : "text-danger"
+                                }`}
+                              >
+                                {diferenca !== null && diferenca > 0 ? "+" : ""}
+                                {formatarMoeda(diferenca ?? 0)}
                               </span>
-                              {conf?.diferencaAbertura !== null && conf?.diferencaAbertura !== undefined && (
-                                <span title="Final menos o valor inicial">
-                                  <span className="text-muted text-xs">Δ desde abertura: </span>
-                                  <span
-                                    className={
-                                      conf.diferencaAbertura >= 0 ? "text-primary-dark" : "text-danger"
-                                    }
-                                  >
-                                    {conf.diferencaAbertura >= 0 ? "+" : ""}
-                                    {formatarMoeda(conf.diferencaAbertura)}
-                                  </span>
-                                </span>
-                              )}
-                              {conf?.diferencaEsperado !== null && conf?.diferencaEsperado !== undefined && (
-                                <span
-                                  title="Final informado menos o esperado (inicial + vendas e trocas em dinheiro no período aberto)"
-                                >
-                                  <span className="text-muted text-xs">Sobra/falta: </span>
-                                  <span
-                                    className={
-                                      Math.abs(conf.diferencaEsperado) < 0.01
-                                        ? "text-primary-dark"
-                                        : "text-danger font-semibold"
-                                    }
-                                  >
-                                    {conf.diferencaEsperado >= 0 ? "+" : ""}
-                                    {formatarMoeda(conf.diferencaEsperado)}
-                                  </span>
-                                </span>
-                              )}
-                            </>
-                          )}
-                        </div>
-                      </li>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="px-4 py-3 text-xs text-muted">
+                            Caixa ainda aberto — a conferência aparece depois do fechamento.
+                          </div>
+                        )}
+                      </div>
                     );
                   })}
-                </ul>
+                </div>
               )}
             </div>
 
@@ -863,6 +885,27 @@ export default function RelatoriosPage() {
           onSalvo={gerar}
         />
       )}
+    </div>
+  );
+}
+
+function LinhaConciliacao({
+  label,
+  valor,
+  comSinal,
+}: {
+  label: string;
+  valor: number;
+  comSinal?: boolean;
+}) {
+  const sinal = comSinal && valor > 0 ? "+" : "";
+  return (
+    <div className="flex items-center justify-between text-xs">
+      <span className="text-muted">{label}</span>
+      <span className="font-mono">
+        {sinal}
+        {formatarMoeda(valor)}
+      </span>
     </div>
   );
 }

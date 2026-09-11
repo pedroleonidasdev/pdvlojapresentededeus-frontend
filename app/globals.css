@@ -13,6 +13,7 @@
 
   --accent: #E0972F;
   --accent-dark: #B8791F;
+  --accent-light: #FBEBD3;
 
   --danger: #B94A3B;
   --danger-light: #F6E4E0;
@@ -31,6 +32,7 @@
   --color-primary-light: var(--primary-light);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
+  --color-accent-light: var(--accent-light);
   --color-danger: var(--danger);
   --color-danger-light: var(--danger-light);
   --color-success: var(--success);
