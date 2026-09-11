@@ -1,0 +1,14 @@
+{
+  "etiquetas": [
+    {
+      "nome": "Bíblia Sagrada Capa Dura",
+      "precoVenda": 89.90,
+      "codigoBarras": "7891234567890"
+    },
+    {
+      "nome": "Terço de Madeira",
+      "precoVenda": 15.50,
+      "codigoBarras": "7899876543210"
+    }
+  ]
+}

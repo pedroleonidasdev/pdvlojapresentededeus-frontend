@@ -1,0 +1,17 @@
+[Unit]
+Description=Agente HTTP local de impressao de etiquetas Goldensky
+After=network.target cups.service
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/python3 /usr/local/bin/goldensky-agente.py
+Environment=GOLDENSKY_AGENTE_HOST=127.0.0.1
+Environment=GOLDENSKY_AGENTE_PORT=9100
+Restart=on-failure
+RestartSec=3
+# roda como usuário sem privilégio, mas precisa poder chamar `lp` (grupo lp/lpadmin)
+User=goldensky-agente
+SupplementaryGroups=lp lpadmin
+
+[Install]
+WantedBy=multi-user.target
