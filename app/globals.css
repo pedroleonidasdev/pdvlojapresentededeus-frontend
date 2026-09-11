@@ -1,41 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #F6F5F1;
+  /* Fundo com leve calor (marfim/pergaminho) em vez de quase-branco, e um
+     tom "surface-alt" para dar profundidade a painéis sem virar cinza. */
+  --background: #F1E9D8;
   --surface: #FFFFFF;
-  --foreground: #191914;
-  --muted: #6B6B60;
-  --border: #E1DFD6;
+  --surface-alt: #FBF6EA;
+  --foreground: #221C12;
+  --muted: #726A55;
+  --border: #E3D8BC;
 
   --primary: #1B4D3E;
   --primary-dark: #0F332A;
   --primary-light: #DCE9E3;
+  --primary-soft: #EAF3EE;
+
+  /* Bordô litúrgico — segunda cor de destaque, usada em cartão de crédito,
+     badges de categoria e detalhes que antes ficavam neutros. */
+  --secondary: #7C2A3A;
+  --secondary-dark: #5A1E2A;
+  --secondary-light: #F3E1E4;
 
   --accent: #E0972F;
   --accent-dark: #B8791F;
   --accent-light: #FBEBD3;
 
+  /* Azul para Pix / débito e outros destaques informativos. */
+  --info: #2B6CA3;
+  --info-dark: #1F5280;
+  --info-light: #DCEAF5;
+
   --danger: #B94A3B;
   --danger-light: #F6E4E0;
 
   --success: #2E7D4F;
+  --success-light: #DFF0E4;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-surface: var(--surface);
+  --color-surface-alt: var(--surface-alt);
   --color-foreground: var(--foreground);
   --color-muted: var(--muted);
   --color-border: var(--border);
   --color-primary: var(--primary);
   --color-primary-dark: var(--primary-dark);
   --color-primary-light: var(--primary-light);
+  --color-primary-soft: var(--primary-soft);
+  --color-secondary: var(--secondary);
+  --color-secondary-dark: var(--secondary-dark);
+  --color-secondary-light: var(--secondary-light);
   --color-accent: var(--accent);
   --color-accent-dark: var(--accent-dark);
   --color-accent-light: var(--accent-light);
+  --color-info: var(--info);
+  --color-info-dark: var(--info-dark);
+  --color-info-light: var(--info-light);
   --color-danger: var(--danger);
   --color-danger-light: var(--danger-light);
   --color-success: var(--success);
+  --color-success-light: var(--success-light);
   --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
 }

@@ -124,7 +124,7 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={carregando}
-              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-dark hover:brightness-110 text-white font-medium py-2.5 rounded-lg shadow-sm transition disabled:opacity-60"
             >
               {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
               Entrar

@@ -15,14 +15,14 @@ export default function Sidebar() {
   const itens = NAV_ITEMS.filter((item) => item.perfis.includes(usuario.perfil));
 
   return (
-    <aside className="w-60 shrink-0 bg-primary text-white flex flex-col h-screen sticky top-0">
+    <aside className="w-60 shrink-0 bg-gradient-to-b from-primary via-primary to-primary-dark text-white flex flex-col h-screen sticky top-0">
       <div className="p-5 flex items-center gap-2 border-b border-white/10">
-        <div className="w-8 h-8 rounded-md bg-accent flex items-center justify-center font-mono font-bold text-primary-dark text-sm">
+        <div className="w-8 h-8 rounded-md bg-gradient-to-br from-accent to-accent-dark shadow-sm flex items-center justify-center font-mono font-bold text-primary-dark text-sm">
           $
         </div>
         <div>
           <p className="font-semibold leading-none text-sm">Sistema PDV</p>
-          <p className="text-[11px] text-white/50 mt-0.5 flex items-center gap-1">
+          <p className="text-[11px] text-accent-light/80 mt-0.5 flex items-center gap-1">
             <LayoutGrid className="w-3 h-3" /> Painel de controle
           </p>
         </div>
@@ -36,13 +36,13 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition ${
+              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition border-l-2 ${
                 ativo
-                  ? "bg-white/15 text-white font-medium"
-                  : "text-white/70 hover:bg-white/10 hover:text-white"
+                  ? "bg-white/15 text-white font-medium border-accent"
+                  : "text-white/70 border-transparent hover:bg-white/10 hover:text-white hover:border-white/30"
               }`}
             >
-              <Icon className="w-4 h-4" />
+              <Icon className={`w-4 h-4 ${ativo ? "text-accent" : ""}`} />
               {item.label}
             </Link>
           );
