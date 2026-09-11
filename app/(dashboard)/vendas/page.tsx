@@ -74,6 +74,13 @@ export default function VendasPage() {
                     <span className="px-1.5 py-0.5 rounded bg-primary-light text-primary-dark font-medium">
                       {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}
                     </span>
+                    {venda.formaPagamento === "MULTIPLO" && venda.pagamentos?.length > 0 && (
+                      <span className="text-[11px]">
+                        {venda.pagamentos
+                          .map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]} ${formatarMoeda(p.valor)}`)
+                          .join(" + ")}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="flex items-center gap-3">

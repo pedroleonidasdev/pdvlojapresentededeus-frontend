@@ -178,7 +178,10 @@ export default function RelatoriosPage() {
 
   const vendasFiltradas = useMemo(() => {
     return vendas.filter((v) => {
-      if (!formasSelecionadas.has(v.formaPagamento)) return false;
+      const formasDaVenda = v.pagamentos?.length
+        ? v.pagamentos.map((p) => p.formaPagamento)
+        : [v.formaPagamento];
+      if (!formasDaVenda.some((forma) => formasSelecionadas.has(forma))) return false;
       if (usuarioSelecionado !== "TODOS" && v.usuarioNome !== usuarioSelecionado) return false;
       return true;
     });
@@ -208,8 +211,15 @@ export default function RelatoriosPage() {
 
     const totalPorFormaPagamento: Record<string, number> = {};
     for (const v of vendasFiltradas) {
-      totalPorFormaPagamento[v.formaPagamento] =
-        (totalPorFormaPagamento[v.formaPagamento] ?? 0) + v.total;
+      if (v.pagamentos?.length) {
+        for (const pagamento of v.pagamentos) {
+          totalPorFormaPagamento[pagamento.formaPagamento] =
+            (totalPorFormaPagamento[pagamento.formaPagamento] ?? 0) + pagamento.valor;
+        }
+      } else {
+        totalPorFormaPagamento[v.formaPagamento] =
+          (totalPorFormaPagamento[v.formaPagamento] ?? 0) + v.total;
+      }
     }
     for (const t of trocasFiltradas) {
       if (!t.formaPagamentoDiferenca || t.diferenca === 0) continue;
@@ -288,8 +298,15 @@ export default function RelatoriosPage() {
       };
 
       const vendasDinheiro = vendas
-        .filter((v) => v.formaPagamento === "DINHEIRO" && dentro(v.dataHora))
-        .reduce((acc, v) => acc + v.total, 0);
+        .filter((v) => dentro(v.dataHora))
+        .reduce((acc, v) => {
+          if (v.pagamentos?.length) {
+            return acc + v.pagamentos
+              .filter((p) => p.formaPagamento === "DINHEIRO")
+              .reduce((soma, p) => soma + p.valor, 0);
+          }
+          return acc + (v.formaPagamento === "DINHEIRO" ? v.total : 0);
+        }, 0);
 
       const trocasDinheiro = trocas
         .filter((t) => t.formaPagamentoDiferenca === "DINHEIRO" && dentro(t.dataHora))
@@ -328,7 +345,9 @@ export default function RelatoriosPage() {
       Venda: v.id,
       "Data/Hora": formatarDataHora(v.dataHora),
       Vendedor: v.usuarioNome,
-      "Forma de pagamento": LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
+      "Forma de pagamento": v.pagamentos?.length
+        ? v.pagamentos.map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]}: ${formatarMoeda(p.valor)}`).join(" + ")
+        : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
       Subtotal: v.subtotal ?? v.total,
       Desconto: v.valorDesconto ?? 0,
       Total: v.total,

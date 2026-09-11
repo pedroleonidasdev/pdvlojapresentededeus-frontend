@@ -12,6 +12,7 @@ export async function imprimirCupom(venda: Venda): Promise<void> {
       usuarioNome: venda.usuarioNome,
       dataHora: venda.dataHora,
       formaPagamento: venda.formaPagamento,
+      pagamentos: venda.pagamentos ?? [],
       subtotal: venda.subtotal,
       percentualDesconto: venda.percentualDesconto,
       valorDesconto: venda.valorDesconto,

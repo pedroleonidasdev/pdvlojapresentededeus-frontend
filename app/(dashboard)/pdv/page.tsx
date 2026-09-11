@@ -20,6 +20,8 @@ export default function PdvPage() {
   const [resultados, setResultados] = useState<Produto[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("PIX");
+  const [pagamentoMultiplo, setPagamentoMultiplo] = useState(false);
+  const [pagamentos, setPagamentos] = useState<{ formaPagamento: Exclude<FormaPagamento, "MULTIPLO">; valor: string }[]>([]);
   const [descontoPercentual, setDescontoPercentual] = useState<string>("");
   const [descontoDinheiro, setDescontoDinheiro] = useState<string>("");
   const [valorRecebido, setValorRecebido] = useState<string>("");
@@ -186,6 +188,13 @@ export default function PdvPage() {
   }, [subtotal, descontoPercentualValido, descontoDinheiroValido]);
 
   const total = useMemo(() => subtotal - valorDesconto, [subtotal, valorDesconto]);
+  const totalPagamentos = useMemo(
+    () => pagamentos.reduce((acc, p) => acc + (parseFloat(p.valor.replace(",", ".")) || 0), 0),
+    [pagamentos]
+  );
+  const restantePagamento = Math.max(0, total - totalPagamentos);
+  const pagamentosCompletos = !pagamentoMultiplo || Math.abs(totalPagamentos - total) < 0.005;
+
 
   const valorRecebidoValido = useMemo(() => {
     const valor = parseFloat(valorRecebido.replace(",", "."));
@@ -197,7 +206,12 @@ export default function PdvPage() {
     return diferenca > 0 ? diferenca : 0;
   }, [valorRecebidoValido, total]);
 
-  const pagamentoInsuficiente = carrinho.length > 0 && valorRecebidoValido > 0 && valorRecebidoValido < total;
+  const pagamentoInsuficiente =
+    carrinho.length > 0 &&
+    !pagamentoMultiplo &&
+    formaPagamento === "DINHEIRO" &&
+    valorRecebidoValido > 0 &&
+    valorRecebidoValido < total;
 
   function handleValorRecebidoChange(valor: string) {
     if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
@@ -218,6 +232,39 @@ export default function PdvPage() {
     }
   }
 
+  function ativarPagamentoMultiplo() {
+    setPagamentoMultiplo(true);
+    setPagamentos([{ formaPagamento: "PIX", valor: total.toFixed(2).replace(".", ",") }]);
+    setFormaPagamento("MULTIPLO");
+    setErro(null);
+  }
+
+  function desativarPagamentoMultiplo() {
+    setPagamentoMultiplo(false);
+    setPagamentos([]);
+    setFormaPagamento("PIX");
+    setErro(null);
+  }
+
+  function adicionarFormaPagamento() {
+    if (pagamentos.length >= 4) return;
+    const usadas = new Set(pagamentos.map((p) => p.formaPagamento));
+    const proxima = (FORMAS.find((f) => !usadas.has(f)) ?? "PIX") as Exclude<FormaPagamento, "MULTIPLO">;
+    setPagamentos((prev) => [...prev, { formaPagamento: proxima, valor: "" }]);
+  }
+
+  function atualizarPagamento(index: number, campo: "formaPagamento" | "valor", valor: string) {
+    setPagamentos((prev) => prev.map((p, i) => {
+      if (i !== index) return p;
+      if (campo === "valor" && valor !== "" && !/^[0-9]*[.,]?[0-9]*$/.test(valor)) return p;
+      return { ...p, [campo]: valor };
+    }));
+  }
+
+  function removerPagamento(index: number) {
+    setPagamentos((prev) => prev.filter((_, i) => i !== index));
+  }
+
   async function finalizarVenda() {
     if (carrinho.length === 0) return;
     if (enviandoVendaRef.current) return;
@@ -226,7 +273,13 @@ export default function PdvPage() {
     setErro(null);
     try {
       const { data } = await api.post<Venda>("/vendas", {
-        formaPagamento,
+        formaPagamento: pagamentoMultiplo ? null : formaPagamento,
+        pagamentos: pagamentoMultiplo
+          ? pagamentos.map((p) => ({
+              formaPagamento: p.formaPagamento,
+              valor: parseFloat(p.valor.replace(",", ".")) || 0,
+            }))
+          : [{ formaPagamento, valor: total }],
         percentualDesconto: descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
         valorDescontoInformado: descontoDinheiroValido > 0 ? descontoDinheiroValido : undefined,
         itens: carrinho.map((i) => ({ produtoId: i.produto.id, quantidade: i.quantidade })),
@@ -234,6 +287,8 @@ export default function PdvPage() {
       setVendaConcluida(data);
       setCarrinho([]);
       setFormaPagamento("PIX");
+      setPagamentoMultiplo(false);
+      setPagamentos([]);
       setDescontoPercentual("");
       setDescontoDinheiro("");
       setValorRecebido("");
@@ -428,21 +483,95 @@ export default function PdvPage() {
 
           <div className="border-t border-border px-5 py-4 space-y-4">
             <div>
-              <p className="text-xs text-muted mb-2">Forma de pagamento</p>
-              <div className="grid grid-cols-2 gap-2">
-                {FORMAS.map((forma) => (
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-xs text-muted">Forma de pagamento</p>
+                {!pagamentoMultiplo ? (
                   <button
-                    key={forma}
-                    onClick={() => setFormaPagamento(forma)}
-                    className={`text-xs py-2 rounded-lg border transition ${formaPagamento === forma
-                        ? "border-primary bg-primary-light text-primary-dark font-medium"
-                        : "border-border text-muted hover:border-primary/40"
-                      }`}
+                    type="button"
+                    onClick={ativarPagamentoMultiplo}
+                    disabled={carrinho.length === 0}
+                    className="text-[11px] font-medium text-primary hover:text-primary-dark disabled:opacity-50"
                   >
-                    {LABEL_FORMA_PAGAMENTO[forma]}
+                    + Dividir pagamento
                   </button>
-                ))}
+                ) : (
+                  <button
+                    type="button"
+                    onClick={desativarPagamentoMultiplo}
+                    className="text-[11px] font-medium text-danger hover:text-danger/80"
+                  >
+                    Usar pagamento único
+                  </button>
+                )}
               </div>
+
+              {!pagamentoMultiplo ? (
+                <div className="grid grid-cols-2 gap-2">
+                  {FORMAS.map((forma) => (
+                    <button
+                      key={forma}
+                      onClick={() => setFormaPagamento(forma)}
+                      className={`text-xs py-2 rounded-lg border transition ${formaPagamento === forma
+                          ? "border-primary bg-primary-light text-primary-dark font-medium"
+                          : "border-border text-muted hover:border-primary/40"
+                        }`}
+                    >
+                      {LABEL_FORMA_PAGAMENTO[forma]}
+                    </button>
+                  ))}
+                </div>
+              ) : (
+                <div className="space-y-2">
+                  {pagamentos.map((pagamento, index) => (
+                    <div key={index} className="flex gap-2 items-center">
+                      <select
+                        value={pagamento.formaPagamento}
+                        onChange={(e) => atualizarPagamento(index, "formaPagamento", e.target.value as Exclude<FormaPagamento, "MULTIPLO">)}
+                        className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                      >
+                        {FORMAS.map((forma) => (
+                          <option key={forma} value={forma}>{LABEL_FORMA_PAGAMENTO[forma]}</option>
+                        ))}
+                      </select>
+                      <div className="relative w-28">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted">R$</span>
+                        <input
+                          inputMode="decimal"
+                          value={pagamento.valor}
+                          onChange={(e) => atualizarPagamento(index, "valor", e.target.value)}
+                          placeholder="0,00"
+                          className="w-full pl-7 pr-2 py-2 rounded-lg border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => removerPagamento(index)}
+                        disabled={pagamentos.length <= 1}
+                        className="p-1.5 text-danger/70 hover:text-danger disabled:opacity-30"
+                        title="Remover"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  ))}
+                  {pagamentos.length < 4 && (
+                    <button
+                      type="button"
+                      onClick={adicionarFormaPagamento}
+                      className="w-full border border-dashed border-border rounded-lg py-2 text-xs text-muted hover:border-primary hover:text-primary"
+                    >
+                      + Adicionar outra forma
+                    </button>
+                  )}
+                  <div className="flex items-center justify-between rounded-lg bg-background border border-border px-3 py-2 text-xs">
+                    <span className="text-muted">Pago</span>
+                    <span className="font-mono font-medium">{formatarMoeda(totalPagamentos)}</span>
+                    <span className={restantePagamento > 0.005 ? "text-danger" : "text-primary"}>
+                      {restantePagamento > 0.005 ? `Falta ${formatarMoeda(restantePagamento)}` : "Valor completo"}
+                    </span>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div>
@@ -477,20 +606,22 @@ export default function PdvPage() {
               <p className="text-[11px] text-muted mt-1">Pode usar os dois juntos, se precisar.</p>
             </div>
 
-            <div>
-              <p className="text-xs text-muted mb-2 flex items-center gap-1">
-                <DollarSign className="w-3 h-3" />
-                Valor recebido
-              </p>
-              <input
-                inputMode="decimal"
-                value={valorRecebido}
-                onChange={(e) => handleValorRecebidoChange(e.target.value)}
-                placeholder="0,00"
-                disabled={carrinho.length === 0}
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
-              />
-            </div>
+            {!pagamentoMultiplo && formaPagamento === "DINHEIRO" && (
+              <div>
+                <p className="text-xs text-muted mb-2 flex items-center gap-1">
+                  <DollarSign className="w-3 h-3" />
+                  Valor recebido
+                </p>
+                <input
+                  inputMode="decimal"
+                  value={valorRecebido}
+                  onChange={(e) => handleValorRecebidoChange(e.target.value)}
+                  placeholder="0,00"
+                  disabled={carrinho.length === 0}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                />
+              </div>
+            )}
 
             {erro && (
               <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erro}</div>
@@ -526,7 +657,7 @@ export default function PdvPage() {
 
             <button
               onClick={finalizarVenda}
-              disabled={carrinho.length === 0 || finalizando || pagamentoInsuficiente}
+              disabled={carrinho.length === 0 || finalizando || pagamentoInsuficiente || !pagamentosCompletos}
               className="w-full flex items-center justify-center gap-2 bg-accent hover:bg-accent-dark text-white font-medium py-3 rounded-lg transition disabled:opacity-50"
             >
               {finalizando && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -615,9 +746,21 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
               <span>{formatarMoeda(venda.total)}</span>
             </div>
           </div>
-          <p className="text-xs text-muted mt-2">
-            Pagamento: {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}
-          </p>
+          <div className="text-xs text-muted mt-2 space-y-0.5">
+            {venda.pagamentos?.length > 0 ? (
+              <>
+                <p className="font-semibold">Pagamentos:</p>
+                {venda.pagamentos.map((pagamento, index) => (
+                  <div key={index} className="flex justify-between">
+                    <span>{LABEL_FORMA_PAGAMENTO[pagamento.formaPagamento]}</span>
+                    <span>{formatarMoeda(pagamento.valor)}</span>
+                  </div>
+                ))}
+              </>
+            ) : (
+              <p>Pagamento: {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}</p>
+            )}
+          </div>
         </div>
       </div>
 

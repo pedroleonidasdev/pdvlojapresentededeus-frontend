@@ -1,6 +1,11 @@
 export type Perfil = "ADMIN" | "CAIXA";
 
-export type FormaPagamento = "PIX" | "DINHEIRO" | "CARTAO_CREDITO" | "CARTAO_DEBITO";
+export type FormaPagamento =
+  | "PIX"
+  | "DINHEIRO"
+  | "CARTAO_CREDITO"
+  | "CARTAO_DEBITO"
+  | "MULTIPLO";
 
 export interface Usuario {
   login: string;
@@ -42,6 +47,11 @@ export interface ItemVendaResponse {
   subtotal: number;
 }
 
+export interface PagamentoVenda {
+  formaPagamento: Exclude<FormaPagamento, "MULTIPLO">;
+  valor: number;
+}
+
 export interface Venda {
   id: number;
   usuarioNome: string;
@@ -52,6 +62,7 @@ export interface Venda {
   valorDesconto?: number;
   total: number;
   itens: ItemVendaResponse[];
+  pagamentos: PagamentoVenda[];
 }
 
 export type TipoItemTroca = "DEVOLVIDO" | "NOVO";

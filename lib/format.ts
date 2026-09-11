@@ -57,6 +57,7 @@ export const LABEL_FORMA_PAGAMENTO: Record<string, string> = {
   DINHEIRO: "Dinheiro",
   CARTAO_CREDITO: "Cartão de crédito",
   CARTAO_DEBITO: "Cartão de débito",
+  MULTIPLO: "Múltiplos pagamentos",
 };
 
 export const LABEL_TIPO_DESPESA: Record<string, string> = {
