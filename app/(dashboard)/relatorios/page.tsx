@@ -14,7 +14,6 @@ import {
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
-import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
 import {
   Loader2,
   TrendingUp,
@@ -52,16 +51,11 @@ export default function RelatoriosPage() {
   const [excluindoTodas, setExcluindoTodas] = useState(false);
   const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
 
-  // caixa aberto no momento (independe do período filtrado)
+  // caixa aberto no momento (independe do período filtrado) — exibido aqui só
+  // como informação; a ação de fechar caixa mora na aba "Fechar Caixa".
   const [caixaAtual, setCaixaAtual] = useState<Caixa | null | undefined>(undefined);
   // histórico de aberturas/fechamentos de caixa dentro do período filtrado
   const [historicoCaixas, setHistoricoCaixas] = useState<Caixa[]>([]);
-  // fechamento do caixa atual (somente ADMIN)
-  const [valorFinalCaixa, setValorFinalCaixa] = useState<string>("");
-  const [fechandoCaixa, setFechandoCaixa] = useState(false);
-  const [erroFechamento, setErroFechamento] = useState<string | null>(null);
-  // exige confirmação explícita (valor em espécie, não faturamento) antes de fechar
-  const [confirmandoFechamento, setConfirmandoFechamento] = useState(false);
 
   useEffect(() => {
     async function buscarCaixaAtual() {
@@ -74,28 +68,6 @@ export default function RelatoriosPage() {
     }
     buscarCaixaAtual();
   }, []);
-
-  async function fecharCaixa() {
-    setFechandoCaixa(true);
-    setErroFechamento(null);
-    try {
-      await api.post("/caixa/fechar", {
-        valorFinal: Number(valorFinalCaixa.replace(",", ".")) || 0,
-      });
-      setCaixaAtual(null);
-      setValorFinalCaixa("");
-      setConfirmandoFechamento(false);
-      // se já havia um relatório gerado, atualiza o histórico de caixas exibido
-      if (jaGerou) await gerar();
-    } catch (e: unknown) {
-      const msg =
-        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "Não foi possível fechar o caixa.";
-      setErroFechamento(msg);
-    } finally {
-      setFechandoCaixa(false);
-    }
-  }
 
   // filtros aplicados sobre o período já carregado
   const [formasSelecionadas, setFormasSelecionadas] = useState<Set<FormaPagamento>>(
@@ -406,7 +378,7 @@ export default function RelatoriosPage() {
       <PageHeader title="Relatórios" subtitle="Faturamento e desempenho de vendas por período" />
 
       <div className="p-8 space-y-6">
-        {/* caixa aberto no momento, em destaque, independente do período filtrado */}
+        {/* caixa aberto no momento — só informativo aqui; fechar caixa é na aba própria */}
         {caixaAtual !== undefined && (
           <div
             className={`flex flex-wrap items-center gap-4 rounded-xl border p-4 ${
@@ -423,60 +395,27 @@ export default function RelatoriosPage() {
               {caixaAtual ? <Unlock className="w-5 h-5" /> : <Lock className="w-5 h-5" />}
             </div>
             {caixaAtual ? (
-              <>
-                <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
-                  <div>
-                    <p className="text-[11px] text-primary-dark/70 uppercase tracking-wide font-medium">
-                      Caixa aberto — saldo inicial
-                    </p>
-                    <p className="text-lg font-semibold font-mono text-primary-dark">
-                      {formatarMoeda(caixaAtual.valorInicial)}
-                    </p>
-                  </div>
-                  <div className="text-xs text-primary-dark/80 flex items-center gap-1.5">
-                    <User className="w-3.5 h-3.5" />
-                    Aberto por {caixaAtual.usuarioAberturaNome}
-                  </div>
-                  <div className="text-xs text-primary-dark/80 flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5" />
-                    {formatarDataHora(caixaAtual.dataAbertura)}
-                  </div>
+              <div className="flex flex-wrap items-center gap-x-6 gap-y-1">
+                <div>
+                  <p className="text-[11px] text-primary-dark/70 uppercase tracking-wide font-medium">
+                    Caixa aberto — saldo inicial
+                  </p>
+                  <p className="text-lg font-semibold font-mono text-primary-dark">
+                    {formatarMoeda(caixaAtual.valorInicial)}
+                  </p>
                 </div>
-
-                {isAdmin && (
-                  <div className="ml-auto flex flex-wrap items-center gap-2">
-                    <input
-                      inputMode="decimal"
-                      value={valorFinalCaixa}
-                      onChange={(e) => {
-                        const v = e.target.value;
-                        if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorFinalCaixa(v);
-                      }}
-                      onKeyDown={(e) => e.key === "Enter" && valorFinalCaixa !== "" && setConfirmandoFechamento(true)}
-                      placeholder="Dinheiro contado"
-                      title="Só o dinheiro em espécie contado na gaveta — não é o faturamento do dia"
-                      className="w-36 px-3 py-2 rounded-lg border border-primary/30 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm"
-                    />
-                    <button
-                      onClick={() => setConfirmandoFechamento(true)}
-                      disabled={fechandoCaixa || valorFinalCaixa === ""}
-                      className="flex items-center gap-2 bg-primary-dark hover:bg-primary text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
-                    >
-                      {fechandoCaixa && <Loader2 className="w-4 h-4 animate-spin" />}
-                      Fechar caixa
-                    </button>
-                  </div>
-                )}
-              </>
+                <div className="text-xs text-primary-dark/80 flex items-center gap-1.5">
+                  <User className="w-3.5 h-3.5" />
+                  Aberto por {caixaAtual.usuarioAberturaNome}
+                </div>
+                <div className="text-xs text-primary-dark/80 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5" />
+                  {formatarDataHora(caixaAtual.dataAbertura)}
+                </div>
+              </div>
             ) : (
               <p className="text-sm text-danger font-medium">Nenhum caixa aberto no momento.</p>
             )}
-          </div>
-        )}
-
-        {erroFechamento && (
-          <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">
-            {erroFechamento}
           </div>
         )}
 
@@ -944,15 +883,6 @@ export default function RelatoriosPage() {
         />
       )}
 
-      {confirmandoFechamento && (
-        <ConfirmarFechamentoCaixaModal
-          valor={Number(valorFinalCaixa.replace(",", ".")) || 0}
-          confirmando={fechandoCaixa}
-          erro={erroFechamento}
-          onCancelar={() => setConfirmandoFechamento(false)}
-          onConfirmar={fecharCaixa}
-        />
-      )}
     </div>
   );
 }
