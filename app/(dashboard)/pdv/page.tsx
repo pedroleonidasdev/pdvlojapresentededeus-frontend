@@ -471,7 +471,7 @@ export default function PdvPage() {
         </div>
 
         {/* Carrinho / fechamento */}
-        <div className="w-full md:w-[420px] lg:w-[440px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border flex flex-col shadow-sm">
+        <div className="w-full md:w-[40%] lg:w-[40%] xl:w-[38%] max-w-[560px] md:min-w-[420px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border flex flex-col shadow-sm">
           <div className="px-5 md:px-6 py-5 border-b border-border flex items-center gap-3">
             <ShoppingCart className="w-6 h-6 text-primary" />
             <h2 className="font-bold text-xl">Carrinho</h2>
