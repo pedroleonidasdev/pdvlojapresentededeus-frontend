@@ -119,8 +119,6 @@ export interface Caixa {
   valorFinal: number | null;
   dataFechamento: string | null;
   aberto: boolean;
-  usuarioReaberturaNome: string | null;
-  dataReabertura: string | null;
 }
 
 export type TipoDespesa = "DESPESA" | "SANGRIA" | "SUPRIMENTO";

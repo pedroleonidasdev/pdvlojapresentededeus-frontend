@@ -52,6 +52,35 @@ export function limiteDiaBrasiliaParaUtc(dataYYYYMMDD: string, fimDoDia: boolean
   return utc.toISOString().slice(0, 19);
 }
 
+/** Converte a dataHora "crua" (UTC) da venda para o formato aceito pelo input
+ *  datetime-local ("YYYY-MM-DDTHH:mm"), já no fuso de Brasília. Usado para
+ *  pré-preencher o formulário de edição de data/hora com o valor atual. */
+export function paraInputDataHoraLocal(iso: string): string {
+  const formatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: FUSO_BRASILIA,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const partes = formatter.formatToParts(paraDataUtc(iso));
+  const obter = (tipo: string) => partes.find((p) => p.type === tipo)?.value ?? "00";
+  return `${obter("year")}-${obter("month")}-${obter("day")}T${obter("hour")}:${obter("minute")}`;
+}
+
+/** Converte o valor de um input datetime-local ("YYYY-MM-DDTHH:mm"), entendido
+ *  como horário de Brasília, para o formato UTC "cru" que o backend espera ao
+ *  salvar a correção de data/hora (mesmo padrão de limiteDiaBrasiliaParaUtc). */
+export function deInputDataHoraLocalParaUtc(valorLocal: string): string {
+  const [data, hora] = valorLocal.split("T");
+  const [ano, mes, dia] = data.split("-").map(Number);
+  const [h, m] = hora.split(":").map(Number);
+  const utc = new Date(Date.UTC(ano, mes - 1, dia, h + OFFSET_BRASILIA_HORAS, m, 0));
+  return utc.toISOString().slice(0, 19);
+}
+
 export const LABEL_FORMA_PAGAMENTO: Record<string, string> = {
   PIX: "Pix",
   DINHEIRO: "Dinheiro",
