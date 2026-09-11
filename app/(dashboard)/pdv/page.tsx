@@ -37,16 +37,16 @@ export default function PdvPage() {
   const [caixa, setCaixa] = useState<Caixa | null | undefined>(undefined);
   const [valorInicialCaixa, setValorInicialCaixa] = useState<string>("");
   const [abrindoCaixa, setAbrindoCaixa] = useState(false);
-  // referÃªncia do campo de busca: leitores de cÃ³digo de barras baratos funcionam como
-  // um teclado (digitam o cÃ³digo + Enter em quem estiver com foco no momento). Se o
-  // foco escapar do campo â€” por exemplo depois de clicar num produto com o mouse â€” o
-  // prÃ³ximo disparo do leitor se perde. Por isso devolvemos o foco a este campo apÃ³s
+  // referência do campo de busca: leitores de código de barras baratos funcionam como
+  // um teclado (digitam o código + Enter em quem estiver com foco no momento). Se o
+  // foco escapar do campo — por exemplo depois de clicar num produto com o mouse — o
+  // próximo disparo do leitor se perde. Por isso devolvemos o foco a este campo após
   // cada produto adicionado.
   const buscaInputRef = useRef<HTMLInputElement>(null);
   const [erroCaixa, setErroCaixa] = useState<string | null>(null);
-  // guarda sÃ­ncrona contra duplo-clique/duplo-toque: o estado `finalizando` jÃ¡ desabilita o
-  // botÃ£o, mas a atualizaÃ§Ã£o de estado sÃ³ reflete no DOM apÃ³s o re-render, e dois cliques
-  // muito prÃ³ximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
+  // guarda síncrona contra duplo-clique/duplo-toque: o estado `finalizando` já desabilita o
+  // botão, mas a atualização de estado só reflete no DOM após o re-render, e dois cliques
+  // muito próximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
   const enviandoVendaRef = useRef(false);
 
   useEffect(() => {
@@ -73,7 +73,7 @@ export default function PdvPage() {
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "NÃ£o foi possÃ­vel abrir o caixa.";
+        "Não foi possível abrir o caixa.";
       setErroCaixa(msg);
     } finally {
       setAbrindoCaixa(false);
@@ -116,7 +116,7 @@ export default function PdvPage() {
       setBusca("");
       setResultados([]);
     } catch {
-      setErro(`Produto nÃ£o encontrado para o cÃ³digo ${codigo}`);
+      setErro(`Produto não encontrado para o código ${codigo}`);
     } finally {
       buscaInputRef.current?.focus();
     }
@@ -142,7 +142,7 @@ export default function PdvPage() {
         );
       }
       if (produto.quantidadeEstoque < 1) {
-        setErro(`${produto.nome} estÃ¡ sem estoque`);
+        setErro(`${produto.nome} está sem estoque`);
         return prev;
       }
       return [...prev, { produto, quantidade: 1 }];
@@ -225,7 +225,7 @@ export default function PdvPage() {
   }
 
   function handleDescontoChange(valor: string) {
-    // Aceita apenas nÃºmeros e um separador decimal (. ou ,)
+    // Aceita apenas números e um separador decimal (. ou ,)
     if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) {
       setDescontoPercentual(valor);
     }
@@ -300,7 +300,7 @@ export default function PdvPage() {
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
-        "NÃ£o foi possÃ­vel concluir a venda.";
+        "Não foi possível concluir a venda.";
       setErro(msg);
     } finally {
       enviandoVendaRef.current = false;
@@ -310,7 +310,7 @@ export default function PdvPage() {
 
   function cancelarVenda() {
     if (carrinho.length === 0) return;
-    if (!confirm("Deseja cancelar esta venda? O carrinho serÃ¡ esvaziado.")) return;
+    if (!confirm("Deseja cancelar esta venda? O carrinho será esvaziado.")) return;
     setCarrinho([]);
     setFormaPagamento("PIX");
     setDescontoPercentual("");
@@ -339,7 +339,7 @@ export default function PdvPage() {
             <Lock className="w-8 h-8 mx-auto mb-2" />
             <p className="font-semibold">Abrir caixa</p>
             <p className="text-xs text-white/70 mt-0.5">
-              Informe o valor inicial para comeÃ§ar as vendas
+              Informe o valor inicial para começar as vendas
             </p>
           </div>
 
@@ -380,7 +380,7 @@ export default function PdvPage() {
 
   return (
     <div className="flex flex-col h-screen">
-      <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou cÃ³digo de barras" />
+      <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" />
 
       <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
         {/* Coluna de busca de produtos */}
@@ -393,7 +393,7 @@ export default function PdvPage() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={handleBuscaKeyDown}
-              placeholder="Nome do produto ou cÃ³digo de barras + Enter"
+              placeholder="Nome do produto ou código de barras + Enter"
               className="w-full pl-10 pr-4 py-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
             />
             {buscando && (
@@ -434,7 +434,7 @@ export default function PdvPage() {
           </div>
         </div>
 
-        {/* Coluna do carrinho / recibo â€” empilha abaixo da busca no celular, fica ao lado em telas md+ */}
+        {/* Coluna do carrinho / recibo — empilha abaixo da busca no celular, fica ao lado em telas md+ */}
         <div className="w-full md:w-[380px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border flex flex-col">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2">
             <ShoppingCart className="w-4 h-4 text-primary" />
@@ -505,7 +505,7 @@ export default function PdvPage() {
                     onClick={desativarPagamentoMultiplo}
                     className="text-[11px] font-medium text-danger hover:text-danger/80"
                   >
-                    Usar pagamento Ãºnico
+                    Usar pagamento único
                   </button>
                 )}
               </div>
@@ -697,7 +697,7 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
       await imprimirCupom(venda);
       setImpressaoOk(true);
     } catch (error) {
-      setErroImpressao(error instanceof Error ? error.message : "NÃ£o foi possÃ­vel imprimir o cupom.");
+      setErroImpressao(error instanceof Error ? error.message : "Não foi possível imprimir o cupom.");
     } finally {
       setImprimindo(false);
     }
@@ -708,16 +708,16 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />
-          <p className="font-semibold">Venda concluÃ­da</p>
+          <p className="font-semibold">Venda concluída</p>
           <p className="text-xs text-white/70 mt-0.5">Venda #{venda.id}</p>
         </div>
 
-        {/* cabeÃ§alho sÃ³ visÃ­vel na impressÃ£o: a tela jÃ¡ mostra "Venda concluÃ­da" acima */}
+        {/* cabeçalho só visível na impressão: a tela já mostra "Venda concluída" acima */}
         <div className="hidden print:block text-center px-6 pt-4">
           <p className="font-semibold">PRESENTE DE DEUS</p>
-          <p className="text-xs text-muted">Artigos Religiosos CatÃ³licos e Presentes</p>
-          <p className="text-xs text-muted">CLN 07 Bloco B, Lote 1, Loja 04 â€” Riacho Fundo I, BrasÃ­lia-DF</p>
-          <p className="text-xs text-muted">(61) 3264087 Â· @presentededeusartigosreligiososcatolicos</p>
+          <p className="text-xs text-muted">Artigos Religiosos Católicos e Presentes</p>
+          <p className="text-xs text-muted">CLN 07 Bloco B, Lote 1, Loja 04 — Riacho Fundo I, Brasília-DF</p>
+          <p className="text-xs text-muted">(61) 3264087 · @presentededeusartigosreligiososcatolicos</p>
           <p className="text-xs text-muted mt-2">Comprovante de venda #{venda.id}</p>
           <p className="text-xs text-muted">{formatarDataHora(venda.dataHora)}</p>
         </div>
