@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Despesa, TipoDespesa, FormaPagamento, Venda } from "@/lib/types";
 import {
@@ -34,6 +34,29 @@ const COR_TIPO: Record<TipoDespesa, string> = {
   DESPESA: "bg-danger-light text-danger",
   SANGRIA: "bg-accent-light text-accent-dark",
   SUPRIMENTO: "bg-primary-light text-primary-dark",
+};
+
+const BORDA_TIPO: Record<TipoDespesa, string> = {
+  DESPESA: "border-l-danger",
+  SANGRIA: "border-l-accent",
+  SUPRIMENTO: "border-l-primary",
+};
+
+const COR_VALOR_TIPO: Record<TipoDespesa, string> = {
+  DESPESA: "text-danger",
+  SANGRIA: "text-accent-dark",
+  SUPRIMENTO: "text-primary-dark",
+};
+
+// cada forma de pagamento com uma cor própria, pra bater o olho na listagem
+// sem precisar ler o texto
+const COR_FORMA: Record<string, string> = {
+  PIX: "bg-primary-light text-primary-dark",
+  DINHEIRO: "bg-accent-light text-accent-dark",
+  CARTAO_CREDITO: "bg-primary-soft text-primary-dark border border-primary/20",
+  CARTAO_DEBITO: "bg-surface-alt text-foreground border border-border",
+  CHEQUE: "bg-danger-light text-danger",
+  MULTIPLO: "bg-surface-alt text-muted border border-border border-dashed",
 };
 
 /**
@@ -292,74 +315,111 @@ export default function FinancasPage() {
             <table className="w-full text-sm">
               <thead className="bg-background border-b border-border">
                 <tr className="text-left text-muted">
-                  <th className="px-4 py-2.5 font-medium">Tipo</th>
-                  <th className="px-4 py-2.5 font-medium">Categoria</th>
-                  <th className="px-4 py-2.5 font-medium">Fornecedor</th>
-                  <th className="px-4 py-2.5 font-medium">Descrição</th>
-                  <th className="px-4 py-2.5 font-medium">Forma</th>
-                  <th className="px-4 py-2.5 font-medium">Data</th>
-                  <th className="px-4 py-2.5 font-medium">Usuário</th>
-                  <th className="px-4 py-2.5 font-medium text-right">Valor</th>
-                  <th className="px-4 py-2.5 font-medium text-right">Ações</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Tipo</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Categoria</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Fornecedor</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Descrição</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Forma</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Data</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Usuário</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Valor</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {despesasFiltradas.map((d) => (
-                  <tr key={d.id} className="border-b border-border last:border-0 align-top">
-                    <td className="px-4 py-2.5">
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${COR_TIPO[d.tipo]}`}>
-                        {LABEL_TIPO_DESPESA[d.tipo]}
-                      </span>
-                    </td>
-                    <td className="px-4 py-2.5 text-muted">{d.categoria || "—"}</td>
-                    <td className="px-4 py-2.5 text-muted">{d.fornecedor || "—"}</td>
-                    <td className="px-4 py-2.5 text-foreground">
-                      <p>{d.descricao}</p>
-                      {d.parcelas.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mt-1.5">
-                          {d.parcelas.map((p) => (
-                            <span
-                              key={p.numero}
-                              className="text-[11px] px-1.5 py-0.5 rounded bg-background text-muted whitespace-nowrap"
-                            >
-                              {p.numero}ª {formatarMoeda(p.valor)}
-                              {p.dataVencimento ? ` — ${formatarDataCurta(p.dataVencimento)}` : " — sem data"}
-                            </span>
-                          ))}
+                  <Fragment key={d.id}>
+                    <tr
+                      className={`border-b ${
+                        d.parcelas.length > 0 ? "border-transparent" : "border-border"
+                      } last:border-0 align-top border-l-4 ${BORDA_TIPO[d.tipo]} hover:bg-background/60 transition`}
+                    >
+                      <td className="px-4 py-2.5">
+                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${COR_TIPO[d.tipo]}`}>
+                          {LABEL_TIPO_DESPESA[d.tipo]}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5">
+                        {d.categoria ? (
+                          <span className="text-xs px-2 py-0.5 rounded-full bg-surface-alt border border-border text-foreground font-medium whitespace-nowrap">
+                            {d.categoria}
+                          </span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-2.5 text-foreground font-medium">{d.fornecedor || "—"}</td>
+                      <td className="px-4 py-2.5 text-foreground">{d.descricao}</td>
+                      <td className="px-4 py-2.5">
+                        <span
+                          className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
+                            COR_FORMA[d.formaPagamento] ?? "bg-surface-alt text-muted border border-border"
+                          }`}
+                        >
+                          {LABEL_FORMA_PAGAMENTO[d.formaPagamento]}
+                          {d.numeroParcelas && d.numeroParcelas > 1 ? ` ${d.numeroParcelas}x` : ""}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2.5 text-muted whitespace-nowrap">{formatarDataHora(d.dataHora)}</td>
+                      <td className="px-4 py-2.5 text-muted">{d.usuarioNome}</td>
+                      <td className={`px-4 py-2.5 text-right font-mono font-semibold ${COR_VALOR_TIPO[d.tipo]}`}>
+                        {formatarMoeda(d.valor)}
+                      </td>
+                      <td className="px-4 py-2.5">
+                        <div className="flex justify-end gap-1">
+                          <button
+                            onClick={() => setDespesaEmEdicao(d)}
+                            className="p-1.5 rounded-md text-muted hover:bg-background hover:text-primary transition"
+                            title="Editar lançamento"
+                          >
+                            <Pencil className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={() => excluir(d.id)}
+                            disabled={excluindoId === d.id}
+                            className="p-1.5 rounded-md text-muted hover:bg-background hover:text-danger transition disabled:opacity-50"
+                            title="Excluir lançamento"
+                          >
+                            {excluindoId === d.id ? (
+                              <Loader2 className="w-4 h-4 animate-spin" />
+                            ) : (
+                              <Trash2 className="w-4 h-4" />
+                            )}
+                          </button>
                         </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted">
-                      {LABEL_FORMA_PAGAMENTO[d.formaPagamento]}
-                      {d.numeroParcelas && d.numeroParcelas > 1 ? ` (${d.numeroParcelas}x)` : ""}
-                    </td>
-                    <td className="px-4 py-2.5 text-muted whitespace-nowrap">{formatarDataHora(d.dataHora)}</td>
-                    <td className="px-4 py-2.5 text-muted">{d.usuarioNome}</td>
-                    <td className="px-4 py-2.5 text-right font-mono">{formatarMoeda(d.valor)}</td>
-                    <td className="px-4 py-2.5">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          onClick={() => setDespesaEmEdicao(d)}
-                          className="p-1.5 rounded-md text-muted hover:bg-background hover:text-primary transition"
-                          title="Editar lançamento"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => excluir(d.id)}
-                          disabled={excluindoId === d.id}
-                          className="p-1.5 rounded-md text-muted hover:bg-background hover:text-danger transition disabled:opacity-50"
-                          title="Excluir lançamento"
-                        >
-                          {excluindoId === d.id ? (
-                            <Loader2 className="w-4 h-4 animate-spin" />
-                          ) : (
-                            <Trash2 className="w-4 h-4" />
-                          )}
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                    </tr>
+
+                    {d.parcelas.length > 0 && (
+                      <tr className={`border-b border-border last:border-0 border-l-4 ${BORDA_TIPO[d.tipo]}`}>
+                        <td colSpan={9} className="px-4 pb-3 pt-0">
+                          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent-light/50 px-3 py-2">
+                            <span className="text-[11px] font-bold text-accent-dark uppercase tracking-wide shrink-0">
+                              {d.parcelas.length} parcelas
+                            </span>
+                            <div className="flex flex-wrap gap-1.5">
+                              {d.parcelas.map((p) => (
+                                <span
+                                  key={p.numero}
+                                  className="flex items-center gap-1.5 text-xs bg-surface border border-border rounded-full pl-1 pr-2.5 py-0.5"
+                                >
+                                  <span className="w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    {p.numero}
+                                  </span>
+                                  <span className="font-mono font-semibold text-foreground">
+                                    {formatarMoeda(p.valor)}
+                                  </span>
+                                  <span className="text-muted">
+                                    {p.dataVencimento ? formatarDataCurta(p.dataVencimento) : "sem data"}
+                                  </span>
+                                </span>
+                              ))}
+                            </div>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                  </Fragment>
                 ))}
               </tbody>
             </table>
