@@ -6,7 +6,7 @@ import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X } from "lucide-react";
 
 interface ItemCarrinho {
   produto: Produto;
@@ -404,8 +404,23 @@ export default function PdvPage() {
               placeholder="Nome do produto ou código de barras + Enter"
               className="w-full pl-10 pr-4 py-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
             />
-            {buscando && (
+            {buscando ? (
               <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted" />
+            ) : (
+              busca.length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBusca("");
+                    setResultados([]);
+                    buscaInputRef.current?.focus();
+                  }}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition"
+                  title="Limpar busca"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )
             )}
           </div>
 

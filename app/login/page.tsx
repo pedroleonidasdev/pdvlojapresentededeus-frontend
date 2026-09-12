@@ -1,6 +1,6 @@
 "use client";
 
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
 import { Loader2, Lock, User } from "lucide-react";
 
@@ -10,6 +10,34 @@ export default function LoginPage() {
   const [senha, setSenha] = useState("");
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [progresso, setProgresso] = useState(0);
+  const [mensagemEspera, setMensagemEspera] = useState("");
+
+  // O backend (Render, plano free) hiberna depois de um tempo sem uso e pode
+  // levar até ~1 minuto pra "acordar" na primeira requisição do dia. Sem essa
+  // barra, a tela fica parada com só um spinner e parece travada. A barra
+  // avança rápido no início e desacelera (nunca chega a 100% sozinha — só
+  // quando a resposta do servidor realmente chegar), e a mensagem muda
+  // conforme o tempo passa pra explicar o que está acontecendo.
+  useEffect(() => {
+    if (!carregando) {
+      setProgresso(0);
+      setMensagemEspera("");
+      return;
+    }
+    const inicio = Date.now();
+    const intervalo = setInterval(() => {
+      const segundos = (Date.now() - inicio) / 1000;
+      setProgresso(Math.min(96, 100 * (1 - Math.exp(-segundos / 12))));
+      if (segundos < 3) setMensagemEspera("Conectando...");
+      else if (segundos < 10) setMensagemEspera("Autenticando...");
+      else
+        setMensagemEspera(
+          "O servidor estava inativo e está iniciando — pode levar até 1 minuto na primeira vez do dia."
+        );
+    }, 200);
+    return () => clearInterval(intervalo);
+  }, [carregando]);
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
@@ -129,6 +157,18 @@ export default function LoginPage() {
               {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
               Entrar
             </button>
+
+            {carregando && (
+              <div className="space-y-1.5">
+                <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-200 ease-out"
+                    style={{ width: `${progresso}%` }}
+                  />
+                </div>
+                <p className="text-xs text-muted text-center">{mensagemEspera}</p>
+              </div>
+            )}
           </form>
         </div>
       </div>
