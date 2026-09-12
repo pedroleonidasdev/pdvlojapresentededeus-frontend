@@ -86,6 +86,7 @@ export const LABEL_FORMA_PAGAMENTO: Record<string, string> = {
   DINHEIRO: "Dinheiro",
   CARTAO_CREDITO: "Cartão de crédito",
   CARTAO_DEBITO: "Cartão de débito",
+  CHEQUE: "Cheque",
   MULTIPLO: "Múltiplos pagamentos",
 };
 
@@ -108,5 +109,13 @@ export const CATEGORIAS_DESPESA_SUGERIDAS = [
   "Embalagens",
   "Marketing",
   "Impostos/Taxas",
+  "Despesas com pessoal",
+  "Frete/Entrega",
+  "Equipamentos",
+  "Software/Assinaturas",
+  "Contabilidade/Jurídico",
+  "Limpeza/Higiene",
+  "Combustível",
+  "Doações",
   "Outros",
 ];

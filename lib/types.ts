@@ -5,6 +5,7 @@ export type FormaPagamento =
   | "DINHEIRO"
   | "CARTAO_CREDITO"
   | "CARTAO_DEBITO"
+  | "CHEQUE"
   | "MULTIPLO";
 
 export interface Usuario {
@@ -133,4 +134,5 @@ export interface Despesa {
   dataHora: string;
   usuarioNome: string;
   caixaId: number | null;
+  numeroParcelas: number | null;
 }

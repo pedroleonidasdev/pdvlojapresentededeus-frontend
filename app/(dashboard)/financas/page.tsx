@@ -16,6 +16,7 @@ import PageHeader from "@/components/PageHeader";
 import {
   Plus,
   Trash2,
+  Pencil,
   X,
   Loader2,
   TrendingDown,
@@ -54,6 +55,7 @@ export default function FinancasPage() {
   const [totalFaturado, setTotalFaturado] = useState(0);
   const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
+  const [despesaEmEdicao, setDespesaEmEdicao] = useState<Despesa | null>(null);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<TipoDespesa | "TODOS">("TODOS");
   const [erro, setErro] = useState<string | null>(null);
@@ -309,16 +311,27 @@ export default function FinancasPage() {
                     </td>
                     <td className="px-4 py-2.5 text-muted">{d.categoria || "—"}</td>
                     <td className="px-4 py-2.5 text-foreground">{d.descricao}</td>
-                    <td className="px-4 py-2.5 text-muted">{LABEL_FORMA_PAGAMENTO[d.formaPagamento]}</td>
+                    <td className="px-4 py-2.5 text-muted">
+                      {LABEL_FORMA_PAGAMENTO[d.formaPagamento]}
+                      {d.numeroParcelas && d.numeroParcelas > 1 ? ` (${d.numeroParcelas}x)` : ""}
+                    </td>
                     <td className="px-4 py-2.5 text-muted whitespace-nowrap">{formatarDataHora(d.dataHora)}</td>
                     <td className="px-4 py-2.5 text-muted">{d.usuarioNome}</td>
                     <td className="px-4 py-2.5 text-right font-mono">{formatarMoeda(d.valor)}</td>
                     <td className="px-4 py-2.5">
-                      <div className="flex justify-end">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          onClick={() => setDespesaEmEdicao(d)}
+                          className="p-1.5 rounded-md text-muted hover:bg-background hover:text-primary transition"
+                          title="Editar lançamento"
+                        >
+                          <Pencil className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => excluir(d.id)}
                           disabled={excluindoId === d.id}
                           className="p-1.5 rounded-md text-muted hover:bg-background hover:text-danger transition disabled:opacity-50"
+                          title="Excluir lançamento"
                         >
                           {excluindoId === d.id ? (
                             <Loader2 className="w-4 h-4 animate-spin" />
@@ -336,11 +349,16 @@ export default function FinancasPage() {
         </div>
       </div>
 
-      {modalAberto && (
+      {(modalAberto || despesaEmEdicao) && (
         <ModalNovoLancamento
-          onClose={() => setModalAberto(false)}
+          despesa={despesaEmEdicao}
+          onClose={() => {
+            setModalAberto(false);
+            setDespesaEmEdicao(null);
+          }}
           onSalvo={() => {
             setModalAberto(false);
+            setDespesaEmEdicao(null);
             carregar();
           }}
         />
@@ -377,12 +395,24 @@ function CardResumo({
   );
 }
 
-function ModalNovoLancamento({ onClose, onSalvo }: { onClose: () => void; onSalvo: () => void }) {
-  const [tipo, setTipo] = useState<TipoDespesa>("DESPESA");
-  const [categoria, setCategoria] = useState("");
-  const [descricao, setDescricao] = useState("");
-  const [valor, setValor] = useState("");
-  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("DINHEIRO");
+function ModalNovoLancamento({
+  despesa,
+  onClose,
+  onSalvo,
+}: {
+  despesa?: Despesa | null;
+  onClose: () => void;
+  onSalvo: () => void;
+}) {
+  const editando = !!despesa;
+  const [tipo, setTipo] = useState<TipoDespesa>(despesa?.tipo ?? "DESPESA");
+  const [categoria, setCategoria] = useState(despesa?.categoria ?? "");
+  const [descricao, setDescricao] = useState(despesa?.descricao ?? "");
+  const [valor, setValor] = useState(despesa ? String(despesa.valor).replace(".", ",") : "");
+  const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(despesa?.formaPagamento ?? "DINHEIRO");
+  const [numeroParcelas, setNumeroParcelas] = useState(
+    despesa?.numeroParcelas && despesa.numeroParcelas > 1 ? String(despesa.numeroParcelas) : ""
+  );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -391,14 +421,20 @@ function ModalNovoLancamento({ onClose, onSalvo }: { onClose: () => void; onSalv
   async function salvar() {
     setSalvando(true);
     setErro(null);
+    const payload = {
+      tipo,
+      categoria: categoria.trim() || null,
+      descricao: descricao.trim(),
+      valor: Number(valor.replace(",", ".")) || 0,
+      formaPagamento: ehMovimentoCaixa ? "DINHEIRO" : formaPagamento,
+      numeroParcelas: !ehMovimentoCaixa && numeroParcelas.trim() ? Number(numeroParcelas) : null,
+    };
     try {
-      await api.post("/despesas", {
-        tipo,
-        categoria: categoria.trim() || null,
-        descricao: descricao.trim(),
-        valor: Number(valor.replace(",", ".")) || 0,
-        formaPagamento: ehMovimentoCaixa ? "DINHEIRO" : formaPagamento,
-      });
+      if (editando && despesa) {
+        await api.put(`/despesas/${despesa.id}`, payload);
+      } else {
+        await api.post("/despesas", payload);
+      }
       onSalvo();
     } catch (e: unknown) {
       const msg =
@@ -417,7 +453,7 @@ function ModalNovoLancamento({ onClose, onSalvo }: { onClose: () => void; onSalv
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
       <div className="bg-surface rounded-2xl w-full max-w-sm overflow-hidden">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold">Novo lançamento</h3>
+          <h3 className="font-semibold">{editando ? "Editar lançamento" : "Novo lançamento"}</h3>
           <button onClick={onClose} className="text-muted hover:text-foreground">
             <X className="w-5 h-5" />
           </button>
@@ -431,12 +467,13 @@ function ModalNovoLancamento({ onClose, onSalvo }: { onClose: () => void; onSalv
                 <button
                   key={t}
                   type="button"
+                  disabled={editando}
                   onClick={() => setTipo(t)}
                   className={`text-xs px-2 py-2 rounded-lg border transition ${
                     tipo === t
                       ? "border-primary bg-primary-light text-primary-dark font-medium"
                       : "border-border text-muted hover:bg-background"
-                  }`}
+                  } ${editando ? "opacity-60 cursor-not-allowed" : ""}`}
                 >
                   {LABEL_TIPO_DESPESA[t]}
                 </button>
@@ -446,6 +483,9 @@ function ModalNovoLancamento({ onClose, onSalvo }: { onClose: () => void; onSalv
               <p className="text-xs text-muted mt-1.5">
                 Sempre em dinheiro, e só pode ser lançado com o caixa aberto.
               </p>
+            )}
+            {editando && (
+              <p className="text-xs text-muted mt-1.5">O tipo do lançamento não pode ser alterado depois de criado.</p>
             )}
           </div>
 
@@ -509,6 +549,24 @@ function ModalNovoLancamento({ onClose, onSalvo }: { onClose: () => void; onSalv
             </label>
           )}
 
+          {!ehMovimentoCaixa && (
+            <label className="block">
+              <span className="block text-xs font-medium text-muted mb-1.5">
+                Parcelas <span className="font-normal">(deixe em branco se for à vista)</span>
+              </span>
+              <input
+                type="number"
+                min={2}
+                step={1}
+                inputMode="numeric"
+                value={numeroParcelas}
+                onChange={(e) => setNumeroParcelas(e.target.value)}
+                placeholder="Ex: 5"
+                className="input font-mono"
+              />
+            </label>
+          )}
+
           {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
         </div>
 
@@ -522,7 +580,7 @@ function ModalNovoLancamento({ onClose, onSalvo }: { onClose: () => void; onSalv
             className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-medium transition disabled:opacity-50"
           >
             {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
-            Salvar
+            {editando ? "Salvar alterações" : "Salvar"}
           </button>
         </div>
       </div>
