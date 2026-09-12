@@ -6,6 +6,7 @@ import { Despesa, TipoDespesa, FormaPagamento, Venda } from "@/lib/types";
 import {
   formatarMoeda,
   formatarDataHora,
+  formatarDataCurta,
   dataBrasiliaISO,
   limiteDiaBrasiliaParaUtc,
   LABEL_FORMA_PAGAMENTO,
@@ -293,6 +294,7 @@ export default function FinancasPage() {
                 <tr className="text-left text-muted">
                   <th className="px-4 py-2.5 font-medium">Tipo</th>
                   <th className="px-4 py-2.5 font-medium">Categoria</th>
+                  <th className="px-4 py-2.5 font-medium">Fornecedor</th>
                   <th className="px-4 py-2.5 font-medium">Descrição</th>
                   <th className="px-4 py-2.5 font-medium">Forma</th>
                   <th className="px-4 py-2.5 font-medium">Data</th>
@@ -303,14 +305,30 @@ export default function FinancasPage() {
               </thead>
               <tbody>
                 {despesasFiltradas.map((d) => (
-                  <tr key={d.id} className="border-b border-border last:border-0">
+                  <tr key={d.id} className="border-b border-border last:border-0 align-top">
                     <td className="px-4 py-2.5">
                       <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${COR_TIPO[d.tipo]}`}>
                         {LABEL_TIPO_DESPESA[d.tipo]}
                       </span>
                     </td>
                     <td className="px-4 py-2.5 text-muted">{d.categoria || "—"}</td>
-                    <td className="px-4 py-2.5 text-foreground">{d.descricao}</td>
+                    <td className="px-4 py-2.5 text-muted">{d.fornecedor || "—"}</td>
+                    <td className="px-4 py-2.5 text-foreground">
+                      <p>{d.descricao}</p>
+                      {d.parcelas.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {d.parcelas.map((p) => (
+                            <span
+                              key={p.numero}
+                              className="text-[11px] px-1.5 py-0.5 rounded bg-background text-muted whitespace-nowrap"
+                            >
+                              {p.numero}ª {formatarMoeda(p.valor)}
+                              {p.dataVencimento ? ` — ${formatarDataCurta(p.dataVencimento)}` : " — sem data"}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-2.5 text-muted">
                       {LABEL_FORMA_PAGAMENTO[d.formaPagamento]}
                       {d.numeroParcelas && d.numeroParcelas > 1 ? ` (${d.numeroParcelas}x)` : ""}
@@ -407,16 +425,58 @@ function ModalNovoLancamento({
   const editando = !!despesa;
   const [tipo, setTipo] = useState<TipoDespesa>(despesa?.tipo ?? "DESPESA");
   const [categoria, setCategoria] = useState(despesa?.categoria ?? "");
+  const [fornecedor, setFornecedor] = useState(despesa?.fornecedor ?? "");
   const [descricao, setDescricao] = useState(despesa?.descricao ?? "");
   const [valor, setValor] = useState(despesa ? String(despesa.valor).replace(".", ",") : "");
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(despesa?.formaPagamento ?? "DINHEIRO");
   const [numeroParcelas, setNumeroParcelas] = useState(
     despesa?.numeroParcelas && despesa.numeroParcelas > 1 ? String(despesa.numeroParcelas) : ""
   );
+  const [parcelas, setParcelas] = useState<{ dataVencimento: string; valor: string }[]>(
+    despesa?.parcelas?.length
+      ? despesa.parcelas.map((p) => ({
+          dataVencimento: p.dataVencimento ?? "",
+          valor: String(p.valor).replace(".", ","),
+        }))
+      : []
+  );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
   const ehMovimentoCaixa = tipo !== "DESPESA";
+
+  // sempre que a quantidade de parcelas ou o valor total mudam, recalcula a
+  // divisão automaticamente (a última parcela absorve os centavos de resto,
+  // pra soma bater exatamente com o total). As datas já digitadas são
+  // preservadas por posição; o valor de cada parcela continua editável depois
+  // — só é recalculado se a quantidade ou o total mudarem de novo.
+  useEffect(() => {
+    const n = Number(numeroParcelas);
+    if (ehMovimentoCaixa || !n || n < 2) {
+      setParcelas([]);
+      return;
+    }
+    const totalCentavos = Math.round((Number(valor.replace(",", ".")) || 0) * 100);
+    const base = Math.floor(totalCentavos / n);
+    const resto = totalCentavos - base * n;
+    setParcelas((atual) =>
+      Array.from({ length: n }, (_, i) => ({
+        dataVencimento: atual[i]?.dataVencimento ?? "",
+        valor: ((base + (i === n - 1 ? resto : 0)) / 100).toFixed(2).replace(".", ","),
+      }))
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [numeroParcelas, valor, ehMovimentoCaixa]);
+
+  function atualizarParcela(index: number, campo: "dataVencimento" | "valor", valorNovo: string) {
+    setParcelas((atual) => atual.map((p, i) => (i === index ? { ...p, [campo]: valorNovo } : p)));
+  }
+
+  const somaParcelas = useMemo(
+    () => parcelas.reduce((acc, p) => acc + (Number(p.valor.replace(",", ".")) || 0), 0),
+    [parcelas]
+  );
+  const somaParcelasDiverge = parcelas.length > 0 && Math.abs(somaParcelas - (Number(valor.replace(",", ".")) || 0)) > 0.009;
 
   async function salvar() {
     setSalvando(true);
@@ -424,10 +484,18 @@ function ModalNovoLancamento({
     const payload = {
       tipo,
       categoria: categoria.trim() || null,
+      fornecedor: !ehMovimentoCaixa && fornecedor.trim() ? fornecedor.trim() : null,
       descricao: descricao.trim(),
       valor: Number(valor.replace(",", ".")) || 0,
       formaPagamento: ehMovimentoCaixa ? "DINHEIRO" : formaPagamento,
       numeroParcelas: !ehMovimentoCaixa && numeroParcelas.trim() ? Number(numeroParcelas) : null,
+      parcelas:
+        !ehMovimentoCaixa && parcelas.length > 0
+          ? parcelas.map((p) => ({
+              dataVencimento: p.dataVencimento || null,
+              valor: Number(p.valor.replace(",", ".")) || 0,
+            }))
+          : null,
     };
     try {
       if (editando && despesa) {
@@ -451,8 +519,8 @@ function ModalNovoLancamento({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-2xl w-full max-w-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
+      <div className="bg-surface rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
+        <div className="px-6 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-surface">
           <h3 className="font-semibold">{editando ? "Editar lançamento" : "Novo lançamento"}</h3>
           <button onClick={onClose} className="text-muted hover:text-foreground">
             <X className="w-5 h-5" />
@@ -507,6 +575,20 @@ function ModalNovoLancamento({
             </datalist>
           </label>
 
+          {!ehMovimentoCaixa && (
+            <label className="block">
+              <span className="block text-xs font-medium text-muted mb-1.5">
+                Fornecedor <span className="font-normal">(opcional)</span>
+              </span>
+              <input
+                value={fornecedor}
+                onChange={(e) => setFornecedor(e.target.value)}
+                placeholder="Ex: Distribuidora Central"
+                className="input"
+              />
+            </label>
+          )}
+
           <label className="block">
             <span className="block text-xs font-medium text-muted mb-1.5">Descrição</span>
             <input
@@ -519,7 +601,7 @@ function ModalNovoLancamento({
           </label>
 
           <label className="block">
-            <span className="block text-xs font-medium text-muted mb-1.5">Valor</span>
+            <span className="block text-xs font-medium text-muted mb-1.5">Valor total</span>
             <input
               inputMode="decimal"
               value={valor}
@@ -565,6 +647,40 @@ function ModalNovoLancamento({
                 className="input font-mono"
               />
             </label>
+          )}
+
+          {!ehMovimentoCaixa && parcelas.length > 0 && (
+            <div>
+              <span className="block text-xs font-medium text-muted mb-1.5">
+                Vencimento e valor de cada parcela
+              </span>
+              <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                {parcelas.map((p, i) => (
+                  <div key={i} className="flex items-center gap-1.5">
+                    <span className="text-xs text-muted w-6 shrink-0">{i + 1}ª</span>
+                    <input
+                      type="date"
+                      value={p.dataVencimento}
+                      onChange={(e) => atualizarParcela(i, "dataVencimento", e.target.value)}
+                      className="input text-xs flex-1 py-1.5"
+                    />
+                    <input
+                      inputMode="decimal"
+                      value={p.valor}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) atualizarParcela(i, "valor", v);
+                      }}
+                      className="input text-xs font-mono w-24 py-1.5"
+                    />
+                  </div>
+                ))}
+              </div>
+              <p className={`text-[11px] mt-1.5 ${somaParcelasDiverge ? "text-danger" : "text-muted"}`}>
+                Soma das parcelas: {formatarMoeda(somaParcelas)}
+                {somaParcelasDiverge && " — diferente do valor total"}
+              </p>
+            </div>
           )}
 
           {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}

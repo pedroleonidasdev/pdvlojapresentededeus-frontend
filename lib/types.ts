@@ -124,10 +124,17 @@ export interface Caixa {
 
 export type TipoDespesa = "DESPESA" | "SANGRIA" | "SUPRIMENTO";
 
+export interface Parcela {
+  numero: number;
+  dataVencimento: string | null;
+  valor: number;
+}
+
 export interface Despesa {
   id: number;
   tipo: TipoDespesa;
   categoria: string | null;
+  fornecedor: string | null;
   descricao: string;
   valor: number;
   formaPagamento: FormaPagamento;
@@ -135,4 +142,5 @@ export interface Despesa {
   usuarioNome: string;
   caixaId: number | null;
   numeroParcelas: number | null;
+  parcelas: Parcela[];
 }

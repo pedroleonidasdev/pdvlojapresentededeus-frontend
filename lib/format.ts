@@ -81,6 +81,14 @@ export function deInputDataHoraLocalParaUtc(valorLocal: string): string {
   return utc.toISOString().slice(0, 19);
 }
 
+/** Formata uma data "crua" (YYYY-MM-DD, sem hora — ex: vencimento de uma
+ *  parcela) para "DD/MM/AAAA". Diferente de formatarDataHora, não faz nenhuma
+ *  conversão de fuso: é só um calendário, não um instante. */
+export function formatarDataCurta(dataYYYYMMDD: string): string {
+  const [ano, mes, dia] = dataYYYYMMDD.split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
 export const LABEL_FORMA_PAGAMENTO: Record<string, string> = {
   PIX: "Pix",
   DINHEIRO: "Dinheiro",
