@@ -28,6 +28,14 @@ const COR_FORMA_PAGAMENTO: Record<FormaPdv, { ativo: string; ponto: string }> = 
   CARTAO_DEBITO: { ativo: "border-accent bg-accent-light text-accent-dark font-medium", ponto: "bg-accent" },
 };
 
+// as 3 etapas fixas do fluxo de finalizar venda — sempre passam por todas,
+// nessa ordem, independente de quão rápido o servidor responde.
+const ETAPA_FINALIZACAO: Record<"processando" | "finalizando" | "sucesso", { texto: string; progresso: number }> = {
+  processando: { texto: "Processando venda...", progresso: 35 },
+  finalizando: { texto: "Finalizando venda...", progresso: 75 },
+  sucesso: { texto: "VENDA FINALIZADA COM SUCESSO!", progresso: 100 },
+};
+
 export default function PdvPage() {
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<Produto[]>([]);
@@ -56,29 +64,7 @@ export default function PdvPage() {
   // botão, mas a atualização de estado só reflete no DOM após o re-render, e dois cliques
   // muito próximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
   const enviandoVendaRef = useRef(false);
-  const [progressoFinalizacao, setProgressoFinalizacao] = useState(0);
-  const [mensagemFinalizacao, setMensagemFinalizacao] = useState("");
-
-  // Barra que acompanha o clique em "Finalizar venda": a requisição costuma ser
-  // rápida, mas se o backend (Render free) estiver hibernado pode demorar mais.
-  // A barra avança sozinha (rápido no início, desacelerando) e nunca chega a
-  // 100% sozinha — só quando a venda realmente for confirmada pelo servidor.
-  useEffect(() => {
-    if (!finalizando) {
-      setProgressoFinalizacao(0);
-      setMensagemFinalizacao("");
-      return;
-    }
-    const inicio = Date.now();
-    const intervalo = setInterval(() => {
-      const segundos = (Date.now() - inicio) / 1000;
-      setProgressoFinalizacao(Math.min(96, 100 * (1 - Math.exp(-segundos / 4))));
-      if (segundos < 1) setMensagemFinalizacao("Processando...");
-      else if (segundos < 3) setMensagemFinalizacao("Finalizando venda...");
-      else setMensagemFinalizacao("Quase lá, aguarde...");
-    }, 150);
-    return () => clearInterval(intervalo);
-  }, [finalizando]);
+  const [etapaFinalizacao, setEtapaFinalizacao] = useState<"processando" | "finalizando" | "sucesso" | null>(null);
 
   useEffect(() => {
     async function verificarCaixa() {
@@ -307,20 +293,37 @@ export default function PdvPage() {
     enviandoVendaRef.current = true;
     setFinalizando(true);
     setErro(null);
+    setEtapaFinalizacao("processando");
+
+    const esperar = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
     try {
-      const { data } = await api.post<Venda>("/vendas", {
-        formaPagamento: pagamentoMultiplo ? null : formaPagamento,
-        pagamentos: pagamentoMultiplo
-          ? pagamentos.map((p) => ({
-              formaPagamento: p.formaPagamento,
-              valor: parseFloat(p.valor.replace(",", ".")) || 0,
-            }))
-          : [{ formaPagamento, valor: total }],
-        percentualDesconto: descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
-        valorDescontoInformado: descontoDinheiroValido > 0 ? descontoDinheiroValido : undefined,
-        itens: carrinho.map((i) => ({ produtoId: i.produto.id, quantidade: i.quantidade })),
-      });
-      setVendaConcluida(data);
+      // dispara a requisição real e, em paralelo, garante que a etapa
+      // "processando" fique visível por pelo menos 900ms antes de avançar —
+      // mesmo que o servidor responda mais rápido que isso.
+      const [, resposta] = await Promise.all([
+        esperar(900).then(() => setEtapaFinalizacao("finalizando")),
+        api.post<Venda>("/vendas", {
+          formaPagamento: pagamentoMultiplo ? null : formaPagamento,
+          pagamentos: pagamentoMultiplo
+            ? pagamentos.map((p) => ({
+                formaPagamento: p.formaPagamento,
+                valor: parseFloat(p.valor.replace(",", ".")) || 0,
+              }))
+            : [{ formaPagamento, valor: total }],
+          percentualDesconto: descontoPercentualValido > 0 ? descontoPercentualValido : undefined,
+          valorDescontoInformado: descontoDinheiroValido > 0 ? descontoDinheiroValido : undefined,
+          itens: carrinho.map((i) => ({ produtoId: i.produto.id, quantidade: i.quantidade })),
+        }),
+      ]);
+
+      // mantém "Finalizando venda..." visível um instante mesmo se a resposta
+      // já tiver chegado durante os 900ms acima
+      await esperar(600);
+      setEtapaFinalizacao("sucesso");
+      await esperar(2000);
+
+      setVendaConcluida(resposta.data);
       setCarrinho([]);
       setFormaPagamento("PIX");
       setPagamentoMultiplo(false);
@@ -336,6 +339,7 @@ export default function PdvPage() {
     } finally {
       enviandoVendaRef.current = false;
       setFinalizando(false);
+      setEtapaFinalizacao(null);
     }
   }
 
@@ -738,15 +742,27 @@ export default function PdvPage() {
         </div>
       </div>
 
-      {finalizando && (
+      {finalizando && etapaFinalizacao && (
         <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50">
           <div className="w-full max-w-xs bg-surface border border-border rounded-2xl shadow-lg p-6 text-center">
-            <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-primary" />
-            <p className="font-semibold text-foreground">{mensagemFinalizacao || "Processando..."}</p>
+            {etapaFinalizacao === "sucesso" ? (
+              <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-primary" />
+            ) : (
+              <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-primary" />
+            )}
+            <p
+              className={
+                etapaFinalizacao === "sucesso"
+                  ? "font-bold text-primary text-base"
+                  : "font-semibold text-foreground"
+              }
+            >
+              {ETAPA_FINALIZACAO[etapaFinalizacao].texto}
+            </p>
             <div className="h-1.5 w-full rounded-full bg-border overflow-hidden mt-4">
               <div
-                className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-150 ease-out"
-                style={{ width: `${progressoFinalizacao}%` }}
+                className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500 ease-out"
+                style={{ width: `${ETAPA_FINALIZACAO[etapaFinalizacao].progresso}%` }}
               />
             </div>
           </div>
