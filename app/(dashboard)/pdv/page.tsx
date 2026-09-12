@@ -17,7 +17,7 @@ const FORMAS: Exclude<FormaPagamento, "MULTIPLO">[] = ["PIX", "DINHEIRO", "CARTA
 
 // cada forma de pagamento recebe uma cor própria, pra ficar fácil bater o olho
 // no carrinho e reconhecer de longe qual está selecionada.
-const COR_FORMA_PAGAMENTO: Record<Exclude<FormaPagamento, "MULTIPLO">, { ativo: string; ponto: string }> = {
+const COR_FORMA_PAGAMENTO: Record<(typeof FORMAS)[number], { ativo: string; ponto: string }> = {
   PIX: { ativo: "border-info bg-info-light text-info-dark font-medium", ponto: "bg-info" },
   DINHEIRO: { ativo: "border-success bg-success-light text-success font-medium", ponto: "bg-success" },
   CARTAO_CREDITO: { ativo: "border-secondary bg-secondary-light text-secondary-dark font-medium", ponto: "bg-secondary" },
