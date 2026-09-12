@@ -56,6 +56,29 @@ export default function PdvPage() {
   // botão, mas a atualização de estado só reflete no DOM após o re-render, e dois cliques
   // muito próximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
   const enviandoVendaRef = useRef(false);
+  const [progressoFinalizacao, setProgressoFinalizacao] = useState(0);
+  const [mensagemFinalizacao, setMensagemFinalizacao] = useState("");
+
+  // Barra que acompanha o clique em "Finalizar venda": a requisição costuma ser
+  // rápida, mas se o backend (Render free) estiver hibernado pode demorar mais.
+  // A barra avança sozinha (rápido no início, desacelerando) e nunca chega a
+  // 100% sozinha — só quando a venda realmente for confirmada pelo servidor.
+  useEffect(() => {
+    if (!finalizando) {
+      setProgressoFinalizacao(0);
+      setMensagemFinalizacao("");
+      return;
+    }
+    const inicio = Date.now();
+    const intervalo = setInterval(() => {
+      const segundos = (Date.now() - inicio) / 1000;
+      setProgressoFinalizacao(Math.min(96, 100 * (1 - Math.exp(-segundos / 4))));
+      if (segundos < 1) setMensagemFinalizacao("Processando...");
+      else if (segundos < 3) setMensagemFinalizacao("Finalizando venda...");
+      else setMensagemFinalizacao("Quase lá, aguarde...");
+    }, 150);
+    return () => clearInterval(intervalo);
+  }, [finalizando]);
 
   useEffect(() => {
     async function verificarCaixa() {
@@ -714,6 +737,21 @@ export default function PdvPage() {
           </div>
         </div>
       </div>
+
+      {finalizando && (
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50">
+          <div className="w-full max-w-xs bg-surface border border-border rounded-2xl shadow-lg p-6 text-center">
+            <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-primary" />
+            <p className="font-semibold text-foreground">{mensagemFinalizacao || "Processando..."}</p>
+            <div className="h-1.5 w-full rounded-full bg-border overflow-hidden mt-4">
+              <div
+                className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-150 ease-out"
+                style={{ width: `${progressoFinalizacao}%` }}
+              />
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
