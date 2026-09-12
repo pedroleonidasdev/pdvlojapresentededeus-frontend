@@ -13,11 +13,15 @@ interface ItemCarrinho {
   quantidade: number;
 }
 
-const FORMAS: Exclude<FormaPagamento, "MULTIPLO">[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
+// o PDV só vende nessas 4 formas — cheque e múltiplos pagamentos não entram aqui
+// (múltiplo é tratado à parte via pagamentoMultiplo/pagamentos; cheque é só para despesas)
+type FormaPdv = Exclude<FormaPagamento, "MULTIPLO" | "CHEQUE">;
+
+const FORMAS: FormaPdv[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
 
 // cada forma de pagamento recebe uma cor própria, pra ficar fácil bater o olho
 // no carrinho e reconhecer de longe qual está selecionada.
-const COR_FORMA_PAGAMENTO: Record<(typeof FORMAS)[number], { ativo: string; ponto: string }> = {
+const COR_FORMA_PAGAMENTO: Record<FormaPdv, { ativo: string; ponto: string }> = {
   PIX: { ativo: "border-info bg-info-light text-info-dark font-medium", ponto: "bg-info" },
   DINHEIRO: { ativo: "border-success bg-success-light text-success font-medium", ponto: "bg-success" },
   CARTAO_CREDITO: { ativo: "border-secondary bg-secondary-light text-secondary-dark font-medium", ponto: "bg-secondary" },
@@ -30,7 +34,7 @@ export default function PdvPage() {
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>("PIX");
   const [pagamentoMultiplo, setPagamentoMultiplo] = useState(false);
-  const [pagamentos, setPagamentos] = useState<{ formaPagamento: Exclude<FormaPagamento, "MULTIPLO">; valor: string }[]>([]);
+  const [pagamentos, setPagamentos] = useState<{ formaPagamento: FormaPdv; valor: string }[]>([]);
   const [descontoPercentual, setDescontoPercentual] = useState<string>("");
   const [descontoDinheiro, setDescontoDinheiro] = useState<string>("");
   const [valorRecebido, setValorRecebido] = useState<string>("");
@@ -258,7 +262,7 @@ export default function PdvPage() {
   function adicionarFormaPagamento() {
     if (pagamentos.length >= 4) return;
     const usadas = new Set(pagamentos.map((p) => p.formaPagamento));
-    const proxima = (FORMAS.find((f) => !usadas.has(f)) ?? "PIX") as Exclude<FormaPagamento, "MULTIPLO">;
+    const proxima = (FORMAS.find((f) => !usadas.has(f)) ?? "PIX") as FormaPdv;
     setPagamentos((prev) => [...prev, { formaPagamento: proxima, valor: "" }]);
   }
 
@@ -595,7 +599,7 @@ export default function PdvPage() {
                     <div key={index} className="flex gap-2 items-center">
                       <select
                         value={pagamento.formaPagamento}
-                        onChange={(e) => atualizarPagamento(index, "formaPagamento", e.target.value as Exclude<FormaPagamento, "MULTIPLO">)}
+                        onChange={(e) => atualizarPagamento(index, "formaPagamento", e.target.value as FormaPdv)}
                         className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
                       >
                         {FORMAS.map((forma) => (
