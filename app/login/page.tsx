@@ -66,7 +66,7 @@ export default function LoginPage() {
 
         <div className="relative z-10">
           <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-accent">
-            <img src="/images/sao-miguel-arcanjo-icone.jpg" alt="" className="w-full h-full object-cover" />
+            <img src="/images/logo-loja.jpg" alt="" className="w-full h-full object-cover" />
           </div>
         </div>
 
@@ -93,7 +93,7 @@ export default function LoginPage() {
         <div className="w-full max-w-sm">
           <div className="mb-8 lg:hidden flex items-center gap-2">
             <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-border">
-              <img src="/images/sao-miguel-arcanjo-icone.jpg" alt="São Miguel Arcanjo" className="w-full h-full object-cover" />
+              <img src="/images/logo-loja.jpg" alt="Presente de Deus" className="w-full h-full object-cover" />
             </div>
             <span className="font-semibold text-lg">Presente de Deus</span>
           </div>
