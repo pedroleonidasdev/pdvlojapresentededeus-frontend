@@ -6,7 +6,7 @@ import { Caixa } from "@/lib/types";
 import { formatarMoeda, formatarDataHora } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
-import { Loader2, Unlock, User, Clock, CheckCircle2, Vault, AlertTriangle } from "lucide-react";
+import { Loader2, Unlock, User, Clock, CheckCircle2, Vault, AlertTriangle, RotateCcw } from "lucide-react";
 
 /**
  * Tela simples de fechamento de caixa para o operador: ele informa quanto tem
@@ -14,6 +14,9 @@ import { Loader2, Unlock, User, Clock, CheckCircle2, Vault, AlertTriangle } from
  * faturamento do dia nem qualquer comparativo — só o ADMIN vê isso, em
  * Relatórios. O operador fecha o caixa "às cegas", sem precisar saber quanto
  * deveria ter.
+ *
+ * Também é aqui que dá pra reabrir o último caixa fechado, caso tenha sido
+ * fechado por engano — mesma permissão do fechamento (ADMIN ou CAIXA).
  */
 export default function FecharCaixaPage() {
   const [caixa, setCaixa] = useState<Caixa | null | undefined>(undefined);
@@ -25,12 +28,31 @@ export default function FecharCaixaPage() {
   // pra reduzir o erro comum de digitar o faturamento em vez do dinheiro contado
   const [confirmando, setConfirmando] = useState(false);
 
+  const [ultimoFechado, setUltimoFechado] = useState<Caixa | null | undefined>(undefined);
+  const [confirmandoReabertura, setConfirmandoReabertura] = useState(false);
+  const [reabrindo, setReabrindo] = useState(false);
+  const [erroReabrir, setErroReabrir] = useState<string | null>(null);
+
   async function carregar() {
     try {
       const { data, status } = await api.get<Caixa>("/caixa/atual");
-      setCaixa(status === 204 || !data || !("id" in data) ? null : data);
+      const aberto = status === 204 || !data || !("id" in data) ? null : data;
+      setCaixa(aberto);
+
+      if (aberto === null) {
+        await carregarUltimoFechado();
+      }
     } catch {
       setCaixa(null);
+    }
+  }
+
+  async function carregarUltimoFechado() {
+    try {
+      const { data, status } = await api.get<Caixa>("/caixa/ultimo-fechado");
+      setUltimoFechado(status === 204 || !data || !("id" in data) ? null : data);
+    } catch {
+      setUltimoFechado(null);
     }
   }
 
@@ -59,6 +81,25 @@ export default function FecharCaixaPage() {
     }
   }
 
+  async function reabrirCaixa() {
+    if (!ultimoFechado) return;
+    setReabrindo(true);
+    setErroReabrir(null);
+    try {
+      await api.post(`/caixa/${ultimoFechado.id}/reabrir`);
+      setConfirmandoReabertura(false);
+      setFechadoComSucesso(false);
+      await carregar();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Não foi possível reabrir o caixa.";
+      setErroReabrir(msg);
+    } finally {
+      setReabrindo(false);
+    }
+  }
+
   return (
     <div>
       <PageHeader title="Fechar Caixa" subtitle="Conte o dinheiro físico em caixa e confirme o fechamento" />
@@ -79,11 +120,66 @@ export default function FecharCaixaPage() {
                 Já pode encerrar o expediente. Para abrir um novo caixa, vá até a tela de Venda.
               </p>
             </div>
+            <button
+              onClick={() => {
+                setFechadoComSucesso(false);
+                carregarUltimoFechado();
+              }}
+              className="text-xs text-muted hover:text-foreground underline underline-offset-2"
+            >
+              Fechei por engano, quero reabrir
+            </button>
           </div>
         ) : caixa === null ? (
-          <div className="bg-surface border border-border rounded-xl p-6 text-center">
-            <Vault className="w-8 h-8 mx-auto mb-2 text-muted opacity-50" />
-            <p className="text-sm text-muted">Nenhum caixa aberto no momento.</p>
+          <div className="bg-surface border border-border rounded-xl p-6 text-center space-y-4">
+            <div>
+              <Vault className="w-8 h-8 mx-auto mb-2 text-muted opacity-50" />
+              <p className="text-sm text-muted">Nenhum caixa aberto no momento.</p>
+            </div>
+
+            {ultimoFechado && (
+              <div className="text-left border border-border rounded-lg p-3 space-y-2">
+                <p className="text-xs text-muted">
+                  Último caixa fechado por <strong>{ultimoFechado.usuarioFechamentoNome}</strong>,{" "}
+                  {ultimoFechado.dataFechamento && formatarDataHora(ultimoFechado.dataFechamento)}, com{" "}
+                  {formatarMoeda(ultimoFechado.valorFinal ?? 0)} contados.
+                </p>
+
+                {erroReabrir && (
+                  <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erroReabrir}</div>
+                )}
+
+                {confirmandoReabertura ? (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted">Isso reabre esse caixa, com o mesmo valor inicial de antes. Confirma?</p>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={() => setConfirmandoReabertura(false)}
+                        className="flex-1 py-2 rounded-lg text-sm font-medium border border-border hover:bg-background transition"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        onClick={reabrirCaixa}
+                        disabled={reabrindo}
+                        className="flex-1 flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium py-2 rounded-lg transition disabled:opacity-50"
+                      >
+                        {reabrindo && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Confirmar
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    onClick={() => setConfirmandoReabertura(true)}
+                    className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    Fechei por engano, reabrir esse caixa
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-xl overflow-hidden">

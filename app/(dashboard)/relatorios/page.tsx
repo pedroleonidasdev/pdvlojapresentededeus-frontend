@@ -30,6 +30,7 @@ import {
   Unlock,
   Vault,
   Repeat,
+  RotateCcw,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
@@ -728,6 +729,12 @@ export default function RelatoriosPage() {
                               <span className="flex items-center gap-1">
                                 <Clock className="w-3 h-3" />
                                 Fechado por {caixa.usuarioFechamentoNome}, {formatarDataHora(caixa.dataFechamento)}
+                              </span>
+                            )}
+                            {caixa.dataReabertura && (
+                              <span className="flex items-center gap-1 text-accent-dark">
+                                <RotateCcw className="w-3 h-3" />
+                                Reaberto por {caixa.usuarioReaberturaNome}, {formatarDataHora(caixa.dataReabertura)}
                               </span>
                             )}
                           </div>
