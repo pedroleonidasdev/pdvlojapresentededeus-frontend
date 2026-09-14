@@ -247,8 +247,8 @@ export default function FolhaEtiquetas({
                 <p className="text-[11px] font-mono">{formatarMoeda(comCodigo[0].precoVenda)}</p>
                 <BarcodeSvg
                   valor={comCodigo[0].codigoBarras!}
-                  altura={28}
-                  largura={1.2}
+                  altura={20}
+                  largura={0.8}
                   fontSize={9}
                   className="mx-auto mt-0.5"
                 />
