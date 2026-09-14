@@ -9,6 +9,7 @@ interface AuthContextValue {
   usuario: Usuario | null;
   carregando: boolean;
   login: (login: string, senha: string) => Promise<void>;
+  trocarUsuario: (login: string, senha: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -28,7 +29,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setCarregando(false);
   }, []);
 
-  async function login(loginValue: string, senha: string) {
+  async function autenticar(loginValue: string, senha: string) {
     const { data } = await api.post("/auth/login", { login: loginValue, senha });
     const usuarioLogado: Usuario = {
       login: data.login,
@@ -38,7 +39,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     localStorage.setItem("pdv_token", data.token);
     localStorage.setItem("pdv_user", JSON.stringify(usuarioLogado));
     setUsuario(usuarioLogado);
+  }
+
+  async function login(loginValue: string, senha: string) {
+    await autenticar(loginValue, senha);
     router.push("/pdv");
+  }
+
+  // Reautentica com outro usuário sem passar pela tela de login: mantém a
+  // pessoa na tela em que já estava, só troca o token/usuário da sessão.
+  async function trocarUsuario(loginValue: string, senha: string) {
+    await autenticar(loginValue, senha);
   }
 
   function logout() {
@@ -49,7 +60,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   return (
-    <AuthContext.Provider value={{ usuario, carregando, login, logout }}>
+    <AuthContext.Provider value={{ usuario, carregando, login, trocarUsuario, logout }}>
       {children}
     </AuthContext.Provider>
   );

@@ -17,7 +17,8 @@ api.interceptors.request.use((config) => {
 api.interceptors.response.use(
   (response) => response,
   (error) => {
-    if (typeof window !== "undefined" && error.response?.status === 401) {
+    const isRequisicaoDeLogin = error.config?.url?.includes("/auth/login");
+    if (typeof window !== "undefined" && error.response?.status === 401 && !isRequisicaoDeLogin) {
       localStorage.removeItem("pdv_token");
       localStorage.removeItem("pdv_user");
       window.location.href = "/login";
