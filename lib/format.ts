@@ -95,6 +95,7 @@ export const LABEL_FORMA_PAGAMENTO: Record<string, string> = {
   CARTAO_CREDITO: "Cartão de crédito",
   CARTAO_DEBITO: "Cartão de débito",
   CHEQUE: "Cheque",
+  BOLETO: "Boleto",
   MULTIPLO: "Múltiplos pagamentos",
 };
 

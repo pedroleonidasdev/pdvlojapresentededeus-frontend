@@ -13,9 +13,9 @@ interface ItemCarrinho {
   quantidade: number;
 }
 
-// o PDV só vende nessas 4 formas — cheque e múltiplos pagamentos não entram aqui
-// (múltiplo é tratado à parte via pagamentoMultiplo/pagamentos; cheque é só para despesas)
-type FormaPdv = Exclude<FormaPagamento, "MULTIPLO" | "CHEQUE">;
+// o PDV só vende nessas 4 formas — cheque, boleto e múltiplos pagamentos não entram aqui
+// (múltiplo é tratado à parte via pagamentoMultiplo/pagamentos; cheque e boleto são só para despesas)
+type FormaPdv = Exclude<FormaPagamento, "MULTIPLO" | "CHEQUE" | "BOLETO">;
 
 const FORMAS: FormaPdv[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
 

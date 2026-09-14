@@ -56,6 +56,7 @@ const COR_FORMA: Record<string, string> = {
   CARTAO_CREDITO: "bg-primary-soft text-primary-dark border border-primary/20",
   CARTAO_DEBITO: "bg-surface-alt text-foreground border border-border",
   CHEQUE: "bg-danger-light text-danger",
+  BOLETO: "bg-secondary-light text-secondary-dark border border-secondary/20",
   MULTIPLO: "bg-surface-alt text-muted border border-border border-dashed",
 };
 

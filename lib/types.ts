@@ -6,6 +6,7 @@ export type FormaPagamento =
   | "CARTAO_CREDITO"
   | "CARTAO_DEBITO"
   | "CHEQUE"
+  | "BOLETO"
   | "MULTIPLO";
 
 export interface Usuario {
