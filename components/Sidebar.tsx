@@ -17,8 +17,8 @@ export default function Sidebar() {
   return (
     <aside className="w-60 shrink-0 bg-gradient-to-b from-primary via-primary to-primary-dark text-white flex flex-col h-screen sticky top-0">
       <div className="p-5 flex items-center gap-2 border-b border-white/10">
-        <div className="w-8 h-8 rounded-md bg-gradient-to-br from-accent to-accent-dark shadow-sm flex items-center justify-center font-mono font-bold text-primary-dark text-sm">
-          $
+        <div className="w-9 h-9 rounded-lg overflow-hidden ring-1 ring-white/20 shadow-sm shrink-0">
+          <img src="/icon-192.png" alt="" className="w-full h-full object-cover" />
         </div>
         <div>
           <p className="font-semibold leading-none text-sm">Sistema PDV</p>
@@ -28,7 +28,7 @@ export default function Sidebar() {
         </div>
       </div>
 
-      <nav className="flex-1 p-3 space-y-1">
+      <nav className="flex-1 p-3 space-y-1.5">
         {itens.map((item) => {
           const ativo = pathname?.startsWith(item.href);
           const Icon = item.icon;
@@ -36,13 +36,21 @@ export default function Sidebar() {
             <Link
               key={item.href}
               href={item.href}
-              className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm transition border-l-2 ${
+              className={`group flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm transition-all duration-200 border-l-2 ${
                 ativo
                   ? "bg-white/15 text-white font-medium border-accent"
                   : "text-white/70 border-transparent hover:bg-white/10 hover:text-white hover:border-white/30"
               }`}
             >
-              <Icon className={`w-4 h-4 ${ativo ? "text-accent" : ""}`} />
+              <span
+                className={`flex items-center justify-center w-9 h-9 rounded-lg shrink-0 transition-all duration-300 ease-out ${
+                  ativo
+                    ? "bg-accent/20 text-accent animate-icon-glow"
+                    : "text-white/70 group-hover:bg-white/10 group-hover:text-white group-hover:scale-110 group-hover:-rotate-3"
+                }`}
+              >
+                <Icon className="w-[20px] h-[20px] transition-transform duration-300" strokeWidth={ativo ? 2.3 : 2} />
+              </span>
               {item.label}
             </Link>
           );
@@ -58,9 +66,11 @@ export default function Sidebar() {
         </div>
         <button
           onClick={logout}
-          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm text-white/70 hover:bg-white/10 hover:text-white transition"
+          className="group w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm text-white/70 hover:bg-white/10 hover:text-white transition-all duration-200"
         >
-          <LogOut className="w-4 h-4" />
+          <span className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 transition-transform duration-300 group-hover:scale-110">
+            <LogOut className="w-[19px] h-[19px]" />
+          </span>
           Sair
         </button>
       </div>

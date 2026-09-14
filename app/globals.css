@@ -149,3 +149,19 @@ body {
     padding-bottom: 0 !important;
   }
 }
+
+/* Brilho suave e contínuo no ícone do item ativo da barra lateral — dá vida
+   sem ser exagerado (o design é de uma loja de artigos religiosos, então a
+   animação fica discreta, tipo uma "respiração" em vez de um piscar). */
+@keyframes icon-glow {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(224, 151, 47, 0.45);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(224, 151, 47, 0);
+  }
+}
+
+.animate-icon-glow {
+  animation: icon-glow 2.4s ease-in-out infinite;
+}
