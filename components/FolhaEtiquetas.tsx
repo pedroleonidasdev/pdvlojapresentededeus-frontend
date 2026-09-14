@@ -167,21 +167,29 @@ export default function FolhaEtiquetas({
         </div>
 
         <div className="flex-1 overflow-y-auto p-4">
-          <div className="space-y-2">
-            {comCodigo.map((produto) => (
-              <div key={produto.id} className="text-center border-b border-dashed border-border pb-2 last:border-0">
-                <p className="text-[11px] font-medium leading-tight px-1">{produto.nome}</p>
-                <p className="text-[11px] font-mono">{formatarMoeda(produto.precoVenda)}</p>
+          {comCodigo.length > 0 ? (
+            <>
+              <div className="max-w-[220px] mx-auto text-center border border-dashed border-border rounded-lg py-3">
+                <p className="text-[11px] font-medium leading-tight px-1">{comCodigo[0].nome}</p>
+                <p className="text-[11px] font-mono">{formatarMoeda(comCodigo[0].precoVenda)}</p>
                 <BarcodeSvg
-                  valor={produto.codigoBarras!}
+                  valor={comCodigo[0].codigoBarras!}
                   altura={28}
                   largura={1.2}
                   fontSize={9}
                   className="mx-auto mt-0.5"
                 />
               </div>
-            ))}
-          </div>
+              {comCodigo.length > 1 && (
+                <p className="text-[11px] text-muted text-center mt-3">
+                  Pré-visualização de 1 etiqueta como exemplo — as outras {comCodigo.length - 1} seguem o
+                  mesmo modelo e serão todas impressas.
+                </p>
+              )}
+            </>
+          ) : (
+            <p className="text-sm text-muted text-center py-6">Nenhum produto com código de barras selecionado.</p>
+          )}
         </div>
 
         <div className="p-4 border-t border-border space-y-2">
