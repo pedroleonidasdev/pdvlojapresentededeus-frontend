@@ -456,7 +456,7 @@ export default function RelatoriosPage() {
                       onKeyDown={(e) => e.key === "Enter" && valorFinalCaixa !== "" && setConfirmandoFechamento(true)}
                       placeholder="Dinheiro contado"
                       title="Só o dinheiro em espécie contado na gaveta — não é o faturamento do dia"
-                      className="w-36 px-3 py-2 rounded-lg border border-primary/30 bg-white focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm"
+                      className="w-36 px-3 py-2 rounded-lg border border-primary/30 bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 text-sm"
                     />
                     <button
                       onClick={() => setConfirmandoFechamento(true)}

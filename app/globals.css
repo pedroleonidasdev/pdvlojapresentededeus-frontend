@@ -1,13 +1,19 @@
 @import "tailwindcss";
 
 :root {
-  /* Fundo azul-esverdeado (teal suave) em vez do tom marfim anterior. */
+  /* Fundo azul-esverdeado (teal suave) em vez do tom marfim anterior. Surface
+     usa um marfim quente de propósito — o contraste quente/frio contra o fundo
+     teal faz os cards "saltarem" do fundo em vez de só diferenciar por brilho,
+     que é bem mais fácil de perceber do que branco puro sobre teal claro. */
   --background: #DCEEEC;
-  --surface: #FFFFFF;
-  --surface-alt: #EAF6F4;
+  --surface: #FFFBF3;
+  --surface-alt: #FBF0DC;
   --foreground: #17221F;
   --muted: #55726C;
-  --border: #C7DEDA;
+  /* Borda bem mais saturada que antes — precisa se destacar tanto contra o
+     fundo teal quanto contra o marfim do surface, então não dá pra ser um tom
+     quase neutro como era (#C7DEDA). */
+  --border: #6FAEA3;
 
   --primary: #1B4D3E;
   --primary-dark: #0F332A;
