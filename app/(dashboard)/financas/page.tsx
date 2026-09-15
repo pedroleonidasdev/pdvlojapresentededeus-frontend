@@ -26,6 +26,8 @@ import {
   ArrowUpCircle,
   Wallet,
   Filter,
+  CheckCircle2,
+  Circle,
 } from "lucide-react";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
@@ -82,6 +84,7 @@ export default function FinancasPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [despesaEmEdicao, setDespesaEmEdicao] = useState<Despesa | null>(null);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
+  const [marcandoPagoId, setMarcandoPagoId] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<TipoDespesa | "TODOS">("TODOS");
   const [erro, setErro] = useState<string | null>(null);
 
@@ -124,6 +127,40 @@ export default function FinancasPage() {
       alert(msg);
     } finally {
       setExcluindoId(null);
+    }
+  }
+
+  async function alternarPago(d: Despesa) {
+    const chave = `${d.id}`;
+    setMarcandoPagoId(chave);
+    try {
+      await api.patch(`/despesas/${d.id}/pago`, null, { params: { pago: !d.pago } });
+      await carregar();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Não foi possível atualizar o pagamento.";
+      alert(msg);
+    } finally {
+      setMarcandoPagoId(null);
+    }
+  }
+
+  async function alternarParcelaPaga(d: Despesa, numeroParcela: number, pagoAtual: boolean) {
+    const chave = `${d.id}-${numeroParcela}`;
+    setMarcandoPagoId(chave);
+    try {
+      await api.patch(`/despesas/${d.id}/parcelas/${numeroParcela}/pago`, null, {
+        params: { pago: !pagoAtual },
+      });
+      await carregar();
+    } catch (e: unknown) {
+      const msg =
+        (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Não foi possível atualizar o pagamento da parcela.";
+      alert(msg);
+    } finally {
+      setMarcandoPagoId(null);
     }
   }
 
@@ -324,6 +361,7 @@ export default function FinancasPage() {
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Data</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Usuário</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Valor</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-center">Pago</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Ações</th>
                 </tr>
               </thead>
@@ -366,6 +404,33 @@ export default function FinancasPage() {
                       <td className={`px-4 py-2.5 text-right font-mono font-semibold ${COR_VALOR_TIPO[d.tipo]}`}>
                         {formatarMoeda(d.valor)}
                       </td>
+                      <td className="px-4 py-2.5 text-center">
+                        {d.tipo === "DESPESA" && d.parcelas.length === 0 ? (
+                          <button
+                            onClick={() => alternarPago(d)}
+                            disabled={marcandoPagoId === `${d.id}`}
+                            className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium transition disabled:opacity-50 ${
+                              d.pago
+                                ? "bg-primary-light text-primary-dark hover:bg-primary-soft"
+                                : "bg-danger-light text-danger hover:bg-danger-light/70"
+                            }`}
+                            title={d.pago ? "Marcar como pendente" : "Marcar como pago"}
+                          >
+                            {marcandoPagoId === `${d.id}` ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : d.pago ? (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            ) : (
+                              <Circle className="w-3.5 h-3.5" />
+                            )}
+                            {d.pago ? "Pago" : "Pendente"}
+                          </button>
+                        ) : d.tipo === "DESPESA" && d.parcelas.length > 0 ? (
+                          <span className="text-[11px] text-muted">ver parcelas</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5">
                         <div className="flex justify-end gap-1">
                           <button
@@ -393,28 +458,45 @@ export default function FinancasPage() {
 
                     {d.parcelas.length > 0 && (
                       <tr className={`border-b border-border last:border-0 border-l-4 ${BORDA_TIPO[d.tipo]}`}>
-                        <td colSpan={9} className="px-4 pb-3 pt-0">
+                        <td colSpan={10} className="px-4 pb-3 pt-0">
                           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent-light/50 px-3 py-2">
                             <span className="text-[11px] font-bold text-accent-dark uppercase tracking-wide shrink-0">
                               {d.parcelas.length} parcelas
                             </span>
                             <div className="flex flex-wrap gap-1.5">
-                              {d.parcelas.map((p) => (
-                                <span
-                                  key={p.numero}
-                                  className="flex items-center gap-1.5 text-xs bg-surface border border-border rounded-full pl-1 pr-2.5 py-0.5"
-                                >
-                                  <span className="w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center shrink-0">
-                                    {p.numero}
-                                  </span>
-                                  <span className="font-mono font-semibold text-foreground">
-                                    {formatarMoeda(p.valor)}
-                                  </span>
-                                  <span className="text-muted">
-                                    {p.dataVencimento ? formatarDataCurta(p.dataVencimento) : "sem data"}
-                                  </span>
-                                </span>
-                              ))}
+                              {d.parcelas.map((p) => {
+                                const chave = `${d.id}-${p.numero}`;
+                                return (
+                                  <button
+                                    key={p.numero}
+                                    onClick={() => alternarParcelaPaga(d, p.numero, p.pago)}
+                                    disabled={marcandoPagoId === chave}
+                                    title={p.pago ? "Marcar parcela como pendente" : "Marcar parcela como paga"}
+                                    className={`flex items-center gap-1.5 text-xs border rounded-full pl-1 pr-2.5 py-0.5 transition disabled:opacity-50 ${
+                                      p.pago
+                                        ? "bg-primary-light border-primary/30"
+                                        : "bg-surface border-border hover:border-primary/40"
+                                    }`}
+                                  >
+                                    <span className="w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                      {p.numero}
+                                    </span>
+                                    <span className="font-mono font-semibold text-foreground">
+                                      {formatarMoeda(p.valor)}
+                                    </span>
+                                    <span className="text-muted">
+                                      {p.dataVencimento ? formatarDataCurta(p.dataVencimento) : "sem data"}
+                                    </span>
+                                    {marcandoPagoId === chave ? (
+                                      <Loader2 className="w-3.5 h-3.5 animate-spin text-muted" />
+                                    ) : p.pago ? (
+                                      <CheckCircle2 className="w-3.5 h-3.5 text-primary-dark" />
+                                    ) : (
+                                      <Circle className="w-3.5 h-3.5 text-muted" />
+                                    )}
+                                  </button>
+                                );
+                              })}
                             </div>
                           </div>
                         </td>

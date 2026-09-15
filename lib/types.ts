@@ -131,6 +131,7 @@ export interface Parcela {
   numero: number;
   dataVencimento: string | null;
   valor: number;
+  pago: boolean;
 }
 
 export interface Despesa {
@@ -146,4 +147,5 @@ export interface Despesa {
   caixaId: number | null;
   numeroParcelas: number | null;
   parcelas: Parcela[];
+  pago: boolean;
 }
