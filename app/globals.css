@@ -1,14 +1,13 @@
 @import "tailwindcss";
 
 :root {
-  /* Fundo com leve calor (marfim/pergaminho) em vez de quase-branco, e um
-     tom "surface-alt" para dar profundidade a painéis sem virar cinza. */
-  --background: #F1E9D8;
+  /* Fundo azul-esverdeado (teal suave) em vez do tom marfim anterior. */
+  --background: #DCEEEC;
   --surface: #FFFFFF;
-  --surface-alt: #FBF6EA;
-  --foreground: #221C12;
-  --muted: #726A55;
-  --border: #E3D8BC;
+  --surface-alt: #EAF6F4;
+  --foreground: #17221F;
+  --muted: #55726C;
+  --border: #C7DEDA;
 
   --primary: #1B4D3E;
   --primary-dark: #0F332A;
