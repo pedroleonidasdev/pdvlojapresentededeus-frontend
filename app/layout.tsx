@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   appleWebApp: {
     capable: true,
     statusBarStyle: "black-translucent",
-    title: "Sistema PDV",
+    title: "Sistema de Gestão",
   },
 };
 

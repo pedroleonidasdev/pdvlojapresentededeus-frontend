@@ -24,7 +24,7 @@ export default function Sidebar() {
           <img src="/icon-192.png" alt="" className="w-full h-full object-cover" />
         </div>
         <div>
-          <p className="font-semibold leading-none text-sm">Sistema PDV</p>
+          <p className="font-semibold leading-none text-sm">Sistema de Gestão</p>
           <p className="text-[11px] text-accent-light/80 mt-0.5 flex items-center gap-1">
             <LayoutGrid className="w-3 h-3" /> Painel de controle
           </p>
