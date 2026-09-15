@@ -33,21 +33,22 @@ import {
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
 
 const COR_TIPO: Record<TipoDespesa, string> = {
+  // vermelho = dinheiro saindo (despesa e sangria), azul = dinheiro entrando (suprimento)
   DESPESA: "bg-danger-light text-danger",
-  SANGRIA: "bg-accent-light text-accent-dark",
-  SUPRIMENTO: "bg-primary-light text-primary-dark",
+  SANGRIA: "bg-danger-light text-danger",
+  SUPRIMENTO: "bg-info-light text-info-dark",
 };
 
 const BORDA_TIPO: Record<TipoDespesa, string> = {
   DESPESA: "border-l-danger",
-  SANGRIA: "border-l-accent",
-  SUPRIMENTO: "border-l-primary",
+  SANGRIA: "border-l-danger",
+  SUPRIMENTO: "border-l-info",
 };
 
 const COR_VALOR_TIPO: Record<TipoDespesa, string> = {
   DESPESA: "text-danger",
-  SANGRIA: "text-accent-dark",
-  SUPRIMENTO: "text-primary-dark",
+  SANGRIA: "text-danger",
+  SUPRIMENTO: "text-info",
 };
 
 // cada forma de pagamento com uma cor própria, pra bater o olho na listagem
@@ -255,7 +256,7 @@ export default function FinancasPage() {
             icone={<TrendingUp className="w-4 h-4" />}
             label="Faturamento bruto"
             valor={totalFaturado}
-            cor="text-foreground"
+            cor="text-info"
           />
           <CardResumo
             icone={<TrendingDown className="w-4 h-4" />}
@@ -267,19 +268,19 @@ export default function FinancasPage() {
             icone={<ArrowDownCircle className="w-4 h-4" />}
             label="Sangrias"
             valor={resumo.totalSangrias}
-            cor="text-accent-dark"
+            cor="text-danger"
           />
           <CardResumo
             icone={<ArrowUpCircle className="w-4 h-4" />}
             label="Suprimentos"
             valor={resumo.totalSuprimentos}
-            cor="text-primary-dark"
+            cor="text-info"
           />
           <CardResumo
             icone={<Wallet className="w-4 h-4" />}
             label="Lucro líquido estimado"
             valor={resumo.lucroLiquido}
-            cor={resumo.lucroLiquido >= 0 ? "text-primary-dark" : "text-danger"}
+            cor={resumo.lucroLiquido >= 0 ? "text-info" : "text-danger"}
             destaque
           />
         </div>
