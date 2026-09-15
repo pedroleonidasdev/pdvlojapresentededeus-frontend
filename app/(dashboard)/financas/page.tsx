@@ -359,7 +359,8 @@ export default function FinancasPage() {
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Fornecedor</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Descrição</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Forma</th>
-                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Data</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Registro</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Vencimento</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Usuário</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Valor</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-center">Pago</th>
@@ -401,6 +402,13 @@ export default function FinancasPage() {
                         </span>
                       </td>
                       <td className="px-4 py-2.5 text-muted whitespace-nowrap">{formatarDataHora(d.dataHora)}</td>
+                      <td className="px-4 py-2.5 whitespace-nowrap">
+                        {d.dataVencimento ? (
+                          <span className="text-foreground">{formatarDataCurta(d.dataVencimento)}</span>
+                        ) : (
+                          <span className="text-muted">—</span>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5 text-muted">{d.usuarioNome}</td>
                       <td className={`px-4 py-2.5 text-right font-mono font-semibold ${COR_VALOR_TIPO[d.tipo]}`}>
                         {formatarMoeda(d.valor)}
@@ -459,7 +467,7 @@ export default function FinancasPage() {
 
                     {d.parcelas.length > 0 && (
                       <tr className={`border-b border-border last:border-0 border-l-4 ${BORDA_TIPO[d.tipo]}`}>
-                        <td colSpan={10} className="px-4 pb-3 pt-0">
+                        <td colSpan={11} className="px-4 pb-3 pt-0">
                           <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent-light/50 px-3 py-2">
                             <span className="text-[11px] font-bold text-accent-dark uppercase tracking-wide shrink-0">
                               {d.parcelas.length} parcelas
@@ -573,6 +581,7 @@ function ModalNovoLancamento({
   const [descricao, setDescricao] = useState(despesa?.descricao ?? "");
   const [valor, setValor] = useState(despesa ? String(despesa.valor).replace(".", ",") : "");
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>(despesa?.formaPagamento ?? "DINHEIRO");
+  const [dataVencimento, setDataVencimento] = useState(despesa?.dataVencimento ?? "");
   const [numeroParcelas, setNumeroParcelas] = useState(
     despesa?.numeroParcelas && despesa.numeroParcelas > 1 ? String(despesa.numeroParcelas) : ""
   );
@@ -640,6 +649,7 @@ function ModalNovoLancamento({
               valor: Number(p.valor.replace(",", ".")) || 0,
             }))
           : null,
+      dataVencimento: !ehMovimentoCaixa && parcelas.length === 0 && dataVencimento ? dataVencimento : null,
     };
     try {
       if (editando && despesa) {
@@ -757,6 +767,20 @@ function ModalNovoLancamento({
               className="input font-mono"
             />
           </label>
+
+          {!ehMovimentoCaixa && parcelas.length === 0 && (
+            <label className="block">
+              <span className="block text-xs font-medium text-muted mb-1.5">
+                Data de vencimento <span className="font-normal">(opcional)</span>
+              </span>
+              <input
+                type="date"
+                value={dataVencimento}
+                onChange={(e) => setDataVencimento(e.target.value)}
+                className="input"
+              />
+            </label>
+          )}
 
           {!ehMovimentoCaixa && (
             <label className="block">

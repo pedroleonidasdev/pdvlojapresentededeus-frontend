@@ -143,6 +143,7 @@ export interface Despesa {
   valor: number;
   formaPagamento: FormaPagamento;
   dataHora: string;
+  dataVencimento: string | null;
   usuarioNome: string;
   caixaId: number | null;
   numeroParcelas: number | null;
