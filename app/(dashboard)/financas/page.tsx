@@ -5,7 +5,6 @@ import api from "@/lib/api";
 import { Despesa, TipoDespesa, FormaPagamento, Venda } from "@/lib/types";
 import {
   formatarMoeda,
-  formatarDataHora,
   formatarDataCurta,
   dataBrasiliaISO,
   limiteDiaBrasiliaParaUtc,
@@ -28,6 +27,8 @@ import {
   Filter,
   CheckCircle2,
   Circle,
+  Clock,
+  AlertTriangle,
 } from "lucide-react";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
@@ -63,6 +64,83 @@ const COR_FORMA: Record<string, string> = {
   MULTIPLO: "bg-surface-alt text-muted border border-border border-dashed",
 };
 
+type FiltroStatus = "TODOS" | "PENDENTE" | "PAGO";
+
+/** Hoje no fuso de Brasília como "YYYY-MM-DD", pra comparar com datas de
+ *  vencimento (que são calendário puro, sem hora/fuso). Comparação de string
+ *  funciona porque o formato ISO é ordenável lexicograficamente. */
+function hojeISO(): string {
+  return new Intl.DateTimeFormat("en-CA", {
+    timeZone: "America/Sao_Paulo",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).format(new Date());
+}
+
+/** Dias entre hoje e a data (negativo = já passou). */
+function diasAte(dataYYYYMMDD: string): number {
+  const [a, m, d] = dataYYYYMMDD.split("-").map(Number);
+  const [ah, mh, dh] = hojeISO().split("-").map(Number);
+  const alvo = Date.UTC(a, m - 1, d);
+  const hoje = Date.UTC(ah, mh - 1, dh);
+  return Math.round((alvo - hoje) / 86400000);
+}
+
+type StatusVencimento = "VENCIDO" | "VENCE_HOJE" | "PROXIMO" | "EM_DIA";
+
+/** Um vencimento só é "vencido"/"a vencer" enquanto não estiver pago — depois
+ *  de quitado a data vira histórico e não deve mais alarmar ninguém. */
+function statusVencimento(dataYYYYMMDD: string | null, pago: boolean): StatusVencimento | null {
+  if (!dataYYYYMMDD || pago) return null;
+  const dias = diasAte(dataYYYYMMDD);
+  if (dias < 0) return "VENCIDO";
+  if (dias === 0) return "VENCE_HOJE";
+  if (dias <= 7) return "PROXIMO";
+  return "EM_DIA";
+}
+
+const COR_VENCIMENTO: Record<StatusVencimento, string> = {
+  VENCIDO: "text-danger font-semibold",
+  VENCE_HOJE: "text-danger font-semibold",
+  PROXIMO: "text-secondary-dark font-medium",
+  EM_DIA: "text-foreground",
+};
+
+const LABEL_VENCIMENTO: Record<StatusVencimento, string> = {
+  VENCIDO: "vencido",
+  VENCE_HOJE: "vence hoje",
+  PROXIMO: "a vencer",
+  EM_DIA: "",
+};
+
+/** Resumo de pagamento de um lançamento: quantas parcelas pagas e quanto falta.
+ *  Para lançamento à vista, trata como "1 parcela" pra unificar a leitura. */
+function resumoPagamento(d: Despesa) {
+  if (d.parcelas.length === 0) {
+    return {
+      parcelado: false,
+      pagas: d.pago ? 1 : 0,
+      total: 1,
+      restante: d.pago ? 0 : d.valor,
+    };
+  }
+  const pagas = d.parcelas.filter((p) => p.pago).length;
+  const restante = d.parcelas.filter((p) => !p.pago).reduce((acc, p) => acc + p.valor, 0);
+  return { parcelado: true, pagas, total: d.parcelas.length, restante };
+}
+
+/** O vencimento "que importa" de um lançamento: à vista é o próprio, parcelado
+ *  é o da próxima parcela em aberto (a mais antiga não paga). */
+function vencimentoRelevante(d: Despesa): { data: string | null; pago: boolean } {
+  if (d.parcelas.length === 0) return { data: d.dataVencimento, pago: d.pago };
+  const emAberto = d.parcelas
+    .filter((p) => !p.pago && p.dataVencimento)
+    .sort((a, b) => (a.dataVencimento! < b.dataVencimento! ? -1 : 1));
+  if (emAberto.length === 0) return { data: null, pago: true };
+  return { data: emAberto[0].dataVencimento, pago: false };
+}
+
 /**
  * Controle Finanças: cadastro de custos/despesas do negócio e de
  * sangria/suprimento de caixa (dinheiro que sai/entra da gaveta fora de uma
@@ -87,6 +165,7 @@ export default function FinancasPage() {
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
   const [marcandoPagoId, setMarcandoPagoId] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<TipoDespesa | "TODOS">("TODOS");
+  const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("TODOS");
   const [erro, setErro] = useState<string | null>(null);
 
   async function carregar() {
@@ -190,13 +269,39 @@ export default function FinancasPage() {
       totalSuprimentos,
       lucroLiquido: totalFaturado - totalDespesas,
       categoriasOrdenadas,
+      // quanto ainda falta pagar, somando lançamentos à vista em aberto e
+      // parcelas não pagas — só DESPESA (sangria/suprimento já aconteceram).
+      totalAPagar: despesas
+        .filter((d) => d.tipo === "DESPESA")
+        .reduce((acc, d) => acc + resumoPagamento(d).restante, 0),
+      totalVencido: despesas
+        .filter((d) => d.tipo === "DESPESA")
+        .reduce((acc, d) => {
+          if (d.parcelas.length === 0) {
+            return acc + (statusVencimento(d.dataVencimento, d.pago) === "VENCIDO" ? d.valor : 0);
+          }
+          return (
+            acc +
+            d.parcelas
+              .filter((p) => statusVencimento(p.dataVencimento, p.pago) === "VENCIDO")
+              .reduce((s, p) => s + p.valor, 0)
+          );
+        }, 0),
     };
   }, [despesas, totalFaturado]);
 
-  const despesasFiltradas = useMemo(
-    () => (filtroTipo === "TODOS" ? despesas : despesas.filter((d) => d.tipo === filtroTipo)),
-    [despesas, filtroTipo]
-  );
+  const despesasFiltradas = useMemo(() => {
+    let lista = filtroTipo === "TODOS" ? despesas : despesas.filter((d) => d.tipo === filtroTipo);
+    if (filtroStatus !== "TODOS") {
+      lista = lista.filter((d) => {
+        // sangria/suprimento não têm status de pagamento — só aparecem em "Todos"
+        if (d.tipo !== "DESPESA") return false;
+        const { pagas, total } = resumoPagamento(d);
+        return filtroStatus === "PAGO" ? pagas === total : pagas < total;
+      });
+    }
+    return lista;
+  }, [despesas, filtroTipo, filtroStatus]);
 
   return (
     <div>
@@ -281,7 +386,24 @@ export default function FinancasPage() {
             label="Lucro líquido estimado"
             valor={resumo.lucroLiquido}
             cor={resumo.lucroLiquido >= 0 ? "text-info" : "text-danger"}
+          />
+        </div>
+
+        {/* o que ainda falta pagar — o dado mais acionável da tela */}
+        <div className="grid grid-cols-2 gap-3 -mt-1">
+          <CardResumo
+            icone={<Clock className="w-4 h-4" />}
+            label="A pagar (em aberto)"
+            valor={resumo.totalAPagar}
+            cor="text-danger"
             destaque
+          />
+          <CardResumo
+            icone={<AlertTriangle className="w-4 h-4" />}
+            label="Vencido"
+            valor={resumo.totalVencido}
+            cor={resumo.totalVencido > 0 ? "text-danger" : "text-muted"}
+            destaque={resumo.totalVencido > 0}
           />
         </div>
         <p className="text-xs text-muted -mt-3">
@@ -342,6 +464,26 @@ export default function FinancasPage() {
                 </button>
               ))}
             </div>
+            <div className="flex gap-1.5 flex-wrap ml-auto items-center">
+              <span className="text-[11px] text-muted uppercase tracking-wide mr-0.5">Pagamento</span>
+              {(["TODOS", "PENDENTE", "PAGO"] as FiltroStatus[]).map((s) => (
+                <button
+                  key={s}
+                  onClick={() => setFiltroStatus(s)}
+                  className={`text-xs px-2.5 py-1 rounded-full transition ${
+                    filtroStatus === s
+                      ? s === "PENDENTE"
+                        ? "bg-danger text-white"
+                        : s === "PAGO"
+                        ? "bg-primary text-white"
+                        : "bg-foreground text-white"
+                      : "bg-background text-muted hover:text-foreground"
+                  }`}
+                >
+                  {s === "TODOS" ? "Todos" : s === "PENDENTE" ? "Em aberto" : "Pagos"}
+                </button>
+              ))}
+            </div>
           </div>
 
           {carregando ? (
@@ -356,24 +498,29 @@ export default function FinancasPage() {
                 <tr className="text-left text-muted">
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Tipo</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Categoria</th>
-                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Fornecedor</th>
-                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Descrição</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Fornecedor / descrição</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Forma</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Registro</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Vencimento</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Usuário</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Valor</th>
-                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-center">Pago</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-center">Pagamento</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Ações</th>
                 </tr>
               </thead>
               <tbody>
-                {despesasFiltradas.map((d) => (
+                {despesasFiltradas.map((d) => {
+                  const vencRelevante = vencimentoRelevante(d);
+                  const statusLinha = statusVencimento(vencRelevante.data, vencRelevante.pago);
+                  const linhaAtrasada = statusLinha === "VENCIDO";
+                  return (
                   <Fragment key={d.id}>
                     <tr
                       className={`border-b ${
                         d.parcelas.length > 0 ? "border-transparent" : "border-border"
-                      } last:border-0 align-top border-l-4 ${BORDA_TIPO[d.tipo]} hover:bg-background/60 transition`}
+                      } last:border-0 align-top border-l-4 ${BORDA_TIPO[d.tipo]} ${
+                        linhaAtrasada ? "bg-danger-light/40" : ""
+                      } hover:bg-background/60 transition`}
                     >
                       <td className="px-4 py-2.5">
                         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${COR_TIPO[d.tipo]}`}>
@@ -389,8 +536,16 @@ export default function FinancasPage() {
                           <span className="text-muted">—</span>
                         )}
                       </td>
-                      <td className="px-4 py-2.5 text-foreground font-medium">{d.fornecedor || "—"}</td>
-                      <td className="px-4 py-2.5 text-foreground">{d.descricao}</td>
+                      <td className="px-4 py-2.5">
+                        {d.fornecedor ? (
+                          <>
+                            <div className="text-foreground font-medium leading-tight">{d.fornecedor}</div>
+                            <div className="text-muted text-xs leading-tight mt-0.5">{d.descricao}</div>
+                          </>
+                        ) : (
+                          <div className="text-foreground">{d.descricao}</div>
+                        )}
+                      </td>
                       <td className="px-4 py-2.5">
                         <span
                           className={`text-xs px-2 py-0.5 rounded-full font-medium whitespace-nowrap ${
@@ -401,13 +556,37 @@ export default function FinancasPage() {
                           {d.numeroParcelas && d.numeroParcelas > 1 ? ` ${d.numeroParcelas}x` : ""}
                         </span>
                       </td>
-                      <td className="px-4 py-2.5 text-muted whitespace-nowrap">{formatarDataHora(d.dataHora)}</td>
+                      <td className="px-4 py-2.5 text-muted whitespace-nowrap text-xs">
+                        {formatarDataCurta(dataBrasiliaISO(d.dataHora))}
+                      </td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
-                        {d.dataVencimento ? (
-                          <span className="text-foreground">{formatarDataCurta(d.dataVencimento)}</span>
-                        ) : (
-                          <span className="text-muted">—</span>
-                        )}
+                        {(() => {
+                          const { data, pago } = vencimentoRelevante(d);
+                          if (!data) return <span className="text-muted">—</span>;
+                          const status = statusVencimento(data, pago);
+                          const label = status ? LABEL_VENCIMENTO[status] : "";
+                          return (
+                            <div className="leading-tight">
+                              <div className={status ? COR_VENCIMENTO[status] : "text-muted"}>
+                                {formatarDataCurta(data)}
+                              </div>
+                              {label && (
+                                <div
+                                  className={`text-[10px] uppercase tracking-wide mt-0.5 ${
+                                    status === "VENCIDO" || status === "VENCE_HOJE"
+                                      ? "text-danger"
+                                      : "text-secondary-dark"
+                                  }`}
+                                >
+                                  {label}
+                                </div>
+                              )}
+                              {d.parcelas.length > 0 && (
+                                <div className="text-[10px] text-muted mt-0.5">próxima parcela</div>
+                              )}
+                            </div>
+                          );
+                        })()}
                       </td>
                       <td className="px-4 py-2.5 text-muted">{d.usuarioNome}</td>
                       <td className={`px-4 py-2.5 text-right font-mono font-semibold ${COR_VALOR_TIPO[d.tipo]}`}>
@@ -435,7 +614,31 @@ export default function FinancasPage() {
                             {d.pago ? "Pago" : "Pendente"}
                           </button>
                         ) : d.tipo === "DESPESA" && d.parcelas.length > 0 ? (
-                          <span className="text-[11px] text-muted">ver parcelas</span>
+                          (() => {
+                            const { pagas, total, restante } = resumoPagamento(d);
+                            const quitado = pagas === total;
+                            return (
+                              <div className="leading-tight">
+                                <div
+                                  className={`inline-flex items-center gap-1 text-xs px-2 py-1 rounded-full font-medium ${
+                                    quitado ? "bg-primary-light text-primary-dark" : "bg-danger-light text-danger"
+                                  }`}
+                                >
+                                  {quitado ? (
+                                    <CheckCircle2 className="w-3.5 h-3.5" />
+                                  ) : (
+                                    <Circle className="w-3.5 h-3.5" />
+                                  )}
+                                  {pagas}/{total} pagas
+                                </div>
+                                {!quitado && (
+                                  <div className="text-[10px] text-muted mt-0.5 font-mono">
+                                    restam {formatarMoeda(restante)}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })()
                         ) : (
                           <span className="text-muted">—</span>
                         )}
@@ -467,14 +670,19 @@ export default function FinancasPage() {
 
                     {d.parcelas.length > 0 && (
                       <tr className={`border-b border-border last:border-0 border-l-4 ${BORDA_TIPO[d.tipo]}`}>
-                        <td colSpan={11} className="px-4 pb-3 pt-0">
-                          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-accent/30 bg-accent-light/50 px-3 py-2">
-                            <span className="text-[11px] font-bold text-accent-dark uppercase tracking-wide shrink-0">
-                              {d.parcelas.length} parcelas
+                        {/* célula vazia alinhando o bloco de parcelas sob a descrição, pra
+                            deixar claro que é um detalhe da linha acima, não outro lançamento */}
+                        <td className="pb-3 pt-0" />
+                        <td colSpan={10} className="px-4 pb-3 pt-0">
+                          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-alt/60 px-3 py-2">
+                            <span className="text-[11px] font-semibold text-muted uppercase tracking-wide shrink-0">
+                              ↳ {resumoPagamento(d).pagas} de {d.parcelas.length} pagas
                             </span>
                             <div className="flex flex-wrap gap-1.5">
                               {d.parcelas.map((p) => {
                                 const chave = `${d.id}-${p.numero}`;
+                                const status = statusVencimento(p.dataVencimento, p.pago);
+                                const atrasada = status === "VENCIDO" || status === "VENCE_HOJE";
                                 return (
                                   <button
                                     key={p.numero}
@@ -484,16 +692,26 @@ export default function FinancasPage() {
                                     className={`flex items-center gap-1.5 text-xs border rounded-full pl-1 pr-2.5 py-0.5 transition disabled:opacity-50 ${
                                       p.pago
                                         ? "bg-primary-light border-primary/30"
+                                        : atrasada
+                                        ? "bg-danger-light border-danger/40 hover:border-danger"
                                         : "bg-surface border-border hover:border-primary/40"
                                     }`}
                                   >
-                                    <span className="w-4 h-4 rounded-full bg-accent text-white text-[10px] font-bold flex items-center justify-center shrink-0">
+                                    <span
+                                      className={`w-4 h-4 rounded-full text-white text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                                        p.pago ? "bg-primary" : atrasada ? "bg-danger" : "bg-accent"
+                                      }`}
+                                    >
                                       {p.numero}
                                     </span>
-                                    <span className="font-mono font-semibold text-foreground">
+                                    <span
+                                      className={`font-mono font-semibold ${
+                                        p.pago ? "text-muted line-through" : "text-foreground"
+                                      }`}
+                                    >
                                       {formatarMoeda(p.valor)}
                                     </span>
-                                    <span className="text-muted">
+                                    <span className={atrasada ? "text-danger font-medium" : "text-muted"}>
                                       {p.dataVencimento ? formatarDataCurta(p.dataVencimento) : "sem data"}
                                     </span>
                                     {marcandoPagoId === chave ? (
@@ -501,18 +719,24 @@ export default function FinancasPage() {
                                     ) : p.pago ? (
                                       <CheckCircle2 className="w-3.5 h-3.5 text-primary-dark" />
                                     ) : (
-                                      <Circle className="w-3.5 h-3.5 text-muted" />
+                                      <Circle className={`w-3.5 h-3.5 ${atrasada ? "text-danger" : "text-muted"}`} />
                                     )}
                                   </button>
                                 );
                               })}
                             </div>
+                            {resumoPagamento(d).restante > 0 && (
+                              <span className="text-[11px] text-muted font-mono ml-auto shrink-0">
+                                restam {formatarMoeda(resumoPagamento(d).restante)}
+                              </span>
+                            )}
                           </div>
                         </td>
                       </tr>
                     )}
                   </Fragment>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           )}
