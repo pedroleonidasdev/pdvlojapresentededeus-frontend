@@ -159,7 +159,10 @@ export default function FinancasPage() {
   const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [totalFaturado, setTotalFaturado] = useState(0);
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(false);
+  // só passa a "true" depois do primeiro clique em Filtrar — evita buscar
+  // automaticamente ao abrir a tela, antes do usuário escolher o período
+  const [buscou, setBuscou] = useState(false);
   const [modalAberto, setModalAberto] = useState(false);
   const [despesaEmEdicao, setDespesaEmEdicao] = useState<Despesa | null>(null);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
@@ -186,13 +189,12 @@ export default function FinancasPage() {
       setErro("Não foi possível carregar os dados financeiros do período.");
     } finally {
       setCarregando(false);
+      setBuscou(true);
     }
   }
 
-  useEffect(() => {
-    carregar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Sem carregamento automático ao abrir a tela: o usuário escolhe o período
+  // (ou mantém o padrão já preenchido) e clica em "Filtrar" para buscar.
 
   async function excluir(id: number) {
     if (!confirm("Excluir este lançamento?")) return;
@@ -355,88 +357,92 @@ export default function FinancasPage() {
 
         {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
 
-        {/* cards de resumo */}
-        <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-          <CardResumo
-            icone={<TrendingUp className="w-4 h-4" />}
-            label="Faturamento bruto"
-            valor={totalFaturado}
-            cor="text-info"
-          />
-          <CardResumo
-            icone={<TrendingDown className="w-4 h-4" />}
-            label="Despesas"
-            valor={resumo.totalDespesas}
-            cor="text-danger"
-          />
-          <CardResumo
-            icone={<ArrowDownCircle className="w-4 h-4" />}
-            label="Sangrias"
-            valor={resumo.totalSangrias}
-            cor="text-danger"
-          />
-          <CardResumo
-            icone={<ArrowUpCircle className="w-4 h-4" />}
-            label="Suprimentos"
-            valor={resumo.totalSuprimentos}
-            cor="text-info"
-          />
-          <CardResumo
-            icone={<Wallet className="w-4 h-4" />}
-            label="Lucro líquido estimado"
-            valor={resumo.lucroLiquido}
-            cor={resumo.lucroLiquido >= 0 ? "text-info" : "text-danger"}
-          />
-        </div>
-
-        {/* o que ainda falta pagar — o dado mais acionável da tela */}
-        <div className="grid grid-cols-2 gap-3 -mt-1">
-          <CardResumo
-            icone={<Clock className="w-4 h-4" />}
-            label="A pagar (em aberto)"
-            valor={resumo.totalAPagar}
-            cor="text-danger"
-            destaque
-          />
-          <CardResumo
-            icone={<AlertTriangle className="w-4 h-4" />}
-            label="Vencido"
-            valor={resumo.totalVencido}
-            cor={resumo.totalVencido > 0 ? "text-danger" : "text-muted"}
-            destaque={resumo.totalVencido > 0}
-          />
-        </div>
-        <p className="text-xs text-muted -mt-3">
-          Lucro líquido estimado = faturamento bruto do período − despesas. Sangria e suprimento não entram
-          nessa conta: são só dinheiro mudando de lugar, não um custo novo.
-        </p>
-
-        {/* despesas por categoria */}
-        {resumo.categoriasOrdenadas.length > 0 && (
-          <div className="bg-surface border border-border rounded-xl p-4">
-            <p className="text-xs font-medium text-muted mb-3 uppercase tracking-wide">
-              Despesas por categoria
-            </p>
-            <div className="space-y-2">
-              {resumo.categoriasOrdenadas.map(([categoria, valor]) => {
-                const percentual = resumo.totalDespesas > 0 ? (valor / resumo.totalDespesas) * 100 : 0;
-                return (
-                  <div key={categoria} className="flex items-center gap-3 text-sm">
-                    <span className="w-40 shrink-0 truncate text-foreground">{categoria}</span>
-                    <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
-                      <div
-                        className="h-full bg-danger/70 rounded-full"
-                        style={{ width: `${percentual}%` }}
-                      />
-                    </div>
-                    <span className="w-24 shrink-0 text-right font-mono text-muted">
-                      {formatarMoeda(valor)}
-                    </span>
-                  </div>
-                );
-              })}
+        {/* cards de resumo — só aparecem depois que o usuário filtrar ao menos uma vez */}
+        {buscou && (
+          <>
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <CardResumo
+                icone={<TrendingUp className="w-4 h-4" />}
+                label="Faturamento bruto"
+                valor={totalFaturado}
+                cor="text-info"
+              />
+              <CardResumo
+                icone={<TrendingDown className="w-4 h-4" />}
+                label="Despesas"
+                valor={resumo.totalDespesas}
+                cor="text-danger"
+              />
+              <CardResumo
+                icone={<ArrowDownCircle className="w-4 h-4" />}
+                label="Sangrias"
+                valor={resumo.totalSangrias}
+                cor="text-danger"
+              />
+              <CardResumo
+                icone={<ArrowUpCircle className="w-4 h-4" />}
+                label="Suprimentos"
+                valor={resumo.totalSuprimentos}
+                cor="text-info"
+              />
+              <CardResumo
+                icone={<Wallet className="w-4 h-4" />}
+                label="Lucro líquido estimado"
+                valor={resumo.lucroLiquido}
+                cor={resumo.lucroLiquido >= 0 ? "text-info" : "text-danger"}
+              />
             </div>
-          </div>
+
+            {/* o que ainda falta pagar — o dado mais acionável da tela */}
+            <div className="grid grid-cols-2 gap-3 -mt-1">
+              <CardResumo
+                icone={<Clock className="w-4 h-4" />}
+                label="A pagar (em aberto)"
+                valor={resumo.totalAPagar}
+                cor="text-danger"
+                destaque
+              />
+              <CardResumo
+                icone={<AlertTriangle className="w-4 h-4" />}
+                label="Vencido"
+                valor={resumo.totalVencido}
+                cor={resumo.totalVencido > 0 ? "text-danger" : "text-muted"}
+                destaque={resumo.totalVencido > 0}
+              />
+            </div>
+            <p className="text-xs text-muted -mt-3">
+              Lucro líquido estimado = faturamento bruto do período − despesas. Sangria e suprimento não
+              entram nessa conta: são só dinheiro mudando de lugar, não um custo novo.
+            </p>
+
+            {/* despesas por categoria */}
+            {resumo.categoriasOrdenadas.length > 0 && (
+              <div className="bg-surface border border-border rounded-xl p-4">
+                <p className="text-xs font-medium text-muted mb-3 uppercase tracking-wide">
+                  Despesas por categoria
+                </p>
+                <div className="space-y-2">
+                  {resumo.categoriasOrdenadas.map(([categoria, valor]) => {
+                    const percentual = resumo.totalDespesas > 0 ? (valor / resumo.totalDespesas) * 100 : 0;
+                    return (
+                      <div key={categoria} className="flex items-center gap-3 text-sm">
+                        <span className="w-40 shrink-0 truncate text-foreground">{categoria}</span>
+                        <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-danger/70 rounded-full"
+                            style={{ width: `${percentual}%` }}
+                          />
+                        </div>
+                        <span className="w-24 shrink-0 text-right font-mono text-muted">
+                          {formatarMoeda(valor)}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
         )}
 
         {/* lista de lançamentos */}
@@ -489,6 +495,13 @@ export default function FinancasPage() {
           {carregando ? (
             <div className="flex justify-center py-16">
               <Loader2 className="w-6 h-6 animate-spin text-primary" />
+            </div>
+          ) : !buscou ? (
+            <div className="flex flex-col items-center gap-2 py-16 text-center px-4">
+              <Filter className="w-5 h-5 text-muted" />
+              <p className="text-sm text-muted">
+                Escolha o período acima e clique em <strong>Filtrar</strong> para carregar os lançamentos.
+              </p>
             </div>
           ) : despesasFiltradas.length === 0 ? (
             <p className="text-center text-sm text-muted py-10">Nenhum lançamento no período.</p>
