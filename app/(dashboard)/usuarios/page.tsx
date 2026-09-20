@@ -47,14 +47,15 @@ export default function UsuariosPage() {
         }
       />
 
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         {carregando ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[520px]">
               <thead className="bg-background border-b border-border">
                 <tr className="text-left text-muted">
                   <th className="px-5 py-3 font-medium">Nome</th>
@@ -106,6 +107,7 @@ export default function UsuariosPage() {
                 ))}
               </tbody>
             </table>
+            </div>
             {usuarios.length === 0 && (
               <p className="text-center text-sm text-muted py-10">Nenhum usuário cadastrado.</p>
             )}

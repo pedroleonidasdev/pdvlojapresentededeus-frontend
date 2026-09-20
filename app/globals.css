@@ -70,10 +70,21 @@
   --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
 }
 
+html {
+  /* impede sobra de scroll horizontal em telas de celular quando algum
+     elemento acaba passando 1-2px da largura da viewport */
+  overflow-x: hidden;
+}
+
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: var(--font-sans);
+  overflow-x: hidden;
+  /* respeita a área "segura" do iPhone (notch/home indicator) quando o app
+     roda instalado em tela cheia (PWA standalone) */
+  padding-left: env(safe-area-inset-left, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
 }
 
 .input {

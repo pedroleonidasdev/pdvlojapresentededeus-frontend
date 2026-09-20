@@ -61,7 +61,7 @@ export default function CategoriasPage() {
         }
       />
 
-      <div className="p-8">
+      <div className="p-4 md:p-8">
         {carregando ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />

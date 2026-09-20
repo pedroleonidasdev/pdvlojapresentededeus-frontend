@@ -198,7 +198,7 @@ export default function TrocasPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-full">
       <PageHeader
         title="Trocas"
         subtitle="Registre a devolução de um produto e a saída de outro em seu lugar"
@@ -473,7 +473,7 @@ function ItemLinha({
 
 function ComprovanteTroca({ troca, onNovaTroca }: { troca: Troca; onNovaTroca: () => void }) {
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+    <div className="min-h-full flex flex-col items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />

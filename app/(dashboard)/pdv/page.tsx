@@ -360,7 +360,7 @@ export default function PdvPage() {
 
   if (caixa === undefined) {
     return (
-      <div className="flex items-center justify-center h-screen">
+      <div className="flex items-center justify-center h-full">
         <Loader2 className="w-6 h-6 animate-spin text-primary" />
       </div>
     );
@@ -368,7 +368,7 @@ export default function PdvPage() {
 
   if (caixa === null) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+      <div className="min-h-full flex flex-col items-center justify-center bg-background p-6">
         <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden">
           <div className="bg-primary text-white px-6 py-5 text-center">
             <Lock className="w-8 h-8 mx-auto mb-2" />
@@ -414,7 +414,7 @@ export default function PdvPage() {
   }
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col h-full">
       <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" />
 
       <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
@@ -485,7 +485,7 @@ export default function PdvPage() {
         </div>
 
         {/* Coluna do carrinho / recibo — painel fixo à direita em telas md+ */}
-        <div className="w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border flex flex-col min-h-0" style={{ width: "380px" }}>
+        <div className="w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border flex flex-col min-h-0">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
             <ShoppingCart className="w-5 h-5 text-primary" />
             <h2 className="font-semibold text-base">Carrinho</h2>
@@ -743,7 +743,7 @@ export default function PdvPage() {
       </div>
 
       {finalizando && etapaFinalizacao && (
-        <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center z-50">
+        <div className="fixed inset-0 bg-black/40 backdrop-blur-[1px] flex items-center justify-center p-4 z-50">
           <div className="w-full max-w-xs bg-surface border border-border rounded-2xl shadow-lg p-6 text-center">
             {etapaFinalizacao === "sucesso" ? (
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-primary" />
@@ -793,7 +793,7 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-background p-6">
+    <div className="min-h-full flex flex-col items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
         <div className="bg-primary text-white px-6 py-5 text-center">
           <CheckCircle2 className="w-8 h-8 mx-auto mb-2" />

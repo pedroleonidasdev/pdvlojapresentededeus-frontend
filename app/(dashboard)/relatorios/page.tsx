@@ -406,7 +406,7 @@ export default function RelatoriosPage() {
     <div>
       <PageHeader title="Relatórios" subtitle="Faturamento e desempenho de vendas por período" />
 
-      <div className="p-8 space-y-6">
+      <div className="p-4 md:p-8 space-y-6">
         {/* caixa aberto no momento, em destaque, independente do período filtrado */}
         {caixaAtual !== undefined && (
           <div

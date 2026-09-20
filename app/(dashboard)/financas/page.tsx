@@ -493,7 +493,8 @@ export default function FinancasPage() {
           ) : despesasFiltradas.length === 0 ? (
             <p className="text-center text-sm text-muted py-10">Nenhum lançamento no período.</p>
           ) : (
-            <table className="w-full text-sm">
+            <div className="overflow-x-auto">
+            <table className="w-full text-sm min-w-[960px]">
               <thead className="bg-background border-b border-border">
                 <tr className="text-left text-muted">
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Tipo</th>
@@ -739,6 +740,7 @@ export default function FinancasPage() {
                 })}
               </tbody>
             </table>
+            </div>
           )}
         </div>
       </div>
