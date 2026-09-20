@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Venda, FormaPagamento } from "@/lib/types";
@@ -30,7 +30,10 @@ export default function VendasPage() {
   const isAdmin = usuario?.perfil === "ADMIN";
 
   const [vendas, setVendas] = useState<Venda[]>([]);
-  const [carregando, setCarregando] = useState(true);
+  const [carregando, setCarregando] = useState(false);
+  // só vira "true" depois do primeiro clique em Buscar — evita buscar
+  // automaticamente ao abrir a tela, antes do usuário escolher o período
+  const [buscou, setBuscou] = useState(false);
   const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
   const [vendaDataHoraEmEdicao, setVendaDataHoraEmEdicao] = useState<Venda | null>(null);
 
@@ -56,13 +59,12 @@ export default function VendasPage() {
       setVendas(data);
     } finally {
       setCarregando(false);
+      setBuscou(true);
     }
   }
 
-  useEffect(() => {
-    carregar();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // Sem busca automática ao abrir a tela: o usuário escolhe o período (ou
+  // mantém o padrão já preenchido) e clica em "Buscar".
 
   const vendasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -143,6 +145,11 @@ export default function VendasPage() {
         {carregando ? (
           <div className="flex justify-center py-16">
             <Loader2 className="w-6 h-6 animate-spin text-primary" />
+          </div>
+        ) : !buscou ? (
+          <div className="text-center py-16 text-muted">
+            <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
+            <p className="text-sm">Escolha o período acima e clique em Buscar para ver as vendas.</p>
           </div>
         ) : vendasFiltradas.length === 0 ? (
           <div className="text-center py-16 text-muted">
