@@ -1,30 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { LogOut, UserCog, X } from "lucide-react";
+import { LogOut, UserCog, Menu, X } from "lucide-react";
 import { NAV_ITEMS, LayoutGrid } from "@/lib/nav-items";
 import TrocarUsuarioModal from "./TrocarUsuarioModal";
 
-export default function Sidebar({
-  aberta = false,
-  onFechar,
-}: {
-  /** Controla a visibilidade do menu como painel deslizante no celular. Em telas md+ o menu é sempre visível. */
-  aberta?: boolean;
-  onFechar?: () => void;
-}) {
+export default function Sidebar() {
   const pathname = usePathname();
   const { usuario, logout } = useAuth();
   const [trocandoUsuario, setTrocandoUsuario] = useState(false);
-
-  // Fecha o menu automaticamente ao navegar para outra rota (celular).
-  useEffect(() => {
-    onFechar?.();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
+  const [aberto, setAberto] = useState(false);
 
   if (!usuario) return null;
 
@@ -32,20 +20,37 @@ export default function Sidebar({
 
   return (
     <>
-      {/* Fundo escurecido atrás do menu no celular; clicar nele fecha o menu */}
-      {aberta && (
+      {/* barra superior só no celular/tablet — no desktop o menu lateral já fica sempre visível */}
+      <header
+        className="md:hidden sticky top-0 z-30 flex items-center gap-3 bg-primary-dark text-white px-4 py-3 shadow-sm"
+        style={{ paddingTop: "max(0.75rem, env(safe-area-inset-top))" }}
+      >
+        <button
+          onClick={() => setAberto(true)}
+          aria-label="Abrir menu"
+          className="p-1.5 -ml-1.5 rounded-lg hover:bg-white/10 active:bg-white/20 transition"
+        >
+          <Menu className="w-6 h-6" />
+        </button>
+        <div className="w-7 h-7 rounded-md overflow-hidden ring-1 ring-white/20 shrink-0">
+          <img src="/icon-192.png" alt="" className="w-full h-full object-cover" />
+        </div>
+        <p className="font-semibold text-sm truncate">Sistema de Gestão</p>
+      </header>
+
+      {/* fundo escurecido atrás do menu quando aberto no celular — clicar nele fecha */}
+      {aberto && (
         <div
-          className="fixed inset-0 bg-black/40 z-40 md:hidden"
-          onClick={onFechar}
+          onClick={() => setAberto(false)}
+          className="md:hidden fixed inset-0 bg-black/50 z-40"
           aria-hidden="true"
         />
       )}
 
       <aside
-        className={`w-72 max-w-[85vw] md:w-60 shrink-0 bg-gradient-to-b from-primary via-primary to-primary-dark text-white flex flex-col h-screen fixed md:sticky top-0 left-0 z-50 overflow-hidden transition-transform duration-300 ease-out ${
-          aberta ? "translate-x-0" : "-translate-x-full md:translate-x-0"
-        }`}
-        style={{ paddingTop: "env(safe-area-inset-top, 0px)", paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        className={`w-64 md:w-60 shrink-0 bg-gradient-to-b from-primary via-primary to-primary-dark text-white flex flex-col h-dvh md:h-screen fixed md:sticky top-0 left-0 z-50 overflow-hidden transition-transform duration-300 ease-out ${
+          aberto ? "translate-x-0" : "-translate-x-full"
+        } md:translate-x-0`}
       >
         <div className="p-5 flex items-center gap-2 border-b border-white/10 shrink-0">
           <div className="w-9 h-9 rounded-lg overflow-hidden ring-1 ring-white/20 shadow-sm shrink-0">
@@ -58,9 +63,9 @@ export default function Sidebar({
             </p>
           </div>
           <button
-            onClick={onFechar}
-            className="md:hidden shrink-0 p-1.5 rounded-lg text-white/70 hover:bg-white/10 hover:text-white transition"
+            onClick={() => setAberto(false)}
             aria-label="Fechar menu"
+            className="md:hidden p-1.5 rounded-lg hover:bg-white/10 active:bg-white/20 transition shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
@@ -74,6 +79,7 @@ export default function Sidebar({
               <Link
                 key={item.href}
                 href={item.href}
+                onClick={() => setAberto(false)}
                 className={`group flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm transition-all duration-200 border-l-2 ${
                   ativo
                     ? "bg-white/15 text-white font-medium border-accent"
@@ -95,7 +101,10 @@ export default function Sidebar({
           })}
         </nav>
 
-        <div className="p-3 border-t border-white/10 shrink-0 space-y-1.5">
+        <div
+          className="p-3 border-t border-white/10 shrink-0 space-y-1.5"
+          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+        >
           <div className="px-3 py-2 mb-1">
             <p className="text-sm font-medium leading-none">{usuario.nome}</p>
             <p className="text-[11px] text-white/50 mt-1 font-mono uppercase tracking-wide">
