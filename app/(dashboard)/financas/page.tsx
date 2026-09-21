@@ -29,6 +29,8 @@ import {
   Circle,
   Clock,
   AlertTriangle,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
@@ -171,6 +173,25 @@ export default function FinancasPage() {
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("TODOS");
   const [erro, setErro] = useState<string | null>(null);
 
+  // esconde os valores da tela (útil com a loja cheia de gente por perto).
+  // a preferência fica salva no aparelho, então some da tela toda vez que
+  // essa tela é aberta se a pessoa deixou oculto da última vez.
+  const [valoresOcultos, setValoresOcultos] = useState(false);
+  useEffect(() => {
+    const salvo = localStorage.getItem("financas:valoresOcultos");
+    if (salvo === "true") setValoresOcultos(true);
+  }, []);
+  function alternarValoresOcultos() {
+    setValoresOcultos((atual) => {
+      const proximo = !atual;
+      localStorage.setItem("financas:valoresOcultos", String(proximo));
+      return proximo;
+    });
+  }
+  function moeda(valor: number) {
+    return valoresOcultos ? "R$ ••••••" : formatarMoeda(valor);
+  }
+
   async function carregar() {
     setCarregando(true);
     setErro(null);
@@ -311,12 +332,22 @@ export default function FinancasPage() {
         title="Controle Finanças"
         subtitle="Custos, despesas, sangria e suprimento de caixa"
         action={
-          <button
-            onClick={() => setModalAberto(true)}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-          >
-            <Plus className="w-4 h-4" /> Novo lançamento
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={alternarValoresOcultos}
+              title={valoresOcultos ? "Mostrar valores" : "Ocultar valores"}
+              aria-label={valoresOcultos ? "Mostrar valores" : "Ocultar valores"}
+              className="flex items-center justify-center w-9 h-9 rounded-lg border border-border text-muted hover:text-foreground hover:bg-background transition shrink-0"
+            >
+              {valoresOcultos ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+            </button>
+            <button
+              onClick={() => setModalAberto(true)}
+              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              <Plus className="w-4 h-4" /> Novo lançamento
+            </button>
+          </div>
         }
       />
 
@@ -365,30 +396,35 @@ export default function FinancasPage() {
                 icone={<TrendingUp className="w-4 h-4" />}
                 label="Faturamento bruto"
                 valor={totalFaturado}
+                oculto={valoresOcultos}
                 cor="text-info"
               />
               <CardResumo
                 icone={<TrendingDown className="w-4 h-4" />}
                 label="Despesas"
                 valor={resumo.totalDespesas}
+                oculto={valoresOcultos}
                 cor="text-danger"
               />
               <CardResumo
                 icone={<ArrowDownCircle className="w-4 h-4" />}
                 label="Sangrias"
                 valor={resumo.totalSangrias}
+                oculto={valoresOcultos}
                 cor="text-danger"
               />
               <CardResumo
                 icone={<ArrowUpCircle className="w-4 h-4" />}
                 label="Suprimentos"
                 valor={resumo.totalSuprimentos}
+                oculto={valoresOcultos}
                 cor="text-info"
               />
               <CardResumo
                 icone={<Wallet className="w-4 h-4" />}
                 label="Lucro líquido estimado"
                 valor={resumo.lucroLiquido}
+                oculto={valoresOcultos}
                 cor={resumo.lucroLiquido >= 0 ? "text-info" : "text-danger"}
               />
             </div>
@@ -399,6 +435,7 @@ export default function FinancasPage() {
                 icone={<Clock className="w-4 h-4" />}
                 label="A pagar (em aberto)"
                 valor={resumo.totalAPagar}
+                oculto={valoresOcultos}
                 cor="text-danger"
                 destaque
               />
@@ -406,6 +443,7 @@ export default function FinancasPage() {
                 icone={<AlertTriangle className="w-4 h-4" />}
                 label="Vencido"
                 valor={resumo.totalVencido}
+                oculto={valoresOcultos}
                 cor={resumo.totalVencido > 0 ? "text-danger" : "text-muted"}
                 destaque={resumo.totalVencido > 0}
               />
@@ -434,7 +472,7 @@ export default function FinancasPage() {
                           />
                         </div>
                         <span className="w-24 shrink-0 text-right font-mono text-muted">
-                          {formatarMoeda(valor)}
+                          {moeda(valor)}
                         </span>
                       </div>
                     );
@@ -604,7 +642,7 @@ export default function FinancasPage() {
                       </td>
                       <td className="px-4 py-2.5 text-muted">{d.usuarioNome}</td>
                       <td className={`px-4 py-2.5 text-right font-mono font-semibold ${COR_VALOR_TIPO[d.tipo]}`}>
-                        {formatarMoeda(d.valor)}
+                        {moeda(d.valor)}
                       </td>
                       <td className="px-4 py-2.5 text-center">
                         {d.tipo === "DESPESA" && d.parcelas.length === 0 ? (
@@ -647,7 +685,7 @@ export default function FinancasPage() {
                                 </div>
                                 {!quitado && (
                                   <div className="text-[10px] text-muted mt-0.5 font-mono">
-                                    restam {formatarMoeda(restante)}
+                                    restam {moeda(restante)}
                                   </div>
                                 )}
                               </div>
@@ -723,7 +761,7 @@ export default function FinancasPage() {
                                         p.pago ? "text-muted line-through" : "text-foreground"
                                       }`}
                                     >
-                                      {formatarMoeda(p.valor)}
+                                      {moeda(p.valor)}
                                     </span>
                                     <span className={atrasada ? "text-danger font-medium" : "text-muted"}>
                                       {p.dataVencimento ? formatarDataCurta(p.dataVencimento) : "sem data"}
@@ -741,7 +779,7 @@ export default function FinancasPage() {
                             </div>
                             {resumoPagamento(d).restante > 0 && (
                               <span className="text-[11px] text-muted font-mono ml-auto shrink-0">
-                                restam {formatarMoeda(resumoPagamento(d).restante)}
+                                restam {moeda(resumoPagamento(d).restante)}
                               </span>
                             )}
                           </div>
@@ -782,12 +820,14 @@ function CardResumo({
   valor,
   cor,
   destaque,
+  oculto,
 }: {
   icone: React.ReactNode;
   label: string;
   valor: number;
   cor: string;
   destaque?: boolean;
+  oculto?: boolean;
 }) {
   return (
     <div
@@ -799,7 +839,9 @@ function CardResumo({
         {icone}
         {label}
       </div>
-      <p className={`text-lg font-semibold font-mono mt-1 ${cor}`}>{formatarMoeda(valor)}</p>
+      <p className={`text-lg font-semibold font-mono mt-1 ${cor}`}>
+        {oculto ? "R$ ••••••" : formatarMoeda(valor)}
+      </p>
     </div>
   );
 }
