@@ -6,7 +6,7 @@ import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy } from "lucide-react";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
 
@@ -24,6 +24,7 @@ export default function EstoquePage() {
   const [busca, setBusca] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
   const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "padrao">("nome-asc");
+  const [filtroEspecial, setFiltroEspecial] = useState<"todos" | "estoque-baixo" | "duplicados">("todos");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
   const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
@@ -76,6 +77,56 @@ export default function EstoquePage() {
     });
   }
 
+  // remove acento e normaliza espaços, pra pegar "Vela Aromática" e "vela  aromatica"
+  // como o mesmo produto cadastrado duas vezes
+  function nomeNormalizado(nome: string): string {
+    return nome
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+
+  // detecta produtos duplicados olhando pra TODOS os produtos (não só os
+  // filtrados na tela), pra não deixar passar um duplicado que caiu fora do
+  // filtro atual de busca/categoria. Dois motivos contam como duplicado:
+  // nome igual (ignorando acento/maiúscula) ou mesmo código de barras.
+  const duplicados = useMemo(() => {
+    const porNome = new Map<string, Produto[]>();
+    const porCodigo = new Map<string, Produto[]>();
+
+    for (const produto of produtos) {
+      const chaveNome = nomeNormalizado(produto.nome ?? "");
+      if (chaveNome) {
+        if (!porNome.has(chaveNome)) porNome.set(chaveNome, []);
+        porNome.get(chaveNome)!.push(produto);
+      }
+      if (produto.codigoBarras) {
+        if (!porCodigo.has(produto.codigoBarras)) porCodigo.set(produto.codigoBarras, []);
+        porCodigo.get(produto.codigoBarras)!.push(produto);
+      }
+    }
+
+    const motivos = new Map<number, string[]>();
+    function marcar(grupo: Produto[], motivo: string) {
+      if (grupo.length < 2) return;
+      for (const produto of grupo) {
+        const atuais = motivos.get(produto.id) ?? [];
+        motivos.set(produto.id, [...atuais, motivo]);
+      }
+    }
+    for (const grupo of porNome.values()) marcar(grupo, "mesmo nome");
+    for (const grupo of porCodigo.values()) marcar(grupo, "mesmo código de barras");
+
+    return motivos;
+  }, [produtos]);
+
+  const estoqueBaixoCount = useMemo(
+    () => produtos.filter((p) => p.estoqueMinimo != null && p.quantidadeEstoque <= p.estoqueMinimo).length,
+    [produtos]
+  );
+
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     let lista = !termo
@@ -93,13 +144,21 @@ export default function EstoquePage() {
       lista = lista.filter((produto) => String(produto.categoria?.id) === categoriaFiltro);
     }
 
+    if (filtroEspecial === "estoque-baixo") {
+      lista = lista.filter(
+        (produto) => produto.estoqueMinimo != null && produto.quantidadeEstoque <= produto.estoqueMinimo
+      );
+    } else if (filtroEspecial === "duplicados") {
+      lista = lista.filter((produto) => duplicados.has(produto.id));
+    }
+
     if (ordenacao === "padrao") return lista;
 
     const ordenada = [...lista].sort((a, b) =>
       (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
     );
     return ordenacao === "nome-desc" ? ordenada.reverse() : ordenada;
-  }, [produtos, busca, categoriaFiltro, ordenacao]);
+  }, [produtos, busca, categoriaFiltro, ordenacao, filtroEspecial, duplicados]);
 
   const semCodigoCount = useMemo(
     () => produtos.filter((p) => !p.codigoBarras).length,
@@ -192,6 +251,37 @@ export default function EstoquePage() {
         )}
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
+          {estoqueBaixoCount > 0 && (
+            <button
+              onClick={() =>
+                setFiltroEspecial((atual) => (atual === "estoque-baixo" ? "todos" : "estoque-baixo"))
+              }
+              className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border transition ${
+                filtroEspecial === "estoque-baixo"
+                  ? "bg-danger text-white border-danger"
+                  : "bg-danger-light text-danger border-danger/30 hover:bg-danger/10"
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Estoque baixo ({estoqueBaixoCount})
+            </button>
+          )}
+          {duplicados.size > 0 && (
+            <button
+              onClick={() =>
+                setFiltroEspecial((atual) => (atual === "duplicados" ? "todos" : "duplicados"))
+              }
+              title="Produtos com o mesmo nome (ignorando acento/maiúscula) ou o mesmo código de barras cadastrados mais de uma vez"
+              className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border transition ${
+                filtroEspecial === "duplicados"
+                  ? "bg-accent text-white border-accent"
+                  : "bg-surface text-accent-dark border-accent/30 hover:bg-accent/10"
+              }`}
+            >
+              <Copy className="w-4 h-4" />
+              Possíveis duplicados ({duplicados.size})
+            </button>
+          )}
           {isAdmin && semCodigoCount > 0 && (
             <button
               onClick={gerarCodigosFaltantes}
@@ -279,7 +369,18 @@ export default function EstoquePage() {
                         />
                       </td>
                       <td className="px-5 py-3">
-                        <p className="font-medium text-foreground">{produto.nome}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-foreground">{produto.nome}</p>
+                          {duplicados.has(produto.id) && (
+                            <span
+                              title={`Possível duplicado: ${[...new Set(duplicados.get(produto.id))].join(" e ")}`}
+                              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-accent-light text-accent-dark shrink-0"
+                            >
+                              <Copy className="w-2.5 h-2.5" />
+                              Duplicado
+                            </span>
+                          )}
+                        </div>
                         {produto.codigoBarras && (
                           <p className="text-xs text-muted font-mono">{produto.codigoBarras}</p>
                         )}
@@ -288,6 +389,7 @@ export default function EstoquePage() {
                       <td className="px-5 py-3 font-mono">{formatarMoeda(produto.precoVenda)}</td>
                       <td className="px-5 py-3">
                         <span
+                          title={estoqueBaixo ? `Abaixo do mínimo (${produto.estoqueMinimo})` : undefined}
                           className={`inline-flex items-center gap-1 font-mono ${estoqueBaixo ? "text-danger" : "text-foreground"
                             }`}
                         >
