@@ -174,19 +174,11 @@ export default function FinancasPage() {
   const [erro, setErro] = useState<string | null>(null);
 
   // esconde os valores da tela (útil com a loja cheia de gente por perto).
-  // a preferência fica salva no aparelho, então some da tela toda vez que
-  // essa tela é aberta se a pessoa deixou oculto da última vez.
-  const [valoresOcultos, setValoresOcultos] = useState(false);
-  useEffect(() => {
-    const salvo = localStorage.getItem("financas:valoresOcultos");
-    if (salvo === "true") setValoresOcultos(true);
-  }, []);
+  // sempre começa oculto ao abrir essa tela — a pessoa decide se quer
+  // revelar os valores naquela visita, mas ao sair e voltar começa oculto de novo.
+  const [valoresOcultos, setValoresOcultos] = useState(true);
   function alternarValoresOcultos() {
-    setValoresOcultos((atual) => {
-      const proximo = !atual;
-      localStorage.setItem("financas:valoresOcultos", String(proximo));
-      return proximo;
-    });
+    setValoresOcultos((atual) => !atual);
   }
   function moeda(valor: number) {
     return valoresOcultos ? "R$ ••••••" : formatarMoeda(valor);
