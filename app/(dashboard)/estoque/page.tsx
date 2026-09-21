@@ -6,8 +6,9 @@ import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList } from "lucide-react";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
+import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -25,6 +26,7 @@ export default function EstoquePage() {
   const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "padrao">("nome-asc");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
+  const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
   const [gerandoCodigos, setGerandoCodigos] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
 
@@ -213,6 +215,16 @@ export default function EstoquePage() {
               Imprimir etiquetas ({selecionados.size})
             </button>
           )}
+          <button
+            onClick={() => setFolhaEstoqueAberta(true)}
+            disabled={produtosFiltrados.length === 0}
+            title="Gera uma folha para imprimir e conferir o estoque físico contra o sistema"
+            className="flex items-center gap-2 bg-surface border border-border hover:bg-background text-foreground text-sm font-medium px-3 py-2 rounded-lg transition disabled:opacity-50"
+          >
+            <ClipboardList className="w-4 h-4" />
+            Imprimir estoque para conferência
+            {produtosFiltrados.length !== produtos.length && ` (${produtosFiltrados.length})`}
+          </button>
         </div>
 
         {carregando ? (
@@ -334,6 +346,13 @@ export default function EstoquePage() {
         <FolhaEtiquetas
           produtos={produtos.filter((p) => selecionados.has(p.id))}
           onFechar={() => setFolhaEtiquetasAberta(false)}
+        />
+      )}
+
+      {folhaEstoqueAberta && (
+        <FolhaConferenciaEstoque
+          produtos={produtosFiltrados}
+          onFechar={() => setFolhaEstoqueAberta(false)}
         />
       )}
     </div>

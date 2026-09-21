@@ -164,6 +164,33 @@ body {
   .receipt-print > *:last-child {
     padding-bottom: 0 !important;
   }
+
+  /* Lista de conferência de estoque — folha A4 normal (impressora comum),
+     diferente do cupom térmico de 80mm acima. Usa uma "página nomeada" (CSS
+     Paged Media) para valer só quando esse elemento é impresso, sem alterar
+     o @page padrão usado pelo cupom. */
+  .a4-print {
+    page: a4Print;
+  }
+
+  .a4-print,
+  .a4-print * {
+    visibility: visible;
+  }
+
+  .a4-print {
+    display: block !important; /* a folha fica com "hidden" (display:none) na tela */
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    color: #000;
+  }
+}
+
+@page a4Print {
+  size: A4 portrait;
+  margin: 12mm;
 }
 
 /* Brilho suave e contínuo no ícone do item ativo da barra lateral — dá vida

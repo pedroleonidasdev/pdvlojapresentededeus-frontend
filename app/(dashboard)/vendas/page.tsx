@@ -5,10 +5,11 @@ import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Venda, FormaPagamento } from "@/lib/types";
 import { formatarMoeda, formatarDataHora, limiteDiaBrasiliaParaUtc, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { imprimirCupom } from "@/lib/impressora";
 import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import EditarDataHoraModal from "@/components/EditarDataHoraModal";
-import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search } from "lucide-react";
+import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO", "MULTIPLO"];
 
@@ -37,8 +38,29 @@ export default function VendasPage() {
   const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
   const [vendaDataHoraEmEdicao, setVendaDataHoraEmEdicao] = useState<Venda | null>(null);
 
-  // filtro de período — busca no backend. Padrão: últimos 7 dias.
-  const [dataInicio, setDataInicio] = useState(dataDeHoje(-7));
+  // reimpressão do cupom de uma venda já finalizada — guarda qual venda está
+  // imprimindo no momento (id) e o erro específico dela, se der problema
+  const [reimprimindoId, setReimprimindoId] = useState<number | null>(null);
+  const [erroReimpressao, setErroReimpressao] = useState<{ id: number; mensagem: string } | null>(null);
+
+  async function reimprimir(venda: Venda) {
+    setReimprimindoId(venda.id);
+    setErroReimpressao(null);
+    try {
+      await imprimirCupom(venda);
+    } catch (error) {
+      setErroReimpressao({
+        id: venda.id,
+        mensagem: error instanceof Error ? error.message : "Não foi possível reimprimir o cupom.",
+      });
+    } finally {
+      setReimprimindoId(null);
+    }
+  }
+
+  // filtro de período — busca no backend. Padrão: só o dia de hoje (o
+  // usuário troca a data acima se quiser ver outro período).
+  const [dataInicio, setDataInicio] = useState(dataDeHoje());
   const [dataFim, setDataFim] = useState(dataDeHoje());
 
   // filtro de busca específica — aplicado sobre o que já foi carregado, sem nova requisição.
@@ -159,51 +181,68 @@ export default function VendasPage() {
         ) : (
           <div className="bg-surface border border-border rounded-xl divide-y divide-border">
             {vendasFiltradas.map((venda) => (
-              <div key={venda.id} className="flex items-center justify-between gap-4 px-5 py-4">
-                <div className="flex flex-col gap-1">
-                  <span className="text-xs font-mono text-primary">Venda #{venda.id}</span>
-                  <div className="flex items-center gap-3 text-xs text-muted flex-wrap">
-                    <span className="flex items-center gap-1">
-                      <Clock className="w-3 h-3" />
-                      {formatarDataHora(venda.dataHora)}
-                    </span>
-                    <span className="flex items-center gap-1">
-                      <User className="w-3 h-3" />
-                      {venda.usuarioNome}
-                    </span>
-                    <span className="px-1.5 py-0.5 rounded bg-primary-light text-primary-dark font-medium">
-                      {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}
-                    </span>
-                    {venda.formaPagamento === "MULTIPLO" && venda.pagamentos?.length > 0 && (
-                      <span className="text-[11px]">
-                        {venda.pagamentos
-                          .map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]} ${formatarMoeda(p.valor)}`)
-                          .join(" + ")}
+              <div key={venda.id} className="px-5 py-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <span className="text-xs font-mono text-primary">Venda #{venda.id}</span>
+                    <div className="flex items-center gap-3 text-xs text-muted flex-wrap">
+                      <span className="flex items-center gap-1">
+                        <Clock className="w-3 h-3" />
+                        {formatarDataHora(venda.dataHora)}
                       </span>
+                      <span className="flex items-center gap-1">
+                        <User className="w-3 h-3" />
+                        {venda.usuarioNome}
+                      </span>
+                      <span className="px-1.5 py-0.5 rounded bg-primary-light text-primary-dark font-medium">
+                        {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}
+                      </span>
+                      {venda.formaPagamento === "MULTIPLO" && venda.pagamentos?.length > 0 && (
+                        <span className="text-[11px]">
+                          {venda.pagamentos
+                            .map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]} ${formatarMoeda(p.valor)}`)
+                            .join(" + ")}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <span className="font-mono font-semibold text-foreground whitespace-nowrap">
+                      {formatarMoeda(venda.total)}
+                    </span>
+                    <button
+                      onClick={() => reimprimir(venda)}
+                      disabled={reimprimindoId === venda.id}
+                      className="text-muted hover:text-primary disabled:opacity-50"
+                      title="Reimprimir cupom desta venda"
+                    >
+                      {reimprimindoId === venda.id ? (
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                      ) : (
+                        <Printer className="w-4 h-4" />
+                      )}
+                    </button>
+                    <button
+                      onClick={() => setVendaEmEdicao(venda)}
+                      className="text-muted hover:text-primary"
+                      title="Editar forma de pagamento"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </button>
+                    {isAdmin && (
+                      <button
+                        onClick={() => setVendaDataHoraEmEdicao(venda)}
+                        className="text-muted hover:text-primary"
+                        title="Editar data e hora"
+                      >
+                        <CalendarClock className="w-4 h-4" />
+                      </button>
                     )}
                   </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className="font-mono font-semibold text-foreground whitespace-nowrap">
-                    {formatarMoeda(venda.total)}
-                  </span>
-                  <button
-                    onClick={() => setVendaEmEdicao(venda)}
-                    className="text-muted hover:text-primary"
-                    title="Editar forma de pagamento"
-                  >
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                  {isAdmin && (
-                    <button
-                      onClick={() => setVendaDataHoraEmEdicao(venda)}
-                      className="text-muted hover:text-primary"
-                      title="Editar data e hora"
-                    >
-                      <CalendarClock className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
+                {erroReimpressao?.id === venda.id && (
+                  <p className="mt-2 text-xs text-danger">{erroReimpressao.mensagem}</p>
+                )}
               </div>
             ))}
           </div>
