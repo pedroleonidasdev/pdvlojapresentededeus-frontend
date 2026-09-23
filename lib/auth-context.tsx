@@ -43,7 +43,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function login(loginValue: string, senha: string) {
     await autenticar(loginValue, senha);
-    router.push("/pdv");
+    router.push("/inicio");
   }
 
   // Reautentica com outro usuário sem passar pela tela de login: mantém a

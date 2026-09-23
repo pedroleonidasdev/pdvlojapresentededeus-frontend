@@ -21,7 +21,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     if (!carregando && !usuario) {
       router.replace("/login");
     } else if (!carregando && acessoNegado) {
-      router.replace("/pdv");
+      router.replace("/inicio");
     }
   }, [carregando, usuario, acessoNegado, router]);
 

@@ -15,9 +15,9 @@ export default function PageHeader({
   const pathname = usePathname();
   const router = useRouter();
 
-  // "/pdv" é a tela inicial do sistema (pra onde o login e o menu sempre levam),
+  // "/inicio" é a tela inicial do sistema (pra onde o login sempre leva),
   // então não faz sentido ter botão de voltar nela — nas demais, volta pra lá.
-  const mostrarVoltar = pathname !== "/pdv";
+  const mostrarVoltar = pathname !== "/inicio";
 
   return (
     <div className="relative flex flex-col sm:flex-row sm:items-start justify-between gap-3 px-4 py-4 sm:px-8 sm:py-6 border-b border-border bg-surface overflow-hidden">
@@ -33,7 +33,7 @@ export default function PageHeader({
               if (window.history.length > 1) {
                 router.back();
               } else {
-                router.push("/pdv");
+                router.push("/inicio");
               }
             }}
             aria-label="Voltar"
