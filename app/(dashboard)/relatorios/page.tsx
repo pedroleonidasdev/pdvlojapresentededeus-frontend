@@ -2,6 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
@@ -31,6 +33,7 @@ import {
   Vault,
   Repeat,
   RotateCcw,
+  FileText,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
@@ -402,6 +405,101 @@ export default function RelatoriosPage() {
     XLSX.writeFile(livro, `relatorio-vendas_${inicio}_a_${fim}.xlsx`);
   }
 
+  function exportarPdf() {
+    const doc = new jsPDF();
+    const margem = 14;
+    let y = 16;
+
+    doc.setFontSize(14);
+    doc.text("Relatório de vendas", margem, y);
+    y += 6;
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Período: ${inicio} a ${fim}`, margem, y);
+    y += 8;
+
+    // resumo em cards de texto
+    doc.setTextColor(0);
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margem, right: margem },
+      theme: "grid",
+      head: [["Faturamento líquido", "Vendas", "Trocas", "Ticket médio"]],
+      body: [[
+        formatarMoeda(metricas.totalLiquido),
+        metricas.quantidadeVendas.toString(),
+        metricas.quantidadeTrocas.toString(),
+        formatarMoeda(
+          metricas.quantidadeVendas > 0 ? metricas.totalFaturado / metricas.quantidadeVendas : 0
+        ),
+      ]],
+      styles: { halign: "center", fontSize: 9 },
+      headStyles: { fillColor: [34, 120, 87] },
+    });
+    y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+
+    if (Object.keys(metricas.totalPorFormaPagamento).length > 0) {
+      doc.setFontSize(11);
+      doc.text("Por forma de pagamento", margem, y);
+      autoTable(doc, {
+        startY: y + 3,
+        margin: { left: margem, right: margem },
+        head: [["Forma de pagamento", "Total"]],
+        body: Object.entries(metricas.totalPorFormaPagamento).map(([forma, valor]) => [
+          LABEL_FORMA_PAGAMENTO[forma] ?? forma,
+          formatarMoeda(valor),
+        ]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [34, 120, 87] },
+      });
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    }
+
+    if (metricas.produtosMaisVendidos.length > 0) {
+      doc.setFontSize(11);
+      doc.text("Produtos mais vendidos", margem, y);
+      autoTable(doc, {
+        startY: y + 3,
+        margin: { left: margem, right: margem },
+        head: [["#", "Produto", "Qtd.", "Total vendido"]],
+        body: metricas.produtosMaisVendidos.map((p, idx) => [
+          (idx + 1).toString(),
+          p.nome,
+          p.quantidadeVendida.toString(),
+          formatarMoeda(p.totalVendido),
+        ]),
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [34, 120, 87] },
+      });
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    }
+
+    if (vendasFiltradas.length > 0) {
+      doc.addPage();
+      y = 16;
+      doc.setFontSize(12);
+      doc.text("Vendas do período", margem, y);
+      autoTable(doc, {
+        startY: y + 4,
+        margin: { left: margem, right: margem },
+        head: [["Venda", "Data/Hora", "Vendedor", "Forma", "Total"]],
+        body: vendasFiltradas.map((v) => [
+          `#${v.id}`,
+          formatarDataHora(v.dataHora),
+          v.usuarioNome,
+          v.pagamentos?.length
+            ? v.pagamentos.map((p) => LABEL_FORMA_PAGAMENTO[p.formaPagamento]).join(" + ")
+            : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
+          formatarMoeda(v.total),
+        ]),
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [34, 120, 87] },
+      });
+    }
+
+    doc.save(`relatorio-vendas_${inicio}_a_${fim}.pdf`);
+  }
+
   return (
     <div>
       <PageHeader title="Relatórios" subtitle="Faturamento e desempenho de vendas por período" />
@@ -516,6 +614,16 @@ export default function RelatoriosPage() {
             >
               <Download className="w-4 h-4" />
               Exportar Excel
+            </button>
+          )}
+
+          {jaGerou && vendasFiltradas.length > 0 && (
+            <button
+              onClick={exportarPdf}
+              className="flex items-center gap-2 bg-secondary hover:bg-secondary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition h-fit"
+            >
+              <FileText className="w-4 h-4" />
+              Exportar PDF
             </button>
           )}
 
