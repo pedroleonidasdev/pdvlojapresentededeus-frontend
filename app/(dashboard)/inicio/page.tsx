@@ -42,39 +42,41 @@ export default function InicioPage() {
   return (
     <div className="min-h-full">
       {/* Faixa de boas-vindas, no mesmo espírito visual do painel de login */}
-      <div className="relative overflow-hidden bg-primary text-white px-4 py-5 sm:px-8 sm:py-6">
+      <div className="relative overflow-hidden bg-primary text-white px-4 py-10 sm:px-8 sm:py-14">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-primary-dark" />
         <div className="absolute -right-14 -top-14 w-56 h-56 rounded-full bg-white/5" />
+        <div className="absolute -right-6 bottom-0 w-40 h-40 rounded-full bg-accent/10" />
         <div className="relative">
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-white/60">
             {saudacao()}, {primeiroNome}
           </p>
-          <h1 className="mt-0.5 text-xl sm:text-2xl font-semibold tracking-tight">
+          <h1 className="mt-1 text-2xl sm:text-3xl font-semibold tracking-tight">
             O que você precisa fazer agora?
           </h1>
+          <p className="mt-2 text-sm text-white/70">Escolha uma área para começar.</p>
         </div>
       </div>
 
-      <div className="px-4 py-4 sm:px-8 sm:py-5 space-y-3 max-w-5xl">
+      <div className="px-4 py-6 sm:px-8 sm:py-8 space-y-5 max-w-5xl">
         {destaque && (
           <Link
             href={destaque.href}
-            className="group flex items-center justify-between gap-4 rounded-xl bg-primary text-white p-4 sm:p-5 shadow-sm hover:bg-primary-dark hover:shadow-md transition"
+            className="group flex items-center justify-between gap-4 rounded-2xl bg-primary text-white p-6 sm:p-8 shadow-sm hover:bg-primary-dark hover:shadow-md transition"
           >
-            <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-              <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                <destaque.icon className="w-5 h-5 sm:w-6 sm:h-6" />
+            <div className="flex items-center gap-4 sm:gap-5 min-w-0">
+              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                <destaque.icon className="w-7 h-7 sm:w-8 sm:h-8" />
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-base sm:text-lg">{destaque.label}</p>
-                <p className="text-xs sm:text-sm text-white/70 truncate">{destaque.descricao}</p>
+                <p className="font-semibold text-xl sm:text-2xl">{destaque.label}</p>
+                <p className="text-sm sm:text-base text-white/70 truncate">{destaque.descricao}</p>
               </div>
             </div>
-            <ArrowRight className="w-5 h-5 shrink-0 opacity-70 group-hover:translate-x-1 transition" />
+            <ArrowRight className="w-6 h-6 shrink-0 opacity-70 group-hover:translate-x-1 transition" />
           </Link>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5 sm:gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-5">
           {outros.map((item) => {
             const cor = CORES[item.href] ?? { bg: "bg-primary", ring: "hover:ring-primary/30" };
             const Icon = item.icon;
@@ -82,15 +84,15 @@ export default function InicioPage() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`group flex items-center gap-3 rounded-xl bg-surface border border-border p-3 sm:p-3.5 hover:-translate-y-0.5 hover:ring-2 hover:shadow-sm transition ${cor.ring}`}
+                className={`group flex flex-col gap-4 rounded-2xl bg-surface border border-border p-5 sm:p-7 min-h-[150px] sm:min-h-[170px] hover:-translate-y-0.5 hover:ring-2 hover:shadow-sm transition ${cor.ring}`}
               >
-                <div className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg ${cor.bg} flex items-center justify-center text-white shrink-0`}>
-                  <Icon className="w-4 h-4 sm:w-5 sm:h-5" />
+                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl ${cor.bg} flex items-center justify-center text-white shrink-0`}>
+                  <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-sm sm:text-base text-foreground truncate">{item.label}</p>
+                  <p className="font-medium text-base sm:text-lg text-foreground truncate">{item.label}</p>
                   {item.descricao && (
-                    <p className="text-xs text-muted truncate">{item.descricao}</p>
+                    <p className="text-sm text-muted mt-1 line-clamp-2">{item.descricao}</p>
                   )}
                 </div>
               </Link>
