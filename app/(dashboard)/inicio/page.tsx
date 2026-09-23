@@ -61,22 +61,22 @@ export default function InicioPage() {
         {destaque && (
           <Link
             href={destaque.href}
-            className="group flex items-center justify-between gap-4 rounded-2xl bg-primary text-white p-6 sm:p-8 shadow-sm hover:bg-primary-dark hover:shadow-md transition"
+            className="group flex items-center justify-between gap-4 rounded-2xl bg-primary text-white p-5 sm:p-6 shadow-sm hover:bg-primary-dark hover:shadow-md transition"
           >
-            <div className="flex items-center gap-4 sm:gap-5 min-w-0">
-              <div className="w-14 h-14 sm:w-16 sm:h-16 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
-                <destaque.icon className="w-7 h-7 sm:w-8 sm:h-8" />
+            <div className="flex items-center gap-4 min-w-0">
+              <div className="w-12 h-12 rounded-xl bg-white/15 flex items-center justify-center shrink-0">
+                <destaque.icon className="w-6 h-6" />
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-xl sm:text-2xl">{destaque.label}</p>
-                <p className="text-sm sm:text-base text-white/70 truncate">{destaque.descricao}</p>
+                <p className="font-semibold text-lg">{destaque.label}</p>
+                <p className="text-sm text-white/70 truncate">{destaque.descricao}</p>
               </div>
             </div>
-            <ArrowRight className="w-6 h-6 shrink-0 opacity-70 group-hover:translate-x-1 transition" />
+            <ArrowRight className="w-5 h-5 shrink-0 opacity-70 group-hover:translate-x-1 transition" />
           </Link>
         )}
 
-        <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 sm:gap-5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 sm:gap-4">
           {outros.map((item) => {
             const cor = CORES[item.href] ?? { bg: "bg-primary", ring: "hover:ring-primary/30" };
             const Icon = item.icon;
@@ -84,15 +84,15 @@ export default function InicioPage() {
               <Link
                 key={item.href}
                 href={item.href}
-                className={`group flex flex-col gap-4 rounded-2xl bg-surface border border-border p-5 sm:p-7 min-h-[150px] sm:min-h-[170px] hover:-translate-y-0.5 hover:ring-2 hover:shadow-sm transition ${cor.ring}`}
+                className={`group flex flex-col gap-3 rounded-2xl bg-surface border border-border p-4 sm:p-5 hover:-translate-y-0.5 hover:ring-2 hover:shadow-sm transition ${cor.ring}`}
               >
-                <div className={`w-12 h-12 sm:w-14 sm:h-14 rounded-xl ${cor.bg} flex items-center justify-center text-white shrink-0`}>
-                  <Icon className="w-6 h-6 sm:w-7 sm:h-7" />
+                <div className={`w-10 h-10 rounded-lg ${cor.bg} flex items-center justify-center text-white shrink-0`}>
+                  <Icon className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
-                  <p className="font-medium text-base sm:text-lg text-foreground truncate">{item.label}</p>
+                  <p className="font-medium text-foreground truncate">{item.label}</p>
                   {item.descricao && (
-                    <p className="text-sm text-muted mt-1 line-clamp-2">{item.descricao}</p>
+                    <p className="text-xs text-muted mt-0.5 line-clamp-2">{item.descricao}</p>
                   )}
                 </div>
               </Link>
