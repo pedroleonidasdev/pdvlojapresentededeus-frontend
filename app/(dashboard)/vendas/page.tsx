@@ -79,6 +79,15 @@ export default function VendasPage() {
   // pra montar o filtro e saber a que categoria cada item pertence.
   const [categorias, setCategorias] = useState<Categoria[]>([]);
   const [categoriaPorProduto, setCategoriaPorProduto] = useState<Map<number, number>>(new Map());
+  const nomeCategoriaPorId = useMemo(
+    () => new Map(categorias.map((c) => [c.id, c.nome])),
+    [categorias]
+  );
+
+  function nomeCategoriaDoProduto(produtoId: number): string | undefined {
+    const categoriaId = categoriaPorProduto.get(produtoId);
+    return categoriaId ? nomeCategoriaPorId.get(categoriaId) : undefined;
+  }
 
   useEffect(() => {
     async function carregarCategoriasEProdutos() {
@@ -127,7 +136,12 @@ export default function VendasPage() {
         ? v.pagamentos.map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]}: ${formatarMoeda(p.valor)}`).join(" + ")
         : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
       Total: v.total,
-      Itens: v.itens.map((i) => `${i.quantidade}x ${i.produtoNome}`).join("; "),
+      Itens: v.itens
+        .map((i) => {
+          const cat = nomeCategoriaDoProduto(i.produtoId);
+          return `${i.quantidade}x ${i.produtoNome}${cat ? ` (${cat})` : ""}`;
+        })
+        .join("; "),
     }));
 
     const planilha = XLSX.utils.json_to_sheet(linhas);
@@ -158,7 +172,12 @@ export default function VendasPage() {
           ? v.pagamentos.map((p) => LABEL_FORMA_PAGAMENTO[p.formaPagamento]).join(" + ")
           : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
         formatarMoeda(v.total),
-        v.itens.map((i) => `${i.quantidade}x ${i.produtoNome}`).join(", "),
+        v.itens
+          .map((i) => {
+            const cat = nomeCategoriaDoProduto(i.produtoId);
+            return `${i.quantidade}x ${i.produtoNome}${cat ? ` (${cat})` : ""}`;
+          })
+          .join(", "),
       ]),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [34, 120, 87] },
@@ -343,12 +362,16 @@ export default function VendasPage() {
                   </div>
                 </div>
                 <p className="mt-2 text-xs text-foreground/70 leading-relaxed">
-                  {venda.itens.map((item, i) => (
-                    <span key={item.id}>
-                      {i > 0 && ", "}
-                      <span className="font-medium">{item.quantidade}x</span> {item.produtoNome}
-                    </span>
-                  ))}
+                  {venda.itens.map((item, i) => {
+                    const nomeCategoria = nomeCategoriaDoProduto(item.produtoId);
+                    return (
+                      <span key={item.id}>
+                        {i > 0 && ", "}
+                        <span className="font-medium">{item.quantidade}x</span> {item.produtoNome}
+                        {nomeCategoria && <span className="text-muted"> ({nomeCategoria})</span>}
+                      </span>
+                    );
+                  })}
                 </p>
                 {erroReimpressao?.id === venda.id && (
                   <p className="mt-2 text-xs text-danger">{erroReimpressao.mensagem}</p>
