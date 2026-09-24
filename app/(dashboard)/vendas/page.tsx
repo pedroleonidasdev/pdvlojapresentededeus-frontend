@@ -132,24 +132,29 @@ export default function VendasPage() {
   // mantém o padrão já preenchido) e clica em "Buscar".
 
   function exportarExcel() {
-    const linhas = vendasFiltradas.map((v) => ({
-      Venda: v.id,
-      "Data/Hora": formatarDataHora(v.dataHora),
-      Vendedor: v.usuarioNome,
-      "Forma de pagamento": v.pagamentos?.length
-        ? v.pagamentos.map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]}: ${formatarMoeda(p.valor)}`).join(" + ")
-        : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
-      Total: v.total,
-      Itens: v.itens
+    const linhas = vendasFiltradas.map((v) => {
+      const linha: Record<string, string | number> = {
+        Venda: v.id,
+        "Data/Hora": formatarDataHora(v.dataHora),
+        Vendedor: v.usuarioNome,
+        "Forma de pagamento": v.pagamentos?.length
+          ? v.pagamentos.map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]}: ${formatarMoeda(p.valor)}`).join(" + ")
+          : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
+      };
+      if (!ocultarValores) linha.Total = v.total;
+      linha.Itens = v.itens
         .map((i) => {
           const cat = nomeCategoriaDoProduto(i.produtoId);
           return `${i.quantidade}x ${i.produtoNome}${cat ? ` (${cat})` : ""}`;
         })
-        .join("; "),
-    }));
+        .join("; ");
+      return linha;
+    });
 
     const planilha = XLSX.utils.json_to_sheet(linhas);
-    planilha["!cols"] = [{ wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 50 }];
+    planilha["!cols"] = ocultarValores
+      ? [{ wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 50 }]
+      : [{ wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 50 }];
 
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Vendas");
@@ -164,28 +169,37 @@ export default function VendasPage() {
     doc.setTextColor(100);
     doc.text(`Período: ${dataInicio} a ${dataFim}`, 14, 22);
 
+    const cabecalho = ocultarValores
+      ? ["Venda", "Data/Hora", "Vendedor", "Forma", "Itens"]
+      : ["Venda", "Data/Hora", "Vendedor", "Forma", "Total", "Itens"];
+
     autoTable(doc, {
       startY: 28,
       margin: { left: 14, right: 14 },
-      head: [["Venda", "Data/Hora", "Vendedor", "Forma", "Total", "Itens"]],
-      body: vendasFiltradas.map((v) => [
-        `#${v.id}`,
-        formatarDataHora(v.dataHora),
-        v.usuarioNome,
-        v.pagamentos?.length
-          ? v.pagamentos.map((p) => LABEL_FORMA_PAGAMENTO[p.formaPagamento]).join(" + ")
-          : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
-        formatarMoeda(v.total),
-        v.itens
-          .map((i) => {
-            const cat = nomeCategoriaDoProduto(i.produtoId);
-            return `${i.quantidade}x ${i.produtoNome}${cat ? ` (${cat})` : ""}`;
-          })
-          .join(", "),
-      ]),
+      head: [cabecalho],
+      body: vendasFiltradas.map((v) => {
+        const linha = [
+          `#${v.id}`,
+          formatarDataHora(v.dataHora),
+          v.usuarioNome,
+          v.pagamentos?.length
+            ? v.pagamentos.map((p) => LABEL_FORMA_PAGAMENTO[p.formaPagamento]).join(" + ")
+            : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
+        ];
+        if (!ocultarValores) linha.push(formatarMoeda(v.total));
+        linha.push(
+          v.itens
+            .map((i) => {
+              const cat = nomeCategoriaDoProduto(i.produtoId);
+              return `${i.quantidade}x ${i.produtoNome}${cat ? ` (${cat})` : ""}`;
+            })
+            .join(", "),
+        );
+        return linha;
+      }),
       styles: { fontSize: 8 },
       headStyles: { fillColor: [34, 120, 87] },
-      columnStyles: { 5: { cellWidth: 60 } },
+      columnStyles: { [cabecalho.length - 1]: { cellWidth: 60 } },
     });
 
     doc.save(`vendas_${dataInicio}_a_${dataFim}.pdf`);
