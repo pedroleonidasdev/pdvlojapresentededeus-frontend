@@ -1,6 +1,9 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import * as XLSX from "xlsx";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Venda, FormaPagamento, Categoria, Produto } from "@/lib/types";
@@ -9,7 +12,8 @@ import { imprimirCupom } from "@/lib/impressora";
 import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import EditarDataHoraModal from "@/components/EditarDataHoraModal";
-import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer } from "lucide-react";
+import FiltroCheckbox from "@/components/FiltroCheckbox";
+import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO", "MULTIPLO"];
 
@@ -65,8 +69,10 @@ export default function VendasPage() {
 
   // filtro de busca específica — aplicado sobre o que já foi carregado, sem nova requisição.
   const [busca, setBusca] = useState("");
-  const [formaFiltro, setFormaFiltro] = useState<FormaPagamento | "TODAS">("TODAS");
-  const [categoriaFiltro, setCategoriaFiltro] = useState<number | "TODAS">("TODAS");
+  // null = "todas selecionadas" (sem filtro) — é o estado inicial, antes do
+  // usuário desmarcar algo no filtro tipo Excel (ver FiltroCheckbox)
+  const [formasSelecionadas, setFormasSelecionadas] = useState<Set<FormaPagamento> | null>(null);
+  const [categoriasSelecionadas, setCategoriasSelecionadas] = useState<Set<number> | null>(null);
 
   // a venda não traz a categoria do produto (só id/nome/qtd/preço), então
   // carregamos categorias + produtos uma vez, à parte do período buscado, só
@@ -112,13 +118,63 @@ export default function VendasPage() {
   // Sem busca automática ao abrir a tela: o usuário escolhe o período (ou
   // mantém o padrão já preenchido) e clica em "Buscar".
 
+  function exportarExcel() {
+    const linhas = vendasFiltradas.map((v) => ({
+      Venda: v.id,
+      "Data/Hora": formatarDataHora(v.dataHora),
+      Vendedor: v.usuarioNome,
+      "Forma de pagamento": v.pagamentos?.length
+        ? v.pagamentos.map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]}: ${formatarMoeda(p.valor)}`).join(" + ")
+        : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
+      Total: v.total,
+      Itens: v.itens.map((i) => `${i.quantidade}x ${i.produtoNome}`).join("; "),
+    }));
+
+    const planilha = XLSX.utils.json_to_sheet(linhas);
+    planilha["!cols"] = [{ wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 50 }];
+
+    const livro = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(livro, planilha, "Vendas");
+    XLSX.writeFile(livro, `vendas_${dataInicio}_a_${dataFim}.xlsx`);
+  }
+
+  function exportarPdf() {
+    const doc = new jsPDF();
+    doc.setFontSize(14);
+    doc.text("Vendas", 14, 16);
+    doc.setFontSize(10);
+    doc.setTextColor(100);
+    doc.text(`Período: ${dataInicio} a ${dataFim}`, 14, 22);
+
+    autoTable(doc, {
+      startY: 28,
+      margin: { left: 14, right: 14 },
+      head: [["Venda", "Data/Hora", "Vendedor", "Forma", "Total", "Itens"]],
+      body: vendasFiltradas.map((v) => [
+        `#${v.id}`,
+        formatarDataHora(v.dataHora),
+        v.usuarioNome,
+        v.pagamentos?.length
+          ? v.pagamentos.map((p) => LABEL_FORMA_PAGAMENTO[p.formaPagamento]).join(" + ")
+          : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
+        formatarMoeda(v.total),
+        v.itens.map((i) => `${i.quantidade}x ${i.produtoNome}`).join(", "),
+      ]),
+      styles: { fontSize: 8 },
+      headStyles: { fillColor: [34, 120, 87] },
+      columnStyles: { 5: { cellWidth: 60 } },
+    });
+
+    doc.save(`vendas_${dataInicio}_a_${dataFim}.pdf`);
+  }
+
   const vendasFiltradas = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     return vendas.filter((venda) => {
-      if (formaFiltro !== "TODAS" && venda.formaPagamento !== formaFiltro) return false;
+      if (formasSelecionadas !== null && !formasSelecionadas.has(venda.formaPagamento)) return false;
       if (
-        categoriaFiltro !== "TODAS" &&
-        !venda.itens.some((item) => categoriaPorProduto.get(item.produtoId) === categoriaFiltro)
+        categoriasSelecionadas !== null &&
+        !venda.itens.some((item) => categoriasSelecionadas.has(categoriaPorProduto.get(item.produtoId) ?? -1))
       ) {
         return false;
       }
@@ -130,7 +186,7 @@ export default function VendasPage() {
         venda.itens.some((item) => item.produtoNome.toLowerCase().includes(termo));
       return combina;
     });
-  }, [vendas, busca, formaFiltro, categoriaFiltro, categoriaPorProduto]);
+  }, [vendas, busca, formasSelecionadas, categoriasSelecionadas, categoriaPorProduto]);
 
   return (
     <div>
@@ -157,36 +213,18 @@ export default function VendasPage() {
                 className="input"
               />
             </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">Forma de pagamento</label>
-              <select
-                value={formaFiltro}
-                onChange={(e) => setFormaFiltro(e.target.value as FormaPagamento | "TODAS")}
-                className="input"
-              >
-                <option value="TODAS">Todas</option>
-                {FORMAS.map((f) => (
-                  <option key={f} value={f}>
-                    {LABEL_FORMA_PAGAMENTO[f]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-xs font-medium text-muted mb-1.5">Categoria</label>
-              <select
-                value={categoriaFiltro}
-                onChange={(e) => setCategoriaFiltro(e.target.value === "TODAS" ? "TODAS" : Number(e.target.value))}
-                className="input"
-              >
-                <option value="TODAS">Todas</option>
-                {categorias.map((c) => (
-                  <option key={c.id} value={c.id}>
-                    {c.nome}
-                  </option>
-                ))}
-              </select>
-            </div>
+            <FiltroCheckbox
+              label="Forma de pagamento"
+              opcoes={FORMAS.map((f) => ({ valor: f, rotulo: LABEL_FORMA_PAGAMENTO[f] }))}
+              selecionados={formasSelecionadas}
+              onChange={setFormasSelecionadas}
+            />
+            <FiltroCheckbox
+              label="Categoria"
+              opcoes={categorias.map((c) => ({ valor: c.id, rotulo: c.nome }))}
+              selecionados={categoriasSelecionadas}
+              onChange={setCategoriasSelecionadas}
+            />
             <button
               onClick={carregar}
               disabled={carregando}
@@ -195,6 +233,25 @@ export default function VendasPage() {
               {carregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Search className="w-4 h-4" />}
               Buscar
             </button>
+
+            {buscou && vendasFiltradas.length > 0 && (
+              <>
+                <button
+                  onClick={exportarExcel}
+                  className="flex items-center gap-2 bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-2.5 rounded-lg transition"
+                >
+                  <Download className="w-4 h-4" />
+                  Excel
+                </button>
+                <button
+                  onClick={exportarPdf}
+                  className="flex items-center gap-2 bg-secondary hover:bg-secondary-dark text-white text-sm font-medium px-4 py-2.5 rounded-lg transition"
+                >
+                  <FileText className="w-4 h-4" />
+                  PDF
+                </button>
+              </>
+            )}
           </div>
 
           <div className="relative">
