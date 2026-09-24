@@ -14,7 +14,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/inicio", label: "Início", icon: Home, perfis: ["ADMIN", "CAIXA"] },
   { href: "/pdv", label: "Venda", icon: ShoppingCart, perfis: ["ADMIN", "CAIXA"], descricao: "Registrar uma nova venda" },
   { href: "/trocas", label: "Trocas", icon: Repeat, perfis: ["ADMIN", "CAIXA"], descricao: "Trocar ou devolver produtos" },
-  { href: "/vendas", label: "Vendas", icon: Receipt, perfis: ["ADMIN", "CAIXA"], descricao: "Consultar vendas registradas" },
+  { href: "/vendas", label: "Relatórios de Vendas", icon: Receipt, perfis: ["ADMIN", "CAIXA"], descricao: "Consultar vendas registradas" },
   { href: "/fechar-caixa", label: "Fechar Caixa", icon: Vault, perfis: ["ADMIN", "CAIXA"], descricao: "Conferir e fechar o caixa do dia" },
   { href: "/reabrir-caixa", label: "Reabrir Caixa", icon: RotateCcw, perfis: ["ADMIN"], descricao: "Reabrir um caixa já fechado" },
   { href: "/estoque", label: "Estoque", icon: Package, perfis: ["ADMIN", "CAIXA"], descricao: "Produtos, preços e estoque" },

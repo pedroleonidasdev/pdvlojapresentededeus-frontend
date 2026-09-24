@@ -190,7 +190,7 @@ export default function VendasPage() {
 
   return (
     <div>
-      <PageHeader title="Vendas" subtitle="Consulte, filtre e corrija vendas registradas" />
+      <PageHeader title="Relatórios de Vendas" subtitle="Consulte, filtre e corrija vendas registradas" />
 
       <div className="p-4 md:p-8 space-y-4">
         <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
@@ -342,6 +342,14 @@ export default function VendasPage() {
                     )}
                   </div>
                 </div>
+                <p className="mt-2 text-xs text-foreground/70 leading-relaxed">
+                  {venda.itens.map((item, i) => (
+                    <span key={item.id}>
+                      {i > 0 && ", "}
+                      <span className="font-medium">{item.quantidade}x</span> {item.produtoNome}
+                    </span>
+                  ))}
+                </p>
                 {erroReimpressao?.id === venda.id && (
                   <p className="mt-2 text-xs text-danger">{erroReimpressao.mensagem}</p>
                 )}
