@@ -1,9 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Venda, FormaPagamento } from "@/lib/types";
+import { Venda, FormaPagamento, Categoria, Produto } from "@/lib/types";
 import { formatarMoeda, formatarDataHora, limiteDiaBrasiliaParaUtc, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import { imprimirCupom } from "@/lib/impressora";
 import PageHeader from "@/components/PageHeader";
@@ -66,6 +66,30 @@ export default function VendasPage() {
   // filtro de busca específica — aplicado sobre o que já foi carregado, sem nova requisição.
   const [busca, setBusca] = useState("");
   const [formaFiltro, setFormaFiltro] = useState<FormaPagamento | "TODAS">("TODAS");
+  const [categoriaFiltro, setCategoriaFiltro] = useState<number | "TODAS">("TODAS");
+
+  // a venda não traz a categoria do produto (só id/nome/qtd/preço), então
+  // carregamos categorias + produtos uma vez, à parte do período buscado, só
+  // pra montar o filtro e saber a que categoria cada item pertence.
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [categoriaPorProduto, setCategoriaPorProduto] = useState<Map<number, number>>(new Map());
+
+  useEffect(() => {
+    async function carregarCategoriasEProdutos() {
+      const [{ data: cats }, { data: produtos }] = await Promise.all([
+        api.get<Categoria[]>("/categorias"),
+        api.get<Produto[]>("/produtos"),
+      ]);
+      setCategorias(cats);
+      setCategoriaPorProduto(new Map(
+        produtos.filter((p) => p.categoria).map((p) => [p.id, p.categoria!.id])
+      ));
+    }
+    carregarCategoriasEProdutos().catch(() => {
+      // filtro de categoria é um extra — se falhar, a tela de vendas continua
+      // funcionando normalmente, só sem essa opção de filtro
+    });
+  }, []);
 
   async function carregar() {
     setCarregando(true);
@@ -92,6 +116,12 @@ export default function VendasPage() {
     const termo = busca.trim().toLowerCase();
     return vendas.filter((venda) => {
       if (formaFiltro !== "TODAS" && venda.formaPagamento !== formaFiltro) return false;
+      if (
+        categoriaFiltro !== "TODAS" &&
+        !venda.itens.some((item) => categoriaPorProduto.get(item.produtoId) === categoriaFiltro)
+      ) {
+        return false;
+      }
       if (!termo) return true;
       const combina =
         String(venda.id).includes(termo) ||
@@ -100,7 +130,7 @@ export default function VendasPage() {
         venda.itens.some((item) => item.produtoNome.toLowerCase().includes(termo));
       return combina;
     });
-  }, [vendas, busca, formaFiltro]);
+  }, [vendas, busca, formaFiltro, categoriaFiltro, categoriaPorProduto]);
 
   return (
     <div>
@@ -138,6 +168,21 @@ export default function VendasPage() {
                 {FORMAS.map((f) => (
                   <option key={f} value={f}>
                     {LABEL_FORMA_PAGAMENTO[f]}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-muted mb-1.5">Categoria</label>
+              <select
+                value={categoriaFiltro}
+                onChange={(e) => setCategoriaFiltro(e.target.value === "TODAS" ? "TODAS" : Number(e.target.value))}
+                className="input"
+              >
+                <option value="TODAS">Todas</option>
+                {categorias.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.nome}
                   </option>
                 ))}
               </select>
