@@ -7,6 +7,7 @@ import { useAuth } from "@/lib/auth-context";
 import { LogOut, UserCog, X } from "lucide-react";
 import { NAV_ITEMS, LayoutGrid } from "@/lib/nav-items";
 import TrocarUsuarioModal from "./TrocarUsuarioModal";
+import CaixaStatusBadge from "./CaixaStatusBadge";
 
 export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
   const pathname = usePathname();
@@ -42,6 +43,7 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
             <p className="text-[11px] text-accent-light/80 mt-0.5 flex items-center gap-1">
               <LayoutGrid className="w-3 h-3" /> Painel de controle
             </p>
+            <CaixaStatusBadge variant="dark" className="mt-1.5" />
           </div>
           <button
             onClick={onFechar}
