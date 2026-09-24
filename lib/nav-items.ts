@@ -19,7 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/reabrir-caixa", label: "Reabrir Caixa", icon: RotateCcw, perfis: ["ADMIN"], descricao: "Reabrir um caixa já fechado" },
   { href: "/estoque", label: "Estoque", icon: Package, perfis: ["ADMIN", "CAIXA"], descricao: "Produtos, preços e estoque" },
   { href: "/categorias", label: "Categorias", icon: Tag, perfis: ["ADMIN"], descricao: "Organizar os produtos por categoria" },
-  { href: "/relatorios", label: "Relatórios", icon: BarChart3, perfis: ["ADMIN"], descricao: "Faturamento e desempenho de vendas" },
+  { href: "/relatorios", label: "Faturamento", icon: BarChart3, perfis: ["ADMIN"], descricao: "Faturamento e desempenho de vendas" },
   { href: "/financas", label: "Controle Finanças", icon: Wallet, perfis: ["ADMIN"], descricao: "Despesas e fluxo financeiro" },
   { href: "/usuarios", label: "Usuários", icon: Users, perfis: ["ADMIN"], descricao: "Gerenciar contas de acesso" },
 ];
