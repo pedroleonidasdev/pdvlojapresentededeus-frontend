@@ -13,7 +13,7 @@ import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import EditarDataHoraModal from "@/components/EditarDataHoraModal";
 import FiltroCheckbox from "@/components/FiltroCheckbox";
-import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText } from "lucide-react";
+import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText, Eye, EyeOff } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO", "MULTIPLO"];
 
@@ -69,6 +69,10 @@ export default function VendasPage() {
 
   // filtro de busca específica — aplicado sobre o que já foi carregado, sem nova requisição.
   const [busca, setBusca] = useState("");
+  // ativado, mascara os valores em R$ na tela (e, por consequência, também na
+  // impressão — Ctrl+P imprime exatamente o que está na tela)
+  const [ocultarValores, setOcultarValores] = useState(false);
+  const valor = (v: number) => (ocultarValores ? "R$ ••••" : formatarMoeda(v));
   // null = "todas selecionadas" (sem filtro) — é o estado inicial, antes do
   // usuário desmarcar algo no filtro tipo Excel (ver FiltroCheckbox)
   const [formasSelecionadas, setFormasSelecionadas] = useState<Set<FormaPagamento> | null>(null);
@@ -256,6 +260,18 @@ export default function VendasPage() {
             {buscou && vendasFiltradas.length > 0 && (
               <>
                 <button
+                  onClick={() => setOcultarValores((v) => !v)}
+                  title="Oculta os valores em R$ na tela — útil pra imprimir a lista sem mostrar os valores"
+                  className={`flex items-center gap-2 text-sm font-medium px-4 py-2.5 rounded-lg border transition ${
+                    ocultarValores
+                      ? "bg-primary-light border-primary/30 text-primary-dark"
+                      : "bg-surface border-border text-foreground hover:bg-background"
+                  }`}
+                >
+                  {ocultarValores ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  {ocultarValores ? "Valores ocultos" : "Ocultar valores"}
+                </button>
+                <button
                   onClick={exportarExcel}
                   className="flex items-center gap-2 bg-accent hover:bg-accent-dark text-white text-sm font-medium px-4 py-2.5 rounded-lg transition"
                 >
@@ -321,7 +337,7 @@ export default function VendasPage() {
                       {venda.formaPagamento === "MULTIPLO" && venda.pagamentos?.length > 0 && (
                         <span className="text-[11px]">
                           {venda.pagamentos
-                            .map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]} ${formatarMoeda(p.valor)}`)
+                            .map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]} ${valor(p.valor)}`)
                             .join(" + ")}
                         </span>
                       )}
@@ -329,7 +345,7 @@ export default function VendasPage() {
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
                     <span className="font-mono font-semibold text-foreground whitespace-nowrap">
-                      {formatarMoeda(venda.total)}
+                      {valor(venda.total)}
                     </span>
                     <button
                       onClick={() => reimprimir(venda)}
