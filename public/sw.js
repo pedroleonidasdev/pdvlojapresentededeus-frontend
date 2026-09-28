@@ -32,3 +32,42 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(caches.match(event.request).then((res) => res || fetch(event.request)));
   }
 });
+
+// --- Notificações push (venda registrada / caixa aberto / caixa fechado) ---
+// O backend manda um payload JSON simples: { titulo, corpo, url }.
+self.addEventListener("push", (event) => {
+  let dados = { titulo: "Sistema de Gestão", corpo: "Você tem uma nova notificação.", url: "/inicio" };
+  try {
+    if (event.data) dados = { ...dados, ...event.data.json() };
+  } catch {
+    // payload não veio em JSON (não deveria acontecer) — usa os valores padrão acima
+  }
+
+  event.waitUntil(
+    self.registration.showNotification(dados.titulo, {
+      body: dados.corpo,
+      icon: "/icon-192.png",
+      badge: "/icon-192.png",
+      data: { url: dados.url || "/inicio" },
+    })
+  );
+});
+
+// Ao clicar na notificação: foca uma aba já aberta do sistema (navegando pra
+// URL certa) ou abre uma nova, se não houver nenhuma aberta.
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+  const destino = new URL(event.notification.data?.url || "/inicio", self.location.origin).href;
+
+  event.waitUntil(
+    self.clients.matchAll({ type: "window", includeUncontrolled: true }).then((clientList) => {
+      for (const client of clientList) {
+        if ("focus" in client) {
+          client.navigate(destino);
+          return client.focus();
+        }
+      }
+      return self.clients.openWindow(destino);
+    })
+  );
+});

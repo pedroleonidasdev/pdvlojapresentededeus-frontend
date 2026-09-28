@@ -2,7 +2,7 @@
   "name": "Sistema PDV - Presente de Deus",
   "short_name": "Sistema PDV",
   "description": "Ponto de venda, estoque, trocas e caixa da loja.",
-  "start_url": "/pdv",
+  "start_url": "/inicio",
   "scope": "/",
   "display": "standalone",
   "orientation": "portrait-primary",

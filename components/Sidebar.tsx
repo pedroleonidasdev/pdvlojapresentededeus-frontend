@@ -8,6 +8,7 @@ import { LogOut, UserCog, X } from "lucide-react";
 import { NAV_ITEMS, LayoutGrid } from "@/lib/nav-items";
 import TrocarUsuarioModal from "./TrocarUsuarioModal";
 import CaixaStatusBadge from "./CaixaStatusBadge";
+import NotificacoesPushButton from "./NotificacoesPushButton";
 
 export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
   const pathname = usePathname();
@@ -94,6 +95,7 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
               {usuario.perfil === "ADMIN" ? "Administrador" : "Operador de caixa"}
             </p>
           </div>
+          {usuario.perfil === "ADMIN" && <NotificacoesPushButton />}
           <button
             onClick={() => setTrocandoUsuario(true)}
             className="group w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm transition-all duration-200 border-l-2 border-transparent text-white/70 hover:bg-white/10 hover:text-white hover:border-white/30"
