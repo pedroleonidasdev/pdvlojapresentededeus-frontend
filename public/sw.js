@@ -71,3 +71,68 @@ self.addEventListener("notificationclick", (event) => {
     })
   );
 });
+
+// --- Renovação automática da inscrição (raiz do "parou de notificar") ----
+// O navegador pode trocar/renovar a inscrição push sozinho por conta própria
+// (rotação de segurança do provedor, atualização do Chrome etc.), inclusive
+// com o app inteiro fechado. Sem tratar esse evento, a inscrição antiga
+// morre, o backend nunca fica sabendo da nova, e as notificações somem sem
+// erro nenhum visível pra ninguém. Config (token/URL da API/chave VAPID) vem
+// do IndexedDB, onde lib/push.ts a deixa salva sempre que o app abre (ver
+// atualizarConfigServiceWorker lá).
+
+const NOME_BANCO_CONFIG = "pdv-notificacoes";
+const NOME_TABELA_CONFIG = "config";
+
+function base64UrlParaUint8Array(base64Url) {
+  const base64 = (base64Url + "=".repeat((4 - (base64Url.length % 4)) % 4))
+    .replace(/-/g, "+")
+    .replace(/_/g, "/");
+  const bruto = atob(base64);
+  return Uint8Array.from([...bruto].map((c) => c.charCodeAt(0)));
+}
+
+function lerConfig(chave) {
+  return new Promise((resolve) => {
+    const pedido = indexedDB.open(NOME_BANCO_CONFIG, 1);
+    pedido.onupgradeneeded = () => pedido.result.createObjectStore(NOME_TABELA_CONFIG);
+    pedido.onsuccess = () => {
+      const transacao = pedido.result.transaction(NOME_TABELA_CONFIG, "readonly");
+      const consulta = transacao.objectStore(NOME_TABELA_CONFIG).get(chave);
+      consulta.onsuccess = () => resolve(consulta.result || null);
+      consulta.onerror = () => resolve(null);
+    };
+    pedido.onerror = () => resolve(null);
+  });
+}
+
+self.addEventListener("pushsubscriptionchange", (event) => {
+  event.waitUntil(
+    (async () => {
+      const vapidPublicKey = await lerConfig("vapidPublicKey");
+      if (!vapidPublicKey) return; // sem config salva ainda, nada a fazer
+
+      const novaInscricao = await self.registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: base64UrlParaUint8Array(vapidPublicKey),
+      });
+
+      const [token, apiUrl] = await Promise.all([lerConfig("token"), lerConfig("apiUrl")]);
+      if (!token || !apiUrl) return; // sem sessão salva — o app reconcilia sozinho na próxima abertura
+
+      const json = novaInscricao.toJSON();
+      try {
+        await fetch(`${apiUrl}/notificacoes/subscribe`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({
+            endpoint: json.endpoint,
+            keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
+          }),
+        });
+      } catch {
+        // sem rede/token expirado — o app reconcilia sozinho na próxima abertura
+      }
+    })()
+  );
+});

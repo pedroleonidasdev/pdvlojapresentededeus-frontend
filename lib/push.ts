@@ -48,6 +48,68 @@ export function motivoSemSuporte(): string {
   return "Este navegador não tem suporte a notificações push.";
 }
 
+// --- Config compartilhada com o service worker via IndexedDB -------------
+// O navegador pode renovar a inscrição push sozinho a qualquer momento (evento
+// "pushsubscriptionchange"), inclusive com o app fechado — nesse caso é o
+// próprio service worker (sw.js) que precisa recriar a inscrição e avisar o
+// backend, sem depender de nenhuma aba aberta. Só que o service worker não
+// tem acesso ao localStorage nem ao axios da página, então guardamos aqui
+// (nessa mesma origem, lida também pelo sw.js) o token atual, a URL da API e
+// a chave VAPID, toda vez que o app abre — assim o service worker sempre tem
+// o que precisa à mão, mesmo acordando sozinho em segundo plano.
+const NOME_BANCO_CONFIG = "pdv-notificacoes";
+const NOME_TABELA_CONFIG = "config";
+
+function abrirBancoConfig(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const pedido = indexedDB.open(NOME_BANCO_CONFIG, 1);
+    pedido.onupgradeneeded = () => {
+      pedido.result.createObjectStore(NOME_TABELA_CONFIG);
+    };
+    pedido.onsuccess = () => resolve(pedido.result);
+    pedido.onerror = () => reject(pedido.error);
+  });
+}
+
+async function salvarConfig(chave: string, valor: string): Promise<void> {
+  const banco = await abrirBancoConfig();
+  await new Promise<void>((resolve, reject) => {
+    const transacao = banco.transaction(NOME_TABELA_CONFIG, "readwrite");
+    transacao.objectStore(NOME_TABELA_CONFIG).put(valor, chave);
+    transacao.oncomplete = () => resolve();
+    transacao.onerror = () => reject(transacao.error);
+  });
+}
+
+/**
+ * Atualiza, no IndexedDB, o token de login atual, a URL da API e a chave
+ * VAPID — pro service worker conseguir se reinscrever e avisar o backend
+ * sozinho caso a inscrição seja renovada pelo navegador em segundo plano.
+ * Best-effort: se falhar (navegador sem IndexedDB, aba anônima restrita
+ * etc.), não afeta o funcionamento normal do app nem das notificações em
+ * primeiro plano.
+ */
+async function atualizarConfigServiceWorker(): Promise<void> {
+  try {
+    const token = localStorage.getItem("pdv_token");
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const apiUrl = api.defaults.baseURL;
+    if (token) await salvarConfig("token", token);
+    if (apiUrl) await salvarConfig("apiUrl", apiUrl);
+    if (vapidPublicKey) await salvarConfig("vapidPublicKey", vapidPublicKey);
+  } catch {
+    // best-effort — ver comentário acima
+  }
+}
+
+async function enviarInscricaoAoBackend(inscricao: PushSubscription): Promise<void> {
+  const json = inscricao.toJSON();
+  await api.post("/notificacoes/subscribe", {
+    endpoint: json.endpoint,
+    keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
+  });
+}
+
 /** Inscrição já existe E o navegador ainda tem permissão concedida? */
 export async function estaInscrito(): Promise<boolean> {
   if (!suportaNotificacaoPush() || Notification.permission !== "granted") return false;
@@ -82,11 +144,29 @@ export async function ativarNotificacoes(): Promise<void> {
     });
   }
 
-  const json = inscricao.toJSON();
-  await api.post("/notificacoes/subscribe", {
-    endpoint: json.endpoint,
-    keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
-  });
+  await enviarInscricaoAoBackend(inscricao);
+  await atualizarConfigServiceWorker();
+}
+
+/**
+ * Reconfirma com o backend a inscrição que o navegador já tem — sem pedir
+ * permissão de novo e sem lançar erro. Chamada silenciosamente toda vez que
+ * o app abre (ver NotificacoesPushButton), pra "curar" o caso mais comum de
+ * notificação parar de chegar: o backend apagou o registro (ex.: recebeu um
+ * 404/410 do provedor) mas o navegador continua achando que está inscrito.
+ * Como o /subscribe do backend faz upsert por endpoint, reenviar é sempre
+ * seguro, mesmo quando já está tudo certo.
+ */
+export async function sincronizarInscricao(): Promise<void> {
+  if (!suportaNotificacaoPush() || Notification.permission !== "granted") return;
+  try {
+    const registro = await navigator.serviceWorker.ready;
+    const inscricao = await registro.pushManager.getSubscription();
+    if (inscricao) await enviarInscricaoAoBackend(inscricao);
+    await atualizarConfigServiceWorker();
+  } catch {
+    // best-effort — se falhar, tenta de novo na próxima vez que o app abrir
+  }
 }
 
 /** Cancela a inscrição neste navegador (backend e navegador). */

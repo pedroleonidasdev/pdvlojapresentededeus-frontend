@@ -6,6 +6,7 @@ import {
   ativarNotificacoes,
   desativarNotificacoes,
   estaInscrito,
+  sincronizarInscricao,
   suportaNotificacaoPush,
   motivoSemSuporte,
 } from "@/lib/push";
@@ -32,7 +33,12 @@ export default function NotificacoesPushButton() {
         setEstado("bloqueado");
         return;
       }
-      setEstado((await estaInscrito()) ? "ativado" : "suportado");
+      const inscrito = await estaInscrito();
+      setEstado(inscrito ? "ativado" : "suportado");
+      // reconfirma com o backend em segundo plano, sem travar a tela nem
+      // mostrar erro — repara sozinho o caso do backend ter perdido o
+      // registro desta inscrição (ver comentário em sincronizarInscricao)
+      if (inscrito) sincronizarInscricao();
     }
     checar();
   }, []);
