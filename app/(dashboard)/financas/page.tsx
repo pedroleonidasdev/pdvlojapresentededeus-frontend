@@ -31,6 +31,9 @@ import {
   AlertTriangle,
   Eye,
   EyeOff,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
 } from "lucide-react";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
@@ -153,6 +156,39 @@ function vencimentoRelevante(d: Despesa): { data: string | null; pago: boolean }
  * são apenas dinheiro mudando de lugar (gaveta -> banco/bolso e vice-versa),
  * não uma despesa nova.
  */
+/** Cabeçalho de coluna clicável, com seta indicando a ordenação atual. */
+function BotaoOrdenar({
+  coluna,
+  label,
+  ativo,
+  asc,
+  onClick,
+  alinhamento = "left",
+}: {
+  coluna: "vencimento" | "valor" | "registro";
+  label: string;
+  ativo: "vencimento" | "valor" | "registro";
+  asc: boolean;
+  onClick: (coluna: "vencimento" | "valor" | "registro") => void;
+  alinhamento?: "left" | "right";
+}) {
+  const estaAtivo = ativo === coluna;
+  const Icone = !estaAtivo ? ArrowUpDown : asc ? ArrowUp : ArrowDown;
+  return (
+    <button
+      type="button"
+      onClick={() => onClick(coluna)}
+      className={`inline-flex items-center gap-1 hover:text-foreground transition ${
+        estaAtivo ? "text-foreground" : "text-muted"
+      } ${alinhamento === "right" ? "flex-row-reverse" : ""}`}
+      title={`Ordenar por ${label.toLowerCase()}`}
+    >
+      {label}
+      <Icone className={`w-3 h-3 ${estaAtivo ? "" : "opacity-40"}`} />
+    </button>
+  );
+}
+
 export default function FinancasPage() {
   const hoje = new Date();
   const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
@@ -305,6 +341,21 @@ export default function FinancasPage() {
     };
   }, [despesas, totalFaturado]);
 
+  // ordenação da lista: por padrão, vencimento do mais antigo pro mais novo —
+  // é o que faz mais sentido pra acompanhar o que vence primeiro. O usuário
+  // pode clicar nos cabeçalhos das colunas pra trocar o critério/direção.
+  const [ordenarPor, setOrdenarPor] = useState<"vencimento" | "valor" | "registro">("vencimento");
+  const [ordemAscendente, setOrdemAscendente] = useState(true);
+
+  function alternarOrdenacao(coluna: "vencimento" | "valor" | "registro") {
+    if (ordenarPor === coluna) {
+      setOrdemAscendente((atual) => !atual);
+    } else {
+      setOrdenarPor(coluna);
+      setOrdemAscendente(true);
+    }
+  }
+
   const despesasFiltradas = useMemo(() => {
     let lista = filtroTipo === "TODOS" ? despesas : despesas.filter((d) => d.tipo === filtroTipo);
     if (filtroStatus !== "TODOS") {
@@ -315,8 +366,25 @@ export default function FinancasPage() {
         return filtroStatus === "PAGO" ? pagas === total : pagas < total;
       });
     }
-    return lista;
-  }, [despesas, filtroTipo, filtroStatus]);
+    const sinal = ordemAscendente ? 1 : -1;
+
+    return [...lista].sort((a, b) => {
+      if (ordenarPor === "valor") {
+        return (a.valor - b.valor) * sinal;
+      }
+      if (ordenarPor === "registro") {
+        return (a.dataHora < b.dataHora ? -1 : a.dataHora > b.dataHora ? 1 : 0) * sinal;
+      }
+      // "vencimento": à vista é a própria data, parcelado é a parcela em
+      // aberto mais antiga — sem data vai pro fim, não mistura com datas reais
+      const dataA = vencimentoRelevante(a).data;
+      const dataB = vencimentoRelevante(b).data;
+      if (!dataA && !dataB) return 0;
+      if (!dataA) return 1;
+      if (!dataB) return -1;
+      return (dataA < dataB ? -1 : dataA > dataB ? 1 : 0) * sinal;
+    });
+  }, [despesas, filtroTipo, filtroStatus, ordenarPor, ordemAscendente]);
 
   return (
     <div>
@@ -544,10 +612,16 @@ export default function FinancasPage() {
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Categoria</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Fornecedor / descrição</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Forma</th>
-                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Registro</th>
-                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Vencimento</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">
+                    <BotaoOrdenar coluna="registro" label="Registro" ativo={ordenarPor} asc={ordemAscendente} onClick={alternarOrdenacao} />
+                  </th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">
+                    <BotaoOrdenar coluna="vencimento" label="Vencimento" ativo={ordenarPor} asc={ordemAscendente} onClick={alternarOrdenacao} />
+                  </th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide">Usuário</th>
-                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Valor</th>
+                  <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">
+                    <BotaoOrdenar coluna="valor" label="Valor" ativo={ordenarPor} asc={ordemAscendente} onClick={alternarOrdenacao} alinhamento="right" />
+                  </th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-center">Pagamento</th>
                   <th className="px-4 py-2.5 font-semibold text-[11px] uppercase tracking-wide text-right">Ações</th>
                 </tr>
