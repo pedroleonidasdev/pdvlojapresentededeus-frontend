@@ -14,8 +14,8 @@ import {
   limiteDiaBrasiliaParaUtc,
   LABEL_FORMA_PAGAMENTO,
 } from "@/lib/format";
+import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
-import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
 import {
   Loader2,
@@ -24,8 +24,6 @@ import {
   Wallet,
   Clock,
   User,
-  Trash2,
-  Pencil,
   Download,
   Filter,
   Lock,
@@ -34,6 +32,7 @@ import {
   Repeat,
   RotateCcw,
   FileText,
+  ArrowRight,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
@@ -52,9 +51,6 @@ export default function RelatoriosPage() {
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [jaGerou, setJaGerou] = useState(false);
-  const [excluindoId, setExcluindoId] = useState<number | null>(null);
-  const [excluindoTodas, setExcluindoTodas] = useState(false);
-  const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
 
   // caixa aberto no momento (independe do período filtrado)
   const [caixaAtual, setCaixaAtual] = useState<Caixa | null | undefined>(undefined);
@@ -130,33 +126,6 @@ export default function RelatoriosPage() {
       setUsuarioSelecionado("TODOS");
     } finally {
       setCarregando(false);
-    }
-  }
-
-  async function excluirVenda(id: number) {
-    if (!confirm(`Excluir a venda #${id}? O estoque dos produtos será devolvido.`)) return;
-    setExcluindoId(id);
-    try {
-      await api.delete(`/vendas/${id}`);
-      await gerar();
-    } finally {
-      setExcluindoId(null);
-    }
-  }
-
-  async function excluirTodasAsVendas() {
-    if (
-      !confirm(
-        "Tem certeza que deseja excluir TODAS as vendas do sistema? Essa ação não pode ser desfeita e o estoque de todos os produtos vendidos será devolvido."
-      )
-    )
-      return;
-    setExcluindoTodas(true);
-    try {
-      await api.delete("/vendas");
-      await gerar();
-    } finally {
-      setExcluindoTodas(false);
     }
   }
 
@@ -627,19 +596,14 @@ export default function RelatoriosPage() {
             </button>
           )}
 
-          {isAdmin && vendas.length > 0 && (
-            <button
-              onClick={excluirTodasAsVendas}
-              disabled={excluindoTodas}
-              className="ml-auto flex items-center gap-2 bg-danger/10 hover:bg-danger/20 text-danger text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-60 h-fit"
+          {jaGerou && vendasFiltradas.length > 0 && (
+            <Link
+              href={`/vendas?inicio=${inicio}&fim=${fim}`}
+              className="ml-auto flex items-center gap-2 text-sm font-medium px-4 py-2 rounded-lg border border-border text-foreground hover:bg-background transition h-fit"
             >
-              {excluindoTodas ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Trash2 className="w-4 h-4" />
-              )}
-              Excluir todas as vendas
-            </button>
+              Ver lista completa de vendas
+              <ArrowRight className="w-4 h-4" />
+            </Link>
           )}
         </div>
 
@@ -974,90 +938,9 @@ export default function RelatoriosPage() {
               )}
             </div>
 
-            <div className="bg-surface border border-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold mb-4">Vendas do período</h3>
-
-              {vendasFiltradas.length === 0 ? (
-                <p className="text-sm text-muted">Nenhuma venda no período.</p>
-              ) : (
-                <ul className="divide-y divide-border">
-                  {vendasFiltradas.map((venda) => (
-                    <li key={venda.id} className="py-4 first:pt-0 last:pb-0">
-                      <div className="flex items-start justify-between gap-4 mb-2">
-                        <div className="flex flex-col gap-1">
-                          <span className="text-xs font-mono text-primary">
-                            Venda #{venda.id}
-                          </span>
-                          <div className="flex items-center gap-3 text-xs text-muted">
-                            <span className="flex items-center gap-1">
-                              <Clock className="w-3 h-3" />
-                              {formatarDataHora(venda.dataHora)}
-                            </span>
-                            <span className="flex items-center gap-1">
-                              <User className="w-3 h-3" />
-                              {venda.usuarioNome}
-                            </span>
-                            <span className="px-1.5 py-0.5 rounded bg-primary-light text-primary-dark font-medium">
-                              {LABEL_FORMA_PAGAMENTO[venda.formaPagamento]}
-                            </span>
-                          </div>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono font-semibold text-foreground whitespace-nowrap">
-                            {formatarMoeda(venda.total)}
-                          </span>
-                          {isAdmin && (
-                            <button
-                              onClick={() => setVendaEmEdicao(venda)}
-                              className="text-muted hover:text-primary"
-                              title="Editar forma de pagamento"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                          )}
-                          {isAdmin && (
-                            <button
-                              onClick={() => excluirVenda(venda.id)}
-                              disabled={excluindoId === venda.id}
-                              className="text-danger/60 hover:text-danger disabled:opacity-40"
-                              title="Excluir venda"
-                            >
-                              {excluindoId === venda.id ? (
-                                <Loader2 className="w-4 h-4 animate-spin" />
-                              ) : (
-                                <Trash2 className="w-4 h-4" />
-                              )}
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      <ul className="font-mono text-xs text-muted space-y-1 pl-1">
-                        {venda.itens.map((item) => (
-                          <li key={item.id} className="flex justify-between gap-2">
-                            <span>
-                              {item.quantidade}x {item.produtoNome}
-                            </span>
-                            <span>{formatarMoeda(item.subtotal)}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
           </>
         )}
       </div>
-
-      {vendaEmEdicao && (
-        <EditarFormaPagamentoModal
-          venda={vendaEmEdicao}
-          onFechar={() => setVendaEmEdicao(null)}
-          onSalvo={gerar}
-        />
-      )}
 
       {confirmandoFechamento && (
         <ConfirmarFechamentoCaixaModal

@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -13,7 +14,7 @@ import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import EditarDataHoraModal from "@/components/EditarDataHoraModal";
 import FiltroCheckbox from "@/components/FiltroCheckbox";
-import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText, Eye, EyeOff } from "lucide-react";
+import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText, Eye, EyeOff, Trash2 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO", "MULTIPLO"];
 
@@ -31,16 +32,33 @@ function dataDeHoje(offsetDias = 0): string {
  * ver /relatorios.
  */
 export default function VendasPage() {
+  // useSearchParams só funciona dentro de um Suspense (exigência do Next.js
+  // pra essa página poder continuar sendo pré-renderizada como estática) —
+  // é assim que a tela sabe o período quando chega pelo link de Faturamento.
+  return (
+    <Suspense fallback={null}>
+      <VendasPageConteudo />
+    </Suspense>
+  );
+}
+
+function VendasPageConteudo() {
   const { usuario } = useAuth();
   const isAdmin = usuario?.perfil === "ADMIN";
+  const searchParams = useSearchParams();
+  const inicioDaUrl = searchParams.get("inicio");
+  const fimDaUrl = searchParams.get("fim");
 
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [carregando, setCarregando] = useState(false);
   // só vira "true" depois do primeiro clique em Buscar — evita buscar
   // automaticamente ao abrir a tela, antes do usuário escolher o período
+  // (exceto quando o período já vem pronto pela URL — ver useEffect abaixo)
   const [buscou, setBuscou] = useState(false);
   const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
   const [vendaDataHoraEmEdicao, setVendaDataHoraEmEdicao] = useState<Venda | null>(null);
+  const [excluindoId, setExcluindoId] = useState<number | null>(null);
+  const [excluindoTodas, setExcluindoTodas] = useState(false);
 
   // reimpressão do cupom de uma venda já finalizada — guarda qual venda está
   // imprimindo no momento (id) e o erro específico dela, se der problema
@@ -64,8 +82,8 @@ export default function VendasPage() {
 
   // filtro de período — busca no backend. Padrão: só o dia de hoje (o
   // usuário troca a data acima se quiser ver outro período).
-  const [dataInicio, setDataInicio] = useState(dataDeHoje());
-  const [dataFim, setDataFim] = useState(dataDeHoje());
+  const [dataInicio, setDataInicio] = useState(inicioDaUrl || dataDeHoje());
+  const [dataFim, setDataFim] = useState(fimDaUrl || dataDeHoje());
 
   // filtro de busca específica — aplicado sobre o que já foi carregado, sem nova requisição.
   const [busca, setBusca] = useState("");
@@ -129,7 +147,42 @@ export default function VendasPage() {
   }
 
   // Sem busca automática ao abrir a tela: o usuário escolhe o período (ou
-  // mantém o padrão já preenchido) e clica em "Buscar".
+  // mantém o padrão já preenchido) e clica em "Buscar" — exceto quando a
+  // tela foi aberta com período na URL (vindo do link "Ver lista completa
+  // de vendas" em Faturamento), aí já busca direto pra poupar um clique.
+  useEffect(() => {
+    if (inicioDaUrl && fimDaUrl) {
+      carregar();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function excluirVenda(id: number) {
+    if (!confirm(`Excluir a venda #${id}? O estoque dos produtos será devolvido.`)) return;
+    setExcluindoId(id);
+    try {
+      await api.delete(`/vendas/${id}`);
+      await carregar();
+    } finally {
+      setExcluindoId(null);
+    }
+  }
+
+  async function excluirTodasAsVendas() {
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir TODAS as vendas do sistema? Essa ação não pode ser desfeita e o estoque de todos os produtos vendidos será devolvido."
+      )
+    )
+      return;
+    setExcluindoTodas(true);
+    try {
+      await api.delete("/vendas");
+      await carregar();
+    } finally {
+      setExcluindoTodas(false);
+    }
+  }
 
   function exportarExcel() {
     const linhas = vendasFiltradas.map((v) => {
@@ -299,6 +352,20 @@ export default function VendasPage() {
                   <FileText className="w-4 h-4" />
                   PDF
                 </button>
+                {isAdmin && vendas.length > 0 && (
+                  <button
+                    onClick={excluirTodasAsVendas}
+                    disabled={excluindoTodas}
+                    className="flex items-center gap-2 bg-danger/10 hover:bg-danger/20 text-danger text-sm font-medium px-4 py-2.5 rounded-lg transition disabled:opacity-60"
+                  >
+                    {excluindoTodas ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
+                    Excluir todas
+                  </button>
+                )}
               </>
             )}
           </div>
@@ -387,6 +454,20 @@ export default function VendasPage() {
                         title="Editar data e hora"
                       >
                         <CalendarClock className="w-4 h-4" />
+                      </button>
+                    )}
+                    {isAdmin && (
+                      <button
+                        onClick={() => excluirVenda(venda.id)}
+                        disabled={excluindoId === venda.id}
+                        className="text-danger/60 hover:text-danger disabled:opacity-40"
+                        title="Excluir venda"
+                      >
+                        {excluindoId === venda.id ? (
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-4 h-4" />
+                        )}
                       </button>
                     )}
                   </div>
