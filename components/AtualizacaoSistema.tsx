@@ -5,7 +5,7 @@ import { CheckCircle2, Loader2, RefreshCw } from "lucide-react";
 
 // Versão embutida neste JavaScript (definida em next.config.ts).
 const VERSAO_ATUAL = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
-const CHAVE_ATUALIZADO = "pdv_versao_atualizada";
+const CHAVE_VERSAO_VISTA = "pdv_versao_vista";
 const INTERVALO_CHECAGEM_MS = 5 * 60_000;
 const ADIAMENTO_MS = 10 * 60_000;
 
@@ -13,8 +13,11 @@ const ADIAMENTO_MS = 10 * 60_000;
  * Avisa, no meio da tela, quando existe uma versão nova do sistema publicada.
  * - Confere ao abrir o painel (logo após o login), ao voltar para a aba/app e
  *   a cada 5 minutos.
- * - "Reiniciar sistema" recarrega a página (o login é mantido) e, ao voltar,
- *   mostra "Sistema atualizado com sucesso".
+ * - "Reiniciar sistema" recarrega a página (o login é mantido).
+ * - Sempre que o painel abre numa versão diferente da última que este
+ *   navegador viu (ex.: depois de reiniciar, ou ao entrar no dia seguinte),
+ *   mostra "Sistema atualizado com sucesso". Na primeira vez que o navegador
+ *   abre o sistema só registra a versão, sem mostrar nada.
  * - "Agora não" adia o aviso por 10 minutos, para não atrapalhar uma venda.
  */
 export default function AtualizacaoSistema() {
@@ -23,14 +26,13 @@ export default function AtualizacaoSistema() {
   const [reiniciando, setReiniciando] = useState(false);
   const adiadoAte = useRef(0);
 
-  // Voltou de um "Reiniciar sistema"? Então confirma que a versão nova subiu.
+  // Compara a versão atual com a última que este navegador já tinha visto.
   useEffect(() => {
+    if (process.env.NODE_ENV !== "production" || !VERSAO_ATUAL) return;
     try {
-      const salva = localStorage.getItem(CHAVE_ATUALIZADO);
-      if (salva) {
-        localStorage.removeItem(CHAVE_ATUALIZADO);
-        if (salva === VERSAO_ATUAL) setSucesso(true);
-      }
+      const vista = localStorage.getItem(CHAVE_VERSAO_VISTA);
+      if (vista && vista !== VERSAO_ATUAL) setSucesso(true);
+      localStorage.setItem(CHAVE_VERSAO_VISTA, VERSAO_ATUAL);
     } catch {
       // sem acesso ao localStorage: só não mostra a confirmação
     }
@@ -66,11 +68,6 @@ export default function AtualizacaoSistema() {
   function reiniciar() {
     if (!novaVersao) return;
     setReiniciando(true);
-    try {
-      localStorage.setItem(CHAVE_ATUALIZADO, novaVersao);
-    } catch {
-      // segue mesmo assim; só não aparece a confirmação depois
-    }
     window.location.reload();
   }
 
