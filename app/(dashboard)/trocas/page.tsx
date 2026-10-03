@@ -486,7 +486,7 @@ function ComprovanteTroca({ troca, onNovaTroca }: { troca: Troca; onNovaTroca: (
           <p className="font-semibold">PRESENTE DE DEUS</p>
           <p className="text-xs text-muted">Artigos Religiosos Católicos e Presentes</p>
           <p className="text-xs text-muted">CLN 07 Bloco B, Lote 1, Loja 04 — Riacho Fundo I, Brasília-DF</p>
-          <p className="text-xs text-muted">(61) 3264087 · @presentededeusartigosreligiososcatolicos</p>
+          <p className="text-xs text-muted">(61) 3264-0087 · @presentededeusartigosreligiososcatolicos</p>
           <p className="text-xs text-muted mt-2">Comprovante de troca #{troca.id}</p>
           <p className="text-xs text-muted">{formatarDataHora(troca.dataHora)}</p>
         </div>
