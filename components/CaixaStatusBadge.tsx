@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Caixa } from "@/lib/types";
+import { formatarDataHora } from "@/lib/format";
 
 /**
  * Bolinha de status do caixa: verde = aberto, vermelha = fechado.
@@ -63,14 +64,25 @@ export default function CaixaStatusBadge({
 
   if (variant === "dark") {
     return (
-      <div
-        className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
-          aberto ? "text-success-light" : "text-red-200"
-        } ${className}`}
-        title={aberto ? "Caixa aberto" : "Caixa fechado"}
-      >
-        {dot}
-        {aberto ? "Caixa aberto" : "Caixa fechado"}
+      <div className={className}>
+        <div
+          className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
+            aberto ? "text-success-light" : "text-red-200"
+          }`}
+          title={aberto ? "Caixa aberto" : "Caixa fechado"}
+        >
+          {dot}
+          {aberto ? "Caixa aberto" : "Caixa fechado"}
+        </div>
+        {aberto && caixa && (
+          <p
+            className="mt-0.5 pl-4 text-[10px] leading-tight text-white/60"
+            title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}
+          >
+            <span className="block truncate">{caixa.usuarioAberturaNome}</span>
+            <span className="block">{formatarDataHora(caixa.dataAbertura)}</span>
+          </p>
+        )}
       </div>
     );
   }
