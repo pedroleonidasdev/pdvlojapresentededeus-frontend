@@ -133,3 +133,28 @@ export const CATEGORIAS_DESPESA_SUGERIDAS = [
   "Doações",
   "Outros",
 ];
+
+/** "YYYY-MM-DD" (LocalDate do backend, sem fuso) -> "DD/MM/AAAA". */
+export function formatarDataISO(dataYYYYMMDD: string | null | undefined): string {
+  if (!dataYYYYMMDD) return "";
+  const [ano, mes, dia] = dataYYYYMMDD.slice(0, 10).split("-");
+  return `${dia}/${mes}/${ano}`;
+}
+
+const MESES = ["Janeiro", "Fevereiro", "Março", "Abril", "Maio", "Junho", "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"];
+
+/** Data por extenso no estilo do termo impresso: "10 de Abril de 2026" (fuso de Brasília). */
+export function formatarDataExtenso(iso: string): string {
+  const [ano, mes, dia] = dataBrasiliaISO(iso).split("-").map(Number);
+  return `${dia} de ${MESES[mes - 1]} de ${ano}`;
+}
+
+/**
+ * Comissão do consignatário: Livros e Bíblias = 15%, demais artigos = 20%.
+ * Mesma regra do backend (ConsignacaoService.percentualComissaoPara): decide
+ * pelo nome da categoria, ignorando acento e maiúscula.
+ */
+export function percentualComissaoConsignacao(categoriaNome: string | null | undefined): number {
+  const nome = (categoriaNome ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  return nome.includes("livro") || nome.includes("biblia") ? 15 : 20;
+}

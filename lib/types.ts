@@ -150,3 +150,38 @@ export interface Despesa {
   parcelas: Parcela[];
   pago: boolean;
 }
+
+export type StatusConsignacao = "ABERTA" | "FECHADA";
+
+export interface ItemConsignacao {
+  id: number;
+  produtoId: number;
+  produtoNome: string;
+  codigoBarras: string | null;
+  categoriaNome: string | null;
+  quantidadeEnviada: number;
+  quantidadeVendida: number;
+  quantidadeDevolvida: number;
+  precoUnitario: number;
+  percentualComissao: number;
+  valorEnviado: number;
+  valorVendido: number;
+  comissao: number;
+}
+
+export interface Consignacao {
+  id: number;
+  usuarioNome: string;
+  dataHora: string;
+  consignatario: string;
+  /** "YYYY-MM-DD" (data combinada para devolver o que não for vendido) */
+  prazoDevolucao: string | null;
+  observacao: string | null;
+  status: StatusConsignacao;
+  dataFechamento: string | null;
+  totalEnviado: number;
+  totalVendido: number;
+  totalComissao: number;
+  totalLiquidoLoja: number;
+  itens: ItemConsignacao[];
+}
