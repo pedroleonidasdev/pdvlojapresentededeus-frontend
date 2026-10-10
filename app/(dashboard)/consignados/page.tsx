@@ -233,38 +233,57 @@ function ModalNovaConsignacao({
       .replace(/[^a-z0-9]+/g, " ")
       .trim();
 
-  // texto pesquisável de cada produto (nome + categoria + código de barras), montado uma vez
+  // nome e código de barras já normalizados, montados uma vez por produto
   const textoDosProdutos = useMemo(() => {
-    const mapa = new Map<number, string>();
+    const mapa = new Map<number, { nome: string; codigo: string }>();
     for (const p of produtos) {
-      mapa.set(p.id, normalizar(`${p.nome} ${p.categoria?.nome ?? ""} ${p.codigoBarras ?? ""}`));
+      mapa.set(p.id, { nome: normalizar(p.nome), codigo: p.codigoBarras ?? "" });
     }
     return mapa;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [produtos]);
 
-  const categoriasDisponiveis = useMemo(
-    () =>
-      Array.from(new Set(produtos.map((p) => p.categoria?.nome ?? "Sem categoria"))).sort((x, y) =>
-        x.localeCompare(y, "pt-BR")
-      ),
-    [produtos]
-  );
-
+  // Busca precisa, por relevância (a categoria fica por conta do seletor ao lado):
+  //  1º o nome COMEÇA com o que foi digitado;
+  //  2º o que foi digitado aparece como palavra(s) inteira(s) no meio do nome;
+  //  3º cada palavra digitada começa alguma palavra do nome, em qualquer ordem.
+  // Cada palavra casa com o INÍCIO de uma palavra do nome ("terco" não acha "esterco");
+  // plural simples vale ("tercos" acha "terço"). Quem digita só números busca no código de barras.
   const produtosFiltrados = useMemo(() => {
-    // cada palavra digitada precisa aparecer no produto, em qualquer ordem
-    // ("terco azul" acha "AZUL TERÇO"); plural simples também vale ("tercos" acha "terço")
-    const palavras = normalizar(busca).split(" ").filter(Boolean);
-    return produtos
-      .filter((p) => {
-        if (filtroCategoria !== "todas" && (p.categoria?.nome ?? "Sem categoria") !== filtroCategoria) return false;
-        if (palavras.length === 0) return true;
-        const texto = textoDosProdutos.get(p.id) ?? "";
-        return palavras.every(
-          (w) => texto.includes(w) || (w.length > 3 && w.endsWith("s") && texto.includes(w.slice(0, -1)))
+    const consulta = normalizar(busca);
+    const palavras = consulta.split(" ").filter(Boolean);
+    const somenteDigitos = /^[0-9]+$/.test(consulta);
+
+    const lista: { p: Produto; nivel: number }[] = [];
+    for (const p of produtos) {
+      if (filtroCategoria !== "todas" && (p.categoria?.nome ?? "Sem categoria") !== filtroCategoria) continue;
+      if (palavras.length === 0) {
+        lista.push({ p, nivel: 0 });
+        continue;
+      }
+      const t = textoDosProdutos.get(p.id);
+      if (!t) continue;
+
+      if (somenteDigitos) {
+        if (t.codigo.includes(consulta)) lista.push({ p, nivel: t.codigo.startsWith(consulta) ? 0 : 1 });
+        continue;
+      }
+
+      const palavrasDoNome = t.nome.split(" ");
+      const comecaPalavra = (w: string) =>
+        palavrasDoNome.some(
+          (n) => n.startsWith(w) || (w.length > 3 && w.endsWith("s") && n.startsWith(w.slice(0, -1)))
         );
-      })
-      .sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
+      if (!palavras.every(comecaPalavra)) continue;
+
+      let nivel = 2;
+      if (t.nome.startsWith(consulta)) nivel = 0;
+      else if ((" " + t.nome).includes(" " + consulta)) nivel = 1;
+      lista.push({ p, nivel });
+    }
+    return lista
+      .sort((x, y) => x.nivel - y.nivel || x.p.nome.localeCompare(y.p.nome, "pt-BR"))
+      .map((x) => x.p);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [produtos, busca, filtroCategoria, textoDosProdutos]);
 
@@ -403,7 +422,7 @@ function ModalNovaConsignacao({
                 <input
                   className="input"
                   style={{ fontSize: "1.0625rem", padding: "0.8rem 0.75rem 0.8rem 3rem" }}
-                  placeholder="Buscar produto (nome, categoria ou código de barras)"
+                  placeholder="Buscar produto por nome ou código de barras"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                   onKeyDown={(e) => {
