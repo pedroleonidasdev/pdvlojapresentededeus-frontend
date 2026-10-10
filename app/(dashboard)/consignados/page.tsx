@@ -223,7 +223,25 @@ function ModalNovaConsignacao({
     };
   }, []);
 
-  const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+  // Normaliza para comparar: sem acento, minúsculo e com qualquer pontuação virando
+  // espaço ("P/CARRO" -> "p carro"). Assim "TERÇO", "terco" e "Terço" são a mesma coisa.
+  const normalizar = (t: string) =>
+    t
+      .normalize("NFD")
+      .replace(/[\u0300-\u036f]/g, "")
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, " ")
+      .trim();
+
+  // texto pesquisável de cada produto (nome + categoria + código de barras), montado uma vez
+  const textoDosProdutos = useMemo(() => {
+    const mapa = new Map<number, string>();
+    for (const p of produtos) {
+      mapa.set(p.id, normalizar(`${p.nome} ${p.categoria?.nome ?? ""} ${p.codigoBarras ?? ""}`));
+    }
+    return mapa;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produtos]);
 
   const categoriasDisponiveis = useMemo(
     () =>
@@ -234,15 +252,21 @@ function ModalNovaConsignacao({
   );
 
   const produtosFiltrados = useMemo(() => {
-    const termo = semAcento(busca.trim());
+    // cada palavra digitada precisa aparecer no produto, em qualquer ordem
+    // ("terco azul" acha "AZUL TERÇO"); plural simples também vale ("tercos" acha "terço")
+    const palavras = normalizar(busca).split(" ").filter(Boolean);
     return produtos
       .filter((p) => {
         if (filtroCategoria !== "todas" && (p.categoria?.nome ?? "Sem categoria") !== filtroCategoria) return false;
-        if (!termo) return true;
-        return semAcento(p.nome).includes(termo) || (p.codigoBarras ?? "").includes(termo);
+        if (palavras.length === 0) return true;
+        const texto = textoDosProdutos.get(p.id) ?? "";
+        return palavras.every(
+          (w) => texto.includes(w) || (w.length > 3 && w.endsWith("s") && texto.includes(w.slice(0, -1)))
+        );
       })
       .sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
-  }, [produtos, busca, filtroCategoria]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [produtos, busca, filtroCategoria, textoDosProdutos]);
 
   const idsSelecionados = useMemo(() => new Set(itens.map((i) => i.produto.id)), [itens]);
 
@@ -379,7 +403,7 @@ function ModalNovaConsignacao({
                 <input
                   className="input"
                   style={{ fontSize: "1.0625rem", padding: "0.8rem 0.75rem 0.8rem 3rem" }}
-                  placeholder="Filtrar a lista por nome ou código de barras"
+                  placeholder="Buscar produto (nome, categoria ou código de barras)"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
                   onKeyDown={(e) => {
