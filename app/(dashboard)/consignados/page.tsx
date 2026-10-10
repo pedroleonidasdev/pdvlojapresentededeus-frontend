@@ -25,6 +25,7 @@ import {
   Clock,
   Lock,
   Pencil,
+  Package,
 } from "lucide-react";
 
 function mensagemErro(e: unknown, padrao: string): string {
@@ -294,6 +295,18 @@ function ModalConsignacaoForm({
   const [carregandoCatalogo, setCarregandoCatalogo] = useState(true);
   const [busca, setBusca] = useState("");
   const [categoriaSel, setCategoriaSel] = useState<string | null>(null); // id da categoria, SEM_CATEGORIA ou null (todas)
+  const [limite, setLimite] = useState(LIMITE_RESULTADOS); // quantos resultados mostrar (cresce com "Mostrar mais")
+  // no celular o modal vira 3 abas (Dados / Produtos / Itens); no computador tudo aparece junto
+  const [aba, setAba] = useState<"dados" | "produtos" | "itens">(editando ? "itens" : "dados");
+
+  function alterarBusca(valor: string) {
+    setBusca(valor);
+    setLimite(LIMITE_RESULTADOS);
+  }
+  function alterarCategoria(valor: string | null) {
+    setCategoriaSel(valor);
+    setLimite(LIMITE_RESULTADOS);
+  }
 
   useEffect(() => {
     let ativo = true;
@@ -423,250 +436,351 @@ function ModalConsignacaoForm({
     }
   }
 
-  const chip = (ativo: boolean) =>
-    `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
-      ativo ? "bg-primary text-white border-primary" : "bg-surface border-border text-foreground hover:border-primary"
+  /** Tira 1 unidade; se era a última, remove o item da consignação. */
+  function diminuir(produtoId: number) {
+    const atual = qtdNaLista(produtoId);
+    if (atual <= 1) setItens((prev) => prev.filter((x) => x.produtoId !== produtoId));
+    else definirQuantidade(produtoId, atual - 1);
+  }
+
+  function limparTudo() {
+    if (itens.length === 0) return;
+    if (confirm(`Remover os ${itens.length} produto(s) da lista?`)) setItens([]);
+  }
+
+  const plural = (n: number, um: string, varios: string) => (n === 1 ? um : varios);
+  const botaoAba = (id: typeof aba) =>
+    `flex-1 px-3 py-2.5 text-sm font-medium border-b-2 transition ${
+      aba === id ? "border-primary text-primary" : "border-transparent text-muted hover:text-foreground"
     }`;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 no-print">
-      <div className="bg-surface rounded-2xl w-full max-w-3xl max-h-[94vh] flex flex-col overflow-hidden">
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 sm:p-4 z-50 no-print">
+      <div className="bg-surface rounded-2xl w-full max-w-6xl h-[94dvh] max-h-[900px] flex flex-col overflow-hidden shadow-xl">
+        {/* ------------------------------ Cabeçalho ------------------------------ */}
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div>
-            <h2 className="font-semibold text-sm">{editando ? `Editar consignação #${consignacao.id}` : "Nova consignação"}</h2>
+            <h2 className="font-semibold text-base">{editando ? `Editar consignação #${consignacao.id}` : "Nova consignação"}</h2>
             <p className="text-xs text-muted mt-0.5">
               {editando
                 ? "Acrescente produtos, mude quantidades ou remova itens. Itens que já estavam mantêm o preço original."
                 : "O estoque só dá baixa quando a consignação for fechada."}
             </p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-background text-muted" aria-label="Fechar">
-            <X className="w-4 h-4" />
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-background text-muted" aria-label="Fechar">
+            <X className="w-5 h-5" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-5">
-          <div className="grid sm:grid-cols-2 gap-3">
-            <label className="text-xs text-muted block sm:col-span-2">
-              Consignatário (quem recebe a mercadoria)
+        {/* abas (só no celular) */}
+        <div className="lg:hidden flex border-b border-border shrink-0">
+          <button type="button" className={botaoAba("dados")} onClick={() => setAba("dados")}>
+            1 · Dados{consignatario.trim() === "" && <span className="ml-1 text-danger">•</span>}
+          </button>
+          <button type="button" className={botaoAba("produtos")} onClick={() => setAba("produtos")}>
+            2 · Produtos
+          </button>
+          <button type="button" className={botaoAba("itens")} onClick={() => setAba("itens")}>
+            3 · Itens{itens.length > 0 && <span className="ml-1.5 rounded-full bg-primary text-white text-xs px-1.5 py-0.5">{itens.length}</span>}
+          </button>
+        </div>
+
+        {/* ------------------------------ Dados da consignação ------------------------------ */}
+        <div
+          className={`${aba === "dados" ? "block flex-1" : "hidden"} lg:block lg:flex-none px-5 py-4 border-b border-border bg-background/40 shrink-0 overflow-y-auto`}
+        >
+          <div className="grid gap-3 lg:grid-cols-[2fr_1fr_2fr]">
+            <label className="text-xs font-medium text-muted block">
+              Consignatário * <span className="font-normal">(quem recebe a mercadoria)</span>
               <input
-                className="input mt-1"
+                className="input mt-1 text-foreground"
                 placeholder="Ex: Cursilho Feminino - 2026"
                 value={consignatario}
                 onChange={(e) => setConsignatario(e.target.value)}
                 maxLength={150}
+                autoFocus={!editando}
               />
             </label>
-            <label className="text-xs text-muted block">
+            <label className="text-xs font-medium text-muted block">
               Devolver o que não vender até
-              <input type="date" className="input mt-1" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
+              <input type="date" className="input mt-1 text-foreground" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
             </label>
-            <label className="text-xs text-muted block">
-              Observação (opcional)
+            <label className="text-xs font-medium text-muted block">
+              Observação <span className="font-normal">(opcional)</span>
               <input
-                className="input mt-1"
+                className="input mt-1 text-foreground"
                 value={observacao}
                 onChange={(e) => setObservacao(e.target.value)}
                 maxLength={255}
               />
             </label>
           </div>
+          <button
+            type="button"
+            onClick={() => setAba("produtos")}
+            className="lg:hidden mt-4 w-full bg-primary text-white text-sm font-medium py-2.5 rounded-lg"
+          >
+            Continuar para os produtos
+          </button>
+        </div>
 
-          {/* ------------------------------ Adicionar produtos ------------------------------ */}
-          <section className="space-y-3">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Adicionar produtos</h3>
+        {/* ------------------------------ Produtos | Itens ------------------------------ */}
+        <div className={`${aba === "dados" ? "hidden" : "grid"} lg:grid flex-1 min-h-0 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]`}>
+          {/* ---------- esquerda: buscar e adicionar produtos ---------- */}
+          <section className={`${aba === "produtos" ? "flex" : "hidden"} lg:flex flex-col min-h-0 gap-3 p-4 sm:p-5 lg:border-r border-border`}>
+            <h3 className="hidden lg:block text-sm font-semibold">Adicionar produtos</h3>
 
-            <div className="relative">
-              <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-              <input
-                ref={buscaRef}
-                className="input"
-                style={{ paddingLeft: "2.5rem", paddingRight: busca ? "2.5rem" : undefined }}
-                placeholder="Buscar por nome, categoria ou código de barras"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && aoApertarEnter()}
-              />
-              {busca && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setBusca("");
-                    buscaRef.current?.focus();
-                  }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted hover:bg-background"
-                  aria-label="Limpar busca"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              )}
+            <div className="flex flex-col sm:flex-row gap-2 shrink-0">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  ref={buscaRef}
+                  className="input"
+                  style={{ paddingLeft: "2.5rem", paddingRight: busca ? "2.5rem" : undefined }}
+                  placeholder="Nome, categoria ou código de barras"
+                  value={busca}
+                  onChange={(e) => alterarBusca(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && aoApertarEnter()}
+                />
+                {busca && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      alterarBusca("");
+                      buscaRef.current?.focus();
+                    }}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted hover:bg-background"
+                    aria-label="Limpar busca"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <select
+                value={categoriaSel ?? ""}
+                onChange={(e) => alterarCategoria(e.target.value || null)}
+                className="input sm:w-64"
+                aria-label="Filtrar por categoria"
+              >
+                <option value="">Todas as categorias ({catalogo.length})</option>
+                {categorias
+                  .filter((c) => (contagemPorCategoria.get(String(c.id)) ?? 0) > 0)
+                  .map((c) => (
+                    <option key={c.id} value={String(c.id)}>
+                      {c.nome} ({contagemPorCategoria.get(String(c.id))}) · comissão {percentualComissaoConsignacao(c.nome)}%
+                    </option>
+                  ))}
+                {(contagemPorCategoria.get(SEM_CATEGORIA) ?? 0) > 0 && (
+                  <option value={SEM_CATEGORIA}>Sem categoria ({contagemPorCategoria.get(SEM_CATEGORIA)})</option>
+                )}
+              </select>
             </div>
 
-            {/* categorias: toque para listar só os produtos daquela categoria */}
-            <div className="flex flex-wrap gap-2">
-              <button type="button" className={chip(categoriaSel === null)} onClick={() => setCategoriaSel(null)}>
-                Todas
-                <span className={categoriaSel === null ? "text-white/80" : "text-muted"}>{catalogo.length}</span>
-              </button>
-              {categorias
-                .filter((c) => (contagemPorCategoria.get(String(c.id)) ?? 0) > 0)
-                .map((c) => {
-                  const ativo = categoriaSel === String(c.id);
-                  const pct = percentualComissaoConsignacao(c.nome);
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      className={chip(ativo)}
-                      onClick={() => setCategoriaSel(ativo ? null : String(c.id))}
-                      title={`Comissão do consignatário: ${pct}%`}
-                    >
-                      {c.nome}
-                      <span className={ativo ? "text-white/80" : "text-muted"}>{contagemPorCategoria.get(String(c.id))}</span>
-                      <span
-                        className={`rounded px-1 text-[10px] ${
-                          ativo ? "bg-white/20 text-white" : pct === 15 ? "bg-amber-100 text-amber-700" : "bg-background text-muted"
-                        }`}
-                      >
-                        {pct}%
-                      </span>
-                    </button>
-                  );
-                })}
-              {(contagemPorCategoria.get(SEM_CATEGORIA) ?? 0) > 0 && (
-                <button
-                  type="button"
-                  className={chip(categoriaSel === SEM_CATEGORIA)}
-                  onClick={() => setCategoriaSel(categoriaSel === SEM_CATEGORIA ? null : SEM_CATEGORIA)}
-                >
-                  Sem categoria
-                  <span className={categoriaSel === SEM_CATEGORIA ? "text-white/80" : "text-muted"}>
-                    {contagemPorCategoria.get(SEM_CATEGORIA)}
-                  </span>
-                </button>
-              )}
-            </div>
-
-            {/* resultados */}
-            <div className="border border-border rounded-xl overflow-hidden">
+            {/* resultados: a única rolagem desta coluna */}
+            <div className="flex-1 min-h-0 flex flex-col border border-border rounded-xl overflow-hidden bg-surface">
               {carregandoCatalogo ? (
-                <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted">
+                <div className="flex-1 flex items-center justify-center gap-2 text-sm text-muted">
                   <Loader2 className="w-4 h-4 animate-spin" /> Carregando produtos...
                 </div>
               ) : !buscando ? (
-                <p className="text-sm text-muted text-center py-8 px-4">
-                  Escolha uma categoria acima ou digite o nome do produto. Com leitor, é só passar o código de barras.
-                </p>
+                <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-muted">
+                  <Search className="w-8 h-8 opacity-40" />
+                  <p className="text-sm">Digite o nome do produto ou escolha uma categoria.</p>
+                  <p className="text-xs">Com leitor, é só passar o código de barras e apertar Enter.</p>
+                </div>
               ) : filtrados.length === 0 ? (
-                <p className="text-sm text-muted text-center py-8 px-4">Nenhum produto encontrado.</p>
+                <div className="flex-1 flex items-center justify-center text-sm text-muted px-4 text-center">
+                  Nenhum produto encontrado.
+                </div>
               ) : (
                 <>
-                  <ul className="divide-y divide-border max-h-72 overflow-y-auto">
-                    {filtrados.slice(0, LIMITE_RESULTADOS).map((p) => {
+                  <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
+                    {filtrados.slice(0, limite).map((p) => {
                       const naLista = qtdNaLista(p.id);
                       const semEstoque = p.quantidadeEstoque <= 0;
                       const esgotou = naLista >= p.quantidadeEstoque;
                       return (
-                        <li key={p.id}>
-                          <button
-                            type="button"
-                            onClick={() => adicionar(p)}
-                            disabled={semEstoque || esgotou}
-                            className="w-full text-left px-3 py-2.5 flex items-center gap-3 hover:bg-background disabled:opacity-50 disabled:hover:bg-transparent"
-                          >
-                            <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{p.nome}</p>
-                              <p className="text-xs text-muted truncate">
-                                {p.categoria?.nome ?? "Sem categoria"} · comissão{" "}
-                                {percentualComissaoConsignacao(p.categoria?.nome)}%
-                                {p.codigoBarras ? ` · ${p.codigoBarras}` : ""}
-                              </p>
-                            </div>
-                            <div className="text-right shrink-0">
-                              <p className="text-sm font-mono">{formatarMoeda(p.precoVenda)}</p>
-                              <p className={`text-xs ${semEstoque ? "text-danger" : "text-muted"}`}>
-                                {semEstoque ? "Sem estoque" : `estoque ${p.quantidadeEstoque}`}
-                              </p>
-                            </div>
-                            {naLista > 0 && (
-                              <span className="shrink-0 rounded-full bg-primary/10 text-primary text-xs font-medium px-2 py-0.5">
-                                {naLista} na lista
-                              </span>
+                        <li key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${naLista > 0 ? "bg-primary-soft" : ""}`}>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-sm font-medium leading-snug line-clamp-2">{p.nome}</p>
+                            <p className="text-xs text-muted truncate">
+                              {p.categoria?.nome ?? "Sem categoria"}
+                              {p.codigoBarras ? ` · ${p.codigoBarras}` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-sm font-mono font-medium">{formatarMoeda(p.precoVenda)}</p>
+                            <p className={`text-xs ${semEstoque ? "text-danger" : "text-muted"}`}>
+                              {semEstoque ? "Sem estoque" : `${p.quantidadeEstoque} em estoque`}
+                            </p>
+                          </div>
+                          <div className="shrink-0 w-[6.75rem] flex justify-end">
+                            {naLista === 0 ? (
+                              <button
+                                type="button"
+                                onClick={() => adicionar(p)}
+                                disabled={semEstoque}
+                                className="flex items-center gap-1 h-9 px-3 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-medium transition disabled:opacity-40"
+                                aria-label={`Adicionar ${p.nome}`}
+                              >
+                                <Plus className="w-4 h-4" /> Add
+                              </button>
+                            ) : (
+                              <div className="flex items-center rounded-lg border border-primary bg-surface overflow-hidden h-9">
+                                <button
+                                  type="button"
+                                  onClick={() => diminuir(p.id)}
+                                  className="w-8 h-full flex items-center justify-center hover:bg-primary-light"
+                                  aria-label="Diminuir"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <span className="w-8 text-center text-sm font-mono font-semibold">{naLista}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => adicionar(p)}
+                                  disabled={esgotou}
+                                  className="w-8 h-full flex items-center justify-center hover:bg-primary-light disabled:opacity-30 disabled:hover:bg-transparent"
+                                  aria-label="Aumentar"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
                             )}
-                            <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-white">
-                              <Plus className="w-4 h-4" />
-                            </span>
-                          </button>
+                          </div>
                         </li>
                       );
                     })}
                   </ul>
-                  <p className="text-xs text-muted bg-background px-3 py-1.5">
-                    {filtrados.length > LIMITE_RESULTADOS
-                      ? `Mostrando ${LIMITE_RESULTADOS} de ${filtrados.length} produtos — digite mais letras para refinar.`
-                      : `${filtrados.length} produto${filtrados.length === 1 ? "" : "s"}`}
-                  </p>
+                  <div className="shrink-0 flex items-center justify-between gap-3 text-xs text-muted bg-background px-3 py-2 border-t border-border">
+                    <span>
+                      {filtrados.length > limite
+                        ? `Mostrando ${limite} de ${filtrados.length} produtos`
+                        : `${filtrados.length} ${plural(filtrados.length, "produto", "produtos")}`}
+                    </span>
+                    {filtrados.length > limite && (
+                      <button
+                        type="button"
+                        onClick={() => setLimite((l) => l + LIMITE_RESULTADOS)}
+                        className="font-medium text-primary hover:underline"
+                      >
+                        Mostrar mais
+                      </button>
+                    )}
+                  </div>
                 </>
               )}
             </div>
           </section>
 
-          {/* ------------------------------ Itens da consignação ------------------------------ */}
-          <section className="space-y-2">
-            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
-              Itens da consignação{itens.length > 0 ? ` (${totalUnidades} unidade${totalUnidades === 1 ? "" : "s"})` : ""}
-            </h3>
+          {/* ---------- direita: itens da consignação ---------- */}
+          <section className={`${aba === "itens" ? "flex" : "hidden"} lg:flex flex-col min-h-0 bg-background/30`}>
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border shrink-0">
+              <div>
+                <h3 className="text-sm font-semibold">Itens da consignação</h3>
+                <p className="text-xs text-muted">
+                  {itens.length === 0
+                    ? "Nenhum produto adicionado"
+                    : `${itens.length} ${plural(itens.length, "produto", "produtos")} · ${totalUnidades} ${plural(totalUnidades, "unidade", "unidades")}`}
+                </p>
+              </div>
+              {itens.length > 0 && (
+                <button type="button" onClick={limparTudo} className="text-xs text-danger hover:underline">
+                  Limpar tudo
+                </button>
+              )}
+            </div>
+
             {itens.length === 0 ? (
-              <p className="text-sm text-muted border border-dashed border-border rounded-xl text-center py-5">
-                Nenhum produto adicionado ainda.
-              </p>
+              <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-muted">
+                <Package className="w-9 h-9 opacity-40" />
+                <p className="text-sm">Os produtos que você adicionar aparecem aqui.</p>
+                <button type="button" onClick={() => setAba("produtos")} className="lg:hidden text-sm font-medium text-primary hover:underline">
+                  Ir para os produtos
+                </button>
+              </div>
             ) : (
-              <ul className="border border-border rounded-xl divide-y divide-border">
+              <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
                 {itens.map((i) => (
-                  <li key={i.produtoId} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm">
-                    <div className="min-w-0 flex-1 basis-48">
-                      <p className="truncate">{i.nome}</p>
-                      <p className="text-xs text-muted">
-                        {i.categoriaNome ?? "Sem categoria"} · {formatarMoeda(i.preco)} · comissão {i.percentual}%
-                      </p>
+                  <li key={i.produtoId} className="px-4 sm:px-5 py-3 space-y-2">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-medium leading-snug">{i.nome}</p>
+                        <p className="text-xs text-muted mt-0.5">
+                          {i.categoriaNome ?? "Sem categoria"} · comissão {i.percentual}%
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => setItens((prev) => prev.filter((x) => x.produtoId !== i.produtoId))}
+                        className="p-1.5 rounded-md hover:bg-danger-light text-danger shrink-0"
+                        aria-label={`Remover ${i.nome}`}
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
                     </div>
-                    <QuantidadeInput
-                      valor={i.quantidade}
-                      onChange={(n) => definirQuantidade(i.produtoId, n)}
-                      onMais={() => definirQuantidade(i.produtoId, i.quantidade + 1)}
-                      onMenos={() => {
-                        if (i.quantidade > 1) definirQuantidade(i.produtoId, i.quantidade - 1);
-                      }}
-                    />
-                    <span className="w-24 text-right font-mono">{formatarMoeda(i.preco * i.quantidade)}</span>
-                    <button
-                      onClick={() => setItens((prev) => prev.filter((x) => x.produtoId !== i.produtoId))}
-                      className="p-1 rounded hover:bg-background text-danger"
-                      aria-label="Remover"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
+                    <div className="flex items-center justify-between gap-3">
+                      <QuantidadeInput
+                        valor={i.quantidade}
+                        onChange={(n) => definirQuantidade(i.produtoId, n)}
+                        onMais={() => definirQuantidade(i.produtoId, i.quantidade + 1)}
+                        onMenos={() => {
+                          if (i.quantidade > 1) definirQuantidade(i.produtoId, i.quantidade - 1);
+                        }}
+                      />
+                      <div className="text-right">
+                        <p className="text-xs text-muted">{formatarMoeda(i.preco)} cada</p>
+                        <p className="text-sm font-mono font-semibold">{formatarMoeda(i.preco * i.quantidade)}</p>
+                      </div>
+                    </div>
                   </li>
                 ))}
               </ul>
             )}
           </section>
-
-          {erro && <p className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2">{erro}</p>}
         </div>
 
-        <div className="p-4 border-t border-border shrink-0 flex items-center justify-between gap-3">
-          <p className="text-sm">
-            Total enviado: <strong>{formatarMoeda(total)}</strong>
-          </p>
-          <button
-            onClick={salvar}
-            disabled={!podeSalvar || salvando}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
-          >
-            {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            {editando ? "Salvar alterações" : "Registrar consignação"}
-          </button>
+        {/* ------------------------------ Erro + rodapé ------------------------------ */}
+        {erro && (
+          <div className="px-5 pt-3 shrink-0">
+            <div className="flex items-start gap-2 text-sm text-danger bg-danger-light rounded-lg px-3 py-2">
+              <p className="flex-1">{erro}</p>
+              <button onClick={() => setErro(null)} className="shrink-0 p-0.5" aria-label="Fechar aviso">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="px-5 py-3 border-t border-border shrink-0 flex flex-wrap items-center justify-between gap-3 bg-surface">
+          <div>
+            <p className="text-xs text-muted">
+              {itens.length} {plural(itens.length, "produto", "produtos")} · {totalUnidades} {plural(totalUnidades, "unidade", "unidades")}
+            </p>
+            <p className="text-lg font-semibold font-mono leading-tight">
+              {formatarMoeda(total)} <span className="text-xs font-sans font-normal text-muted">total enviado</span>
+            </p>
+          </div>
+          <div className="flex items-center gap-2">
+            {!podeSalvar && (
+              <span className="hidden md:inline text-xs text-muted mr-1">
+                {consignatario.trim() === "" ? "Informe o consignatário" : "Adicione ao menos um produto"}
+              </span>
+            )}
+            <button
+              onClick={onClose}
+              className="border border-border hover:bg-background text-sm font-medium px-4 py-2.5 rounded-lg transition"
+            >
+              Cancelar
+            </button>
+            <button
+              onClick={salvar}
+              disabled={!podeSalvar || salvando}
+              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
+            >
+              {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+              {editando ? "Salvar alterações" : "Registrar consignação"}
+            </button>
+          </div>
         </div>
       </div>
     </div>
