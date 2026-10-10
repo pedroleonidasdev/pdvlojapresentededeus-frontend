@@ -188,22 +188,6 @@ body {
   }
 }
 
-/* Folha A4 que corre em várias páginas (ex: consignação: termo + relatório).
-   Diferente do .a4-print "absoluto" acima, aqui o bloco fica no fluxo normal para a
-   página nomeada a4Print (A4 com margem de 12mm) valer em TODAS as páginas, e o resto
-   da tela é escondido com display:none (a classe no body é posta pelo componente). */
-@media print {
-  body.imprimindo-a4-fluxo > *:not(.a4-flow) {
-    display: none !important;
-  }
-
-  body.imprimindo-a4-fluxo .a4-print.a4-flow {
-    position: static;
-    width: auto;
-    page: a4Print;
-  }
-}
-
 @page a4Print {
   size: A4 portrait;
   margin: 12mm;

@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "axios": "^1.19.0",
+    "docx": "^9.9.0",
+    "exceljs": "^4.4.0",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",
     "jspdf-autotable": "^5.0.8",

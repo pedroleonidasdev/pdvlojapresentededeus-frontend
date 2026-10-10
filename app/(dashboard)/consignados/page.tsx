@@ -11,7 +11,7 @@ import {
   percentualComissaoConsignacao,
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
-import FolhaConsignacao from "@/components/FolhaConsignacao";
+import VisualizarConsignacao from "@/components/VisualizarConsignacao";
 import {
   Search,
   Trash2,
@@ -39,7 +39,7 @@ export default function ConsignadosPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
   const [selecionada, setSelecionada] = useState<Consignacao | null>(null);
-  const [imprimindo, setImprimindo] = useState<Consignacao | null>(null);
+  const [visualizando, setVisualizando] = useState<Consignacao | null>(null);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -57,16 +57,6 @@ export default function ConsignadosPage() {
   useEffect(() => {
     carregar();
   }, [carregar]);
-
-  // imprime assim que a folha (portal no body) foi montada
-  useEffect(() => {
-    if (!imprimindo) return;
-    const t = setTimeout(() => {
-      window.print();
-      setImprimindo(null);
-    }, 250);
-    return () => clearTimeout(t);
-  }, [imprimindo]);
 
   return (
     <div className="min-h-full bg-background">
@@ -158,11 +148,11 @@ export default function ConsignadosPage() {
             setSelecionada(null);
             carregar();
           }}
-          onImprimir={(c) => setImprimindo(c)}
+          onImprimir={(c) => setVisualizando(c)}
         />
       )}
 
-      {imprimindo && <FolhaConsignacao consignacao={imprimindo} />}
+      {visualizando && <VisualizarConsignacao consignacao={visualizando} onFechar={() => setVisualizando(null)} />}
     </div>
   );
 }
@@ -608,7 +598,7 @@ function ModalDetalhe({
               className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
             >
               <Printer className="w-4 h-4" />
-              Imprimir termo e relatório
+              Visualizar / imprimir / salvar
             </button>
             {ehAdmin && (
               <button
