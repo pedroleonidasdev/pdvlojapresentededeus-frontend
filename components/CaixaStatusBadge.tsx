@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Caixa } from "@/lib/types";
-import { formatarDataHora } from "@/lib/format";
+import { formatarDataHora, horasDesde } from "@/lib/format";
 
 /**
  * Bolinha de status do caixa: verde = aberto, vermelha = fechado.
@@ -49,6 +49,11 @@ export default function CaixaStatusBadge({
 
   const aberto = caixa !== null;
 
+  // caixa aberto há muitas horas costuma ser esquecimento (virou o dia sem fechar)
+  const LIMITE_HORAS_ESQUECIDO = 12;
+  const horasAberto = aberto && caixa ? Math.floor(horasDesde(caixa.dataAbertura)) : 0;
+  const caixaEsquecido = horasAberto >= LIMITE_HORAS_ESQUECIDO;
+
   const dot = (
     <span className="relative flex h-2.5 w-2.5 shrink-0">
       {aberto && (
@@ -81,6 +86,14 @@ export default function CaixaStatusBadge({
           >
             <span className="block truncate">{caixa.usuarioAberturaNome}</span>
             <span className="block">{formatarDataHora(caixa.dataAbertura)}</span>
+          </p>
+        )}
+        {caixaEsquecido && (
+          <p
+            className="mt-1 pl-4 text-[10px] leading-tight font-medium text-amber-300"
+            title="Este caixa está aberto há muitas horas. Confira se não ficou aberto por esquecimento."
+          >
+            Aberto há {horasAberto}h — confira se precisa fechar
           </p>
         )}
       </div>

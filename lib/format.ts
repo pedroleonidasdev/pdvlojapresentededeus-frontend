@@ -20,6 +20,11 @@ function paraDataUtc(iso: string): Date {
   return new Date(`${normalizado}Z`);
 }
 
+/** Quantas horas se passaram desde um instante vindo do backend (UTC "cru", sem Z). */
+export function horasDesde(iso: string): number {
+  return (Date.now() - paraDataUtc(iso).getTime()) / 3_600_000;
+}
+
 export function formatarDataHora(iso: string): string {
   return new Intl.DateTimeFormat("pt-BR", {
     day: "2-digit",

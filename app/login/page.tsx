@@ -49,11 +49,14 @@ export default function LoginPage() {
       // 429 = login bloqueado por muitas tentativas erradas: o servidor já manda
       // a mensagem pronta ("aguarde X minutos"), então mostramos ela em vez da genérica
       const resposta = (e as { response?: { status?: number; data?: { message?: string } } }).response;
-      setErro(
-        resposta?.status === 429 && resposta.data?.message
-          ? resposta.data.message
-          : "Login ou senha inválidos."
-      );
+      if (resposta?.status === 429 && resposta.data?.message) {
+        setErro(resposta.data.message);
+      } else if (!resposta || (resposta.status ?? 0) >= 500) {
+        // sem resposta (rede/CORS/proxy) ou erro do servidor: não é senha errada
+        setErro("Não foi possível conectar ao servidor. Aguarde um instante e tente de novo.");
+      } else {
+        setErro("Login ou senha inválidos.");
+      }
     } finally {
       setCarregando(false);
     }
