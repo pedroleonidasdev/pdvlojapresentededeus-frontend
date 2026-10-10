@@ -45,8 +45,15 @@ export default function LoginPage() {
     setCarregando(true);
     try {
       await login(loginValue, senha);
-    } catch {
-      setErro("Login ou senha inválidos.");
+    } catch (e) {
+      // 429 = login bloqueado por muitas tentativas erradas: o servidor já manda
+      // a mensagem pronta ("aguarde X minutos"), então mostramos ela em vez da genérica
+      const resposta = (e as { response?: { status?: number; data?: { message?: string } } }).response;
+      setErro(
+        resposta?.status === 429 && resposta.data?.message
+          ? resposta.data.message
+          : "Login ou senha inválidos."
+      );
     } finally {
       setCarregando(false);
     }

@@ -1,7 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Bell, BellOff, BellRing } from "lucide-react";
+import { Bell, BellOff, BellRing, Send } from "lucide-react";
+import api from "@/lib/api";
 import {
   ativarNotificacoes,
   desativarNotificacoes,
@@ -13,6 +14,16 @@ import {
 
 type Estado = "carregando" | "suportado" | "ativado" | "bloqueado" | "sem-suporte";
 
+// Resposta de POST /notificacoes/teste: o que aconteceu com cada aparelho de ADMIN inscrito
+interface ResultadoTeste {
+  configurado: boolean;
+  totalInscricoes: number;
+  enviadas: number;
+  removidas: number;
+  falhas: number;
+  detalhes: string[];
+}
+
 /**
  * Botão pra ativar/desativar notificação push (venda registrada, caixa
  * aberto/fechado) neste navegador/dispositivo. Só faz sentido pra ADMIN —
@@ -22,6 +33,8 @@ export default function NotificacoesPushButton() {
   const [estado, setEstado] = useState<Estado>("carregando");
   const [processando, setProcessando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [testando, setTestando] = useState(false);
+  const [resultadoTeste, setResultadoTeste] = useState<ResultadoTeste | null>(null);
 
   useEffect(() => {
     async function checar() {
@@ -59,6 +72,20 @@ export default function NotificacoesPushButton() {
       if (Notification.permission === "denied") setEstado("bloqueado");
     } finally {
       setProcessando(false);
+    }
+  }
+
+  async function enviarTeste() {
+    setErro(null);
+    setResultadoTeste(null);
+    setTestando(true);
+    try {
+      const { data } = await api.post<ResultadoTeste>("/notificacoes/teste");
+      setResultadoTeste(data);
+    } catch {
+      setErro("Não foi possível enviar o teste (servidor indisponível?).");
+    } finally {
+      setTestando(false);
     }
   }
 
@@ -104,6 +131,28 @@ export default function NotificacoesPushButton() {
               ? "Notificações bloqueadas"
               : "Ativar notificações"}
       </button>
+      {estado === "ativado" && (
+        <button
+          type="button"
+          onClick={enviarTeste}
+          disabled={testando}
+          className="w-full flex items-center gap-2 pl-[52px] pr-2.5 py-1 text-[11px] text-white/50 hover:text-white transition disabled:opacity-50"
+        >
+          <Send className="w-3 h-3" />
+          {testando ? "Enviando teste..." : "Enviar notificação de teste"}
+        </button>
+      )}
+      {resultadoTeste && (
+        <div className="pl-[52px] pr-2.5 mt-1 text-[11px] leading-relaxed text-white/60">
+          <p>
+            {resultadoTeste.enviadas} enviada(s), {resultadoTeste.removidas} expirada(s),{" "}
+            {resultadoTeste.falhas} falha(s).
+          </p>
+          {resultadoTeste.detalhes.map((detalhe, i) => (
+            <p key={i}>{detalhe}</p>
+          ))}
+        </div>
+      )}
       {erro && <p className="px-2.5 mt-1 text-[11px] text-red-300">{erro}</p>}
     </div>
   );
