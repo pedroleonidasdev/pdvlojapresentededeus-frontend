@@ -19,6 +19,7 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
     ShadingType,
     Table,
     TableCell,
+    TableLayoutType,
     TableRow,
     TextRun,
     VerticalAlign,
@@ -147,13 +148,13 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
   ];
 
   // ------------------------------ Relatório ------------------------------
-  const larguras = [800, 3200, 950, 1250, 1250, 950, 1400]; // soma 9800
+  const larguras = [1550, 2900, 850, 1200, 1200, 850, 1250]; // soma 9800
   const total = larguras.reduce((a, b) => a + b, 0);
 
   function celula(
     texto: string,
     i: number,
-    opcoes: { negrito?: boolean; alinhar?: (typeof AlignmentType)[keyof typeof AlignmentType]; fundo?: string; tam?: number; colSpan?: number; largura?: number } = {}
+    opcoes: { negrito?: boolean; alinhar?: (typeof AlignmentType)[keyof typeof AlignmentType]; fundo?: string; tam?: number; colSpan?: number; largura?: number; manterComProxima?: boolean } = {}
   ) {
     return new TableCell({
       borders: bordas,
@@ -165,6 +166,7 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
         (linha) =>
           new Paragraph({
             alignment: opcoes.alinhar,
+            keepNext: opcoes.manterComProxima,
             children: [new TextRun({ text: linha, bold: opcoes.negrito, size: opcoes.tam ?? 18 })],
           })
       ),
@@ -198,7 +200,11 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
 
   for (const g of m.grupos) {
     linhasTabela.push(
-      new TableRow({ cantSplit: true, children: [celula(`${g.categoria}:`, 0, { colSpan: 7, largura: total, negrito: true })] })
+      // keepNext: o título da categoria nunca fica sozinho no fim da página
+      new TableRow({
+        cantSplit: true,
+        children: [celula(`${g.categoria}:`, 0, { colSpan: 7, largura: total, negrito: true, manterComProxima: true })],
+      })
     );
     for (const l of g.linhas) {
       linhasTabela.push(
@@ -236,7 +242,8 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
     new Paragraph({ children: [new PageBreak()] }),
     cabecalho(true),
     new Paragraph({ spacing: { after: 120 }, children: [] }),
-    new Table({ width: { size: total, type: WidthType.DXA }, columnWidths: larguras, rows: linhasTabela }),
+    // layout fixo: as colunas respeitam a largura e o nome do produto quebra em mais de uma linha
+    new Table({ width: { size: total, type: WidthType.DXA }, columnWidths: larguras, layout: TableLayoutType.FIXED, rows: linhasTabela }),
   ];
 
   if (m.acerto) {

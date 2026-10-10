@@ -118,6 +118,8 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
   const direita = { halign: "right" as const };
   type Celula = string | { content: string; colSpan?: number; styles?: Record<string, unknown> };
   const corpo: Celula[][] = [];
+  /** true nas linhas que são título de categoria (precisam ficar junto do primeiro produto) */
+  const ehCategoria: boolean[] = [];
   for (const g of m.grupos) {
     corpo.push([
       {
@@ -126,6 +128,7 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
         styles: { fontStyle: "bold", fillColor: [255, 255, 255], halign: "left" },
       },
     ]);
+    ehCategoria.push(true);
     for (const l of g.linhas) {
       corpo.push([
         l.cod,
@@ -136,48 +139,96 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
         l.qtdVendida === null ? "" : String(l.qtdVendida),
         l.vlrVendido === null ? "" : formatarMoeda(l.vlrVendido),
       ]);
+      ehCategoria.push(false);
     }
   }
 
-  autoTable(doc, {
-    startY: yTabela,
-    margin: { left: MARGEM, right: MARGEM, top: MARGEM, bottom: MARGEM },
-    theme: "grid",
-    styles: { font: "helvetica", fontSize: 8.5, cellPadding: 1.6, lineColor: [0, 0, 0], lineWidth: 0.2, textColor: [0, 0, 0] },
-    headStyles: { fillColor: CINZA, textColor: [0, 0, 0], fontStyle: "bold", halign: "center", fontSize: 7.5 },
-    footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
-    columnStyles: {
-      0: { cellWidth: 16 },
-      1: { cellWidth: 62 },
-      2: { cellWidth: 18, ...centro },
-      3: { cellWidth: 22, ...direita },
-      4: { cellWidth: 22, ...direita },
-      5: { cellWidth: 18, ...centro },
-      6: { cellWidth: 22, ...direita },
-    },
-    head: [
-      [
-        {
-          content: `RELATÓRIO DE MERCADORIAS EM CONSIGNAÇÃO\n${m.consignatario.toUpperCase()}`,
-          colSpan: 7,
-          styles: { halign: "center", fontSize: 10, cellPadding: 2.2 },
+  /**
+   * Desenha a tabela em "blocos": cada índice de `quebras` é uma linha que obrigatoriamente
+   * começa página nova. Devolve a página em que cada linha do corpo foi desenhada.
+   */
+  function desenharTabela(d: InstanceType<typeof jsPDF>, quebras: number[]): number[] {
+    const limites = [0, ...quebras, corpo.length];
+    const paginas: number[] = [];
+    for (let k = 0; k < limites.length - 1; k++) {
+      const inicio = limites[k];
+      const fimBloco = limites[k + 1];
+      const ultimo = k === limites.length - 2;
+      if (k > 0) d.addPage();
+      autoTable(d, {
+        startY: k === 0 ? yTabela : MARGEM,
+        margin: { left: MARGEM, right: MARGEM, top: MARGEM, bottom: MARGEM },
+        theme: "grid",
+        // linha nunca é partida no meio entre duas páginas; texto longo quebra em várias linhas
+        rowPageBreak: "avoid",
+        styles: {
+          font: "helvetica",
+          fontSize: 8.5,
+          cellPadding: 1.6,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.2,
+          textColor: [0, 0, 0],
+          overflow: "linebreak",
+          valign: "middle",
         },
-      ],
-      ["COD.", "PRODUTO", "QTDE ENVIADA", "VLR UNITÁRIO", "VALOR TOTAL", "QTDE VENDIDA", "VLR TOTAL VENDIDO"],
-    ],
-    body: corpo as never,
-    foot: [
-      [
-        { content: "TOTAL", colSpan: 2 },
-        { content: String(m.totais.qtdEnviada), styles: centro },
-        "",
-        { content: formatarMoeda(m.totais.vlrEnviado), styles: direita },
-        { content: m.totais.qtdVendida === null ? "" : String(m.totais.qtdVendida), styles: centro },
-        { content: m.totais.vlrVendido === null ? "" : formatarMoeda(m.totais.vlrVendido), styles: direita },
-      ],
-    ] as never,
-    showFoot: "lastPage",
-  });
+        headStyles: { fillColor: CINZA, textColor: [0, 0, 0], fontStyle: "bold", halign: "center", fontSize: 7.5 },
+        footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
+        // soma = 180 mm (largura útil da página); a coluna do produto é a mais larga
+        columnStyles: {
+          0: { cellWidth: 15 },
+          1: { cellWidth: 65 },
+          2: { cellWidth: 15, ...centro },
+          3: { cellWidth: 22, ...direita },
+          4: { cellWidth: 22, ...direita },
+          5: { cellWidth: 15, ...centro },
+          6: { cellWidth: 26, ...direita },
+        },
+        head: [
+          [
+            {
+              content: `RELATÓRIO DE MERCADORIAS EM CONSIGNAÇÃO\n${m.consignatario.toUpperCase()}`,
+              colSpan: 7,
+              styles: { halign: "center", fontSize: 10, cellPadding: 2.2 },
+            },
+          ],
+          ["COD.", "PRODUTO", "QTDE ENVIADA", "VLR UNITÁRIO", "VALOR TOTAL", "QTDE VENDIDA", "VLR TOTAL VENDIDO"],
+        ],
+        body: corpo.slice(inicio, fimBloco) as never,
+        foot: [
+          [
+            { content: "TOTAL", colSpan: 2 },
+            { content: String(m.totais.qtdEnviada), styles: centro },
+            "",
+            { content: formatarMoeda(m.totais.vlrEnviado), styles: direita },
+            { content: m.totais.qtdVendida === null ? "" : String(m.totais.qtdVendida), styles: centro },
+            { content: m.totais.vlrVendido === null ? "" : formatarMoeda(m.totais.vlrVendido), styles: direita },
+          ],
+        ] as never,
+        showFoot: ultimo ? "lastPage" : "never",
+        didDrawCell: (data: { section: string; column: { index: number }; row: { index: number } }) => {
+          if (data.section === "body" && data.column.index === 0) {
+            paginas[inicio + data.row.index] = d.getCurrentPageInfo().pageNumber;
+          }
+        },
+      });
+    }
+    return paginas;
+  }
+
+  // Passo 1: desenha num PDF de teste para achar títulos de categoria que ficariam sozinhos no
+  // fim de uma página; Passo 2: o PDF final força página nova antes deles.
+  let quebras: number[] = [];
+  for (let tentativa = 0; tentativa < 8; tentativa++) {
+    const teste = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
+    const paginas = desenharTabela(teste, quebras);
+    const orfas: number[] = [];
+    for (let i = 1; i < paginas.length - 1; i++) {
+      if (ehCategoria[i] && paginas[i + 1] > paginas[i] && !quebras.includes(i)) orfas.push(i);
+    }
+    if (orfas.length === 0) break;
+    quebras = [...quebras, ...orfas].sort((a, b) => a - b);
+  }
+  desenharTabela(doc, quebras);
 
   if (m.acerto) {
     const acerto = m.acerto;

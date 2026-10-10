@@ -66,22 +66,16 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
     porCategoria.set(chave, [...(porCategoria.get(chave) ?? []), item]);
   }
 
-  // código = letra inicial da categoria + sequência (C001, C002...); se duas categorias
-  // começarem com a mesma letra, a segunda ganha um número (C2001) para não repetir
-  const letrasUsadas = new Map<string, number>();
   const grupos: GrupoModelo[] = [];
   // subgrupos (categorias) em ordem alfabética; os produtos de cada um também
   const categoriasOrdenadas = [...porCategoria.entries()].sort(([a], [b]) => compararAlfabetico(a, b));
   for (const [categoria, itensCategoria] of categoriasOrdenadas) {
     const itens = [...itensCategoria].sort((a, b) => compararAlfabetico(a.produtoNome, b.produtoNome));
-    const base = categoria.normalize("NFD").replace(/[̀-ͯ]/g, "").charAt(0) || "X";
-    const n = (letrasUsadas.get(base) ?? 0) + 1;
-    letrasUsadas.set(base, n);
-    const prefixo = n === 1 ? base : `${base}${n}`;
     grupos.push({
       categoria,
-      linhas: itens.map((i, idx) => ({
-        cod: `${prefixo}${String(idx + 1).padStart(3, "0")}`,
+      linhas: itens.map((i) => ({
+        // COD. = código de barras cadastrado no estoque ("-" se o produto não tiver)
+        cod: i.codigoBarras?.trim() || "-",
         produto: i.produtoNome,
         qtdEnviada: i.quantidadeEnviada,
         vlrUnitario: i.precoUnitario,

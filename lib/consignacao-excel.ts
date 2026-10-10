@@ -27,7 +27,8 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
   const ws = wb.addWorksheet("Relatório", {
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
   });
-  ws.columns = [{ width: 9 }, { width: 46 }, { width: 11 }, { width: 14 }, { width: 14 }, { width: 11 }, { width: 16 }];
+  const LARGURA_PRODUTO = 50;
+  ws.columns = [{ width: 9 }, { width: LARGURA_PRODUTO }, { width: 11 }, { width: 14 }, { width: 14 }, { width: 11 }, { width: 16 }];
 
   // cabeçalho da loja (linhas 1 a 5) — logo à esquerda, textos ao lado
   const cabecalhoLinhas: [string, boolean, string?][] = [
@@ -72,6 +73,8 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
   });
   ws.getRow(linha).height = 28;
   const linhaCabecalhoTabela = linha;
+  // ao imprimir em várias páginas, o título e o cabeçalho das colunas se repetem em todas
+  ws.pageSetup.printTitlesRow = `${linhaCabecalhoTabela - 1}:${linhaCabecalhoTabela}`;
 
   for (const g of m.grupos) {
     linha++;
@@ -86,6 +89,9 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
       const r = ws.getRow(linha);
       r.getCell(1).value = l.cod;
       r.getCell(2).value = l.produto;
+      // nome longo quebra em mais de uma linha (com a altura da linha ajustada) em vez de ser cortado
+      const linhasNome = Math.max(1, Math.ceil(l.produto.length / (LARGURA_PRODUTO - 6)));
+      if (linhasNome > 1) r.height = linhasNome * 14;
       r.getCell(3).value = l.qtdEnviada;
       r.getCell(4).value = l.vlrUnitario;
       r.getCell(5).value = { formula: `C${linha}*D${linha}`, result: l.vlrTotal };
@@ -96,10 +102,11 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
         const cell = r.getCell(c);
         cell.border = borda;
         cell.font = { size: 10 };
-        if (c === 3 || c === 6) cell.alignment = { horizontal: "center" };
+        cell.alignment = { vertical: "middle", wrapText: c === 2 };
+        if (c === 3 || c === 6) cell.alignment = { vertical: "middle", horizontal: "center" };
         if (c === 4 || c === 5 || c === 7) {
           cell.numFmt = MOEDA;
-          cell.alignment = { horizontal: "right" };
+          cell.alignment = { vertical: "middle", horizontal: "right" };
         }
       }
     }
