@@ -373,10 +373,11 @@ function ModalNovaConsignacao({
           <div>
             <div className="flex flex-col sm:flex-row gap-2">
               <div className="relative flex-1">
-                <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <Search className="w-5 h-5 text-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
+                {/* estilos inline de propósito: a classe .input (globals.css) tem prioridade sobre as utilitárias do Tailwind */}
                 <input
                   className="input"
-                  style={{ paddingLeft: "2.25rem" }}
+                  style={{ fontSize: "1.0625rem", padding: "0.8rem 0.75rem 0.8rem 3rem" }}
                   placeholder="Filtrar a lista por nome ou código de barras"
                   value={busca}
                   onChange={(e) => setBusca(e.target.value)}
@@ -391,7 +392,8 @@ function ModalNovaConsignacao({
                 />
               </div>
               <select
-                className="input sm:w-56"
+                className="input sm:w-60"
+                style={{ fontSize: "1rem", padding: "0.8rem 0.75rem" }}
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
               >
