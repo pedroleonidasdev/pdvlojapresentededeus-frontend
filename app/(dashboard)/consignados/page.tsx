@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Consignacao, Produto } from "@/lib/types";
@@ -196,57 +196,69 @@ function ModalNovaConsignacao({
   const [prazo, setPrazo] = useState("");
   const [observacao, setObservacao] = useState("");
   const [busca, setBusca] = useState("");
-  const [resultados, setResultados] = useState<Produto[]>([]);
-  const [buscando, setBuscando] = useState(false);
+  const [filtroCategoria, setFiltroCategoria] = useState("todas");
+  const [produtos, setProdutos] = useState<Produto[]>([]);
+  const [carregandoProdutos, setCarregandoProdutos] = useState(true);
   const [itens, setItens] = useState<ItemNovo[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
-  const buscaRef = useRef<HTMLInputElement>(null);
 
+  // Carrega todos os produtos ativos uma vez: o operador marca as caixinhas em
+  // vez de digitar para achar cada produto.
   useEffect(() => {
-    const termo = busca.trim();
-    if (termo.length < 2) {
-      setResultados([]);
-      return;
-    }
-    const somenteNumeros = /^[0-9]+$/.test(termo);
-    const t = setTimeout(async () => {
-      setBuscando(true);
+    let cancelado = false;
+    (async () => {
       try {
-        if (somenteNumeros) {
-          try {
-            const { data } = await api.get<Produto>(`/produtos/codigo-barras/${termo}`);
-            setResultados([data]);
-          } catch {
-            setResultados([]);
-          }
-        } else {
-          const { data } = await api.get<Produto[]>("/produtos", { params: { nome: termo } });
-          setResultados(data);
-        }
+        const { data } = await api.get<Produto[]>("/produtos");
+        if (!cancelado) setProdutos(data);
+      } catch (e) {
+        if (!cancelado) setErro(mensagemErro(e, "Não foi possível carregar os produtos."));
       } finally {
-        setBuscando(false);
+        if (!cancelado) setCarregandoProdutos(false);
       }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [busca]);
+    })();
+    return () => {
+      cancelado = true;
+    };
+  }, []);
 
-  function adicionar(produto: Produto) {
+  const semAcento = (t: string) => t.normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
+
+  const categoriasDisponiveis = useMemo(
+    () =>
+      Array.from(new Set(produtos.map((p) => p.categoria?.nome ?? "Sem categoria"))).sort((x, y) =>
+        x.localeCompare(y, "pt-BR")
+      ),
+    [produtos]
+  );
+
+  const produtosFiltrados = useMemo(() => {
+    const termo = semAcento(busca.trim());
+    return produtos
+      .filter((p) => {
+        if (filtroCategoria !== "todas" && (p.categoria?.nome ?? "Sem categoria") !== filtroCategoria) return false;
+        if (!termo) return true;
+        return semAcento(p.nome).includes(termo) || (p.codigoBarras ?? "").includes(termo);
+      })
+      .sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
+  }, [produtos, busca, filtroCategoria]);
+
+  const idsSelecionados = useMemo(() => new Set(itens.map((i) => i.produto.id)), [itens]);
+
+  // marcar = entra com quantidade 1; desmarcar = sai da consignação
+  function alternarProduto(produto: Produto) {
     setErro(null);
     setItens((prev) => {
-      const existente = prev.find((i) => i.produto.id === produto.id);
-      const qtd = (existente?.quantidade ?? 0) + 1;
-      if (qtd > produto.quantidadeEstoque) {
-        setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
+      if (prev.some((i) => i.produto.id === produto.id)) {
+        return prev.filter((i) => i.produto.id !== produto.id);
+      }
+      if (produto.quantidadeEstoque <= 0) {
+        setErro(`${produto.nome} está sem estoque.`);
         return prev;
       }
-      if (existente) return prev.map((i) => (i.produto.id === produto.id ? { ...i, quantidade: qtd } : i));
       return [...prev, { produto, quantidade: 1 }];
     });
-    setBusca("");
-    setResultados([]);
-    buscaRef.current?.focus();
   }
 
   function alterar(produtoId: number, delta: number) {
@@ -359,36 +371,91 @@ function ModalNovaConsignacao({
           </div>
 
           <div>
-            <div className="relative">
-              <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                ref={buscaRef}
-                className="input pl-9"
-                placeholder="Buscar produto por nome ou código de barras"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-              />
-              {buscando && <Loader2 className="w-4 h-4 animate-spin text-muted absolute right-3 top-1/2 -translate-y-1/2" />}
-            </div>
-            {resultados.length > 0 && (
-              <ul className="mt-2 border border-border rounded-lg divide-y divide-border max-h-48 overflow-y-auto">
-                {resultados.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => adicionar(p)}
-                      disabled={p.quantidadeEstoque <= 0}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-background disabled:opacity-40 flex justify-between gap-3"
-                    >
-                      <span className="truncate">{p.nome}</span>
-                      <span className="text-xs text-muted shrink-0">
-                        {formatarMoeda(p.precoVenda)} · estoque {p.quantidadeEstoque} ·{" "}
-                        {percentualComissaoConsignacao(p.categoria?.nome)}%
-                      </span>
-                    </button>
-                  </li>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  className="input"
+                  style={{ paddingLeft: "2.25rem" }}
+                  placeholder="Filtrar a lista por nome ou código de barras"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  onKeyDown={(e) => {
+                    // leitor de código de barras: Enter marca o produto quando só sobrou um
+                    if (e.key === "Enter" && produtosFiltrados.length === 1) {
+                      e.preventDefault();
+                      if (!idsSelecionados.has(produtosFiltrados[0].id)) alternarProduto(produtosFiltrados[0]);
+                      setBusca("");
+                    }
+                  }}
+                />
+              </div>
+              <select
+                className="input sm:w-56"
+                value={filtroCategoria}
+                onChange={(e) => setFiltroCategoria(e.target.value)}
+              >
+                <option value="todas">Todas as categorias</option>
+                {categoriasDisponiveis.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
                 ))}
-              </ul>
-            )}
+              </select>
+            </div>
+
+            <div className="mt-2 border border-border rounded-lg">
+              <div className="flex items-center justify-between px-3 py-1.5 text-xs text-muted bg-background rounded-t-lg border-b border-border">
+                <span>Marque os produtos que serão entregues</span>
+                <span>
+                  {itens.length} selecionado(s) · {produtosFiltrados.length} na lista
+                </span>
+              </div>
+              {carregandoProdutos ? (
+                <div className="flex justify-center py-6">
+                  <Loader2 className="w-5 h-5 animate-spin text-muted" />
+                </div>
+              ) : produtosFiltrados.length === 0 ? (
+                <p className="text-sm text-muted text-center py-6">Nenhum produto encontrado.</p>
+              ) : (
+                <ul className="divide-y divide-border max-h-64 overflow-y-auto">
+                  {produtosFiltrados.map((p) => {
+                    const marcado = idsSelecionados.has(p.id);
+                    const semEstoque = p.quantidadeEstoque <= 0;
+                    return (
+                      <li key={p.id}>
+                        <label
+                          className={`flex items-center gap-3 px-3 py-2 text-sm ${
+                            semEstoque && !marcado ? "opacity-40 cursor-not-allowed" : "cursor-pointer hover:bg-background"
+                          } ${marcado ? "bg-primary/5" : ""}`}
+                        >
+                          <input
+                            type="checkbox"
+                            className="w-4 h-4 accent-primary shrink-0"
+                            checked={marcado}
+                            disabled={semEstoque && !marcado}
+                            onChange={() => alternarProduto(p)}
+                          />
+                          <span className="min-w-0 flex-1">
+                            <span className="block truncate">{p.nome}</span>
+                            <span className="block text-xs text-muted truncate">
+                              {p.categoria?.nome ?? "Sem categoria"} · comissão{" "}
+                              {percentualComissaoConsignacao(p.categoria?.nome)}%
+                            </span>
+                          </span>
+                          <span className="text-xs text-right shrink-0">
+                            <span className="block font-mono">{formatarMoeda(p.precoVenda)}</span>
+                            <span className={`block ${semEstoque ? "text-danger font-medium" : "text-muted"}`}>
+                              {semEstoque ? "sem estoque" : `estoque ${p.quantidadeEstoque}`}
+                            </span>
+                          </span>
+                        </label>
+                      </li>
+                    );
+                  })}
+                </ul>
+              )}
+            </div>
           </div>
 
           {itens.length > 0 && (
