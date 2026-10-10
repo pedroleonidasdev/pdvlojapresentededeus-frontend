@@ -24,6 +24,7 @@ import {
   CheckCircle2,
   Clock,
   Lock,
+  Pencil,
 } from "lucide-react";
 
 function mensagemErro(e: unknown, padrao: string): string {
@@ -38,6 +39,7 @@ export default function ConsignadosPage() {
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
   const [novaAberta, setNovaAberta] = useState(false);
+  const [emEdicao, setEmEdicao] = useState<Consignacao | null>(null);
   const [selecionada, setSelecionada] = useState<Consignacao | null>(null);
   const [visualizando, setVisualizando] = useState<Consignacao | null>(null);
 
@@ -124,11 +126,16 @@ export default function ConsignadosPage() {
         </div>
       </div>
 
-      {novaAberta && (
-        <ModalNovaConsignacao
-          onClose={() => setNovaAberta(false)}
-          onCriada={(c) => {
+      {(novaAberta || emEdicao) && (
+        <ModalConsignacaoForm
+          consignacao={emEdicao}
+          onClose={() => {
             setNovaAberta(false);
+            setEmEdicao(null);
+          }}
+          onSalva={(c) => {
+            setNovaAberta(false);
+            setEmEdicao(null);
             carregar();
             setSelecionada(c);
           }}
@@ -149,6 +156,10 @@ export default function ConsignadosPage() {
             carregar();
           }}
           onImprimir={(c) => setVisualizando(c)}
+          onEditar={(c) => {
+            setSelecionada(null);
+            setEmEdicao(c);
+          }}
         />
       )}
 
@@ -180,9 +191,62 @@ function Resumo({ rotulo, valor }: { rotulo: string; valor: string }) {
 
 /* ------------------------------ Nova consignação ------------------------------ */
 
-interface ItemNovo {
-  produto: Produto;
+/** Linha do formulário (nova ou em edição). Guarda o preço da linha: em edição, os itens
+ *  que já existiam mantêm o preço e a comissão gravados na criação da consignação. */
+interface ItemForm {
+  produtoId: number;
+  nome: string;
+  categoriaNome: string | null;
+  preco: number;
+  percentual: number;
   quantidade: number;
+}
+
+/**
+ * Quantidade editável: dá para digitar o número (ex: 25) ou usar − e +. Enquanto o campo
+ * está em foco ele mostra o que a pessoa digita (inclusive vazio); ao sair, volta a mostrar
+ * o valor real da linha. Valores inválidos (0, vazio) são ignorados.
+ */
+function QuantidadeInput({
+  valor,
+  onChange,
+  onMais,
+  onMenos,
+}: {
+  valor: number;
+  onChange: (n: number) => void;
+  onMais: () => void;
+  onMenos: () => void;
+}) {
+  const [digitando, setDigitando] = useState<string | null>(null);
+  return (
+    <div className="flex items-center gap-1">
+      <button type="button" onClick={onMenos} className="p-1 rounded hover:bg-background" aria-label="Diminuir">
+        <Minus className="w-3.5 h-3.5" />
+      </button>
+      <input
+        inputMode="numeric"
+        aria-label="Quantidade"
+        className="input text-center font-mono py-1"
+        style={{ width: "4.5rem" }}
+        value={digitando ?? String(valor)}
+        onFocus={(e) => {
+          setDigitando(String(valor));
+          e.target.select();
+        }}
+        onChange={(e) => {
+          const v = e.target.value.replace(/\D/g, "").slice(0, 5);
+          setDigitando(v);
+          if (v !== "" && Number(v) >= 1) onChange(Number(v));
+        }}
+        onBlur={() => setDigitando(null)}
+        onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
+      />
+      <button type="button" onClick={onMais} className="p-1 rounded hover:bg-background" aria-label="Aumentar">
+        <Plus className="w-3.5 h-3.5" />
+      </button>
+    </div>
+  );
 }
 
 /** minúsculas e sem acento: "Bíblia" e "biblia" são a mesma busca */
@@ -193,17 +257,31 @@ function semAcento(texto: string): string {
 const SEM_CATEGORIA = "sem-categoria";
 const LIMITE_RESULTADOS = 40;
 
-function ModalNovaConsignacao({
+/** Formulário de consignação: cria uma nova ou, quando recebe `consignacao`, edita uma em aberto. */
+function ModalConsignacaoForm({
+  consignacao,
   onClose,
-  onCriada,
+  onSalva,
 }: {
+  consignacao: Consignacao | null;
   onClose: () => void;
-  onCriada: (c: Consignacao) => void;
+  onSalva: (c: Consignacao) => void;
 }) {
-  const [consignatario, setConsignatario] = useState("");
-  const [prazo, setPrazo] = useState("");
-  const [observacao, setObservacao] = useState("");
-  const [itens, setItens] = useState<ItemNovo[]>([]);
+  const editando = consignacao !== null;
+  const [consignatario, setConsignatario] = useState(consignacao?.consignatario ?? "");
+  const [prazo, setPrazo] = useState(consignacao?.prazoDevolucao ?? "");
+  const [observacao, setObservacao] = useState(consignacao?.observacao ?? "");
+  const [itens, setItens] = useState<ItemForm[]>(
+    () =>
+      consignacao?.itens.map((i) => ({
+        produtoId: i.produtoId,
+        nome: i.produtoNome,
+        categoriaNome: i.categoriaNome,
+        preco: i.precoUnitario,
+        percentual: i.percentualComissao,
+        quantidade: i.quantidadeEnviada,
+      })) ?? []
+  );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
@@ -256,36 +334,49 @@ function ModalNovaConsignacao({
         })
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
 
-  const qtdNaLista = (produtoId: number) => itens.find((i) => i.produto.id === produtoId)?.quantidade ?? 0;
+  const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
+
+  // limite = estoque atual do produto (o que já está na consignação ainda não saiu do estoque).
+  // Se o produto não estiver no catálogo (ex: foi inativado), não limita aqui — o servidor valida.
+  const estoqueDe = (produtoId: number) => catalogo.find((p) => p.id === produtoId)?.quantidadeEstoque ?? Infinity;
 
   function adicionar(produto: Produto) {
     setErro(null);
-    const atual = qtdNaLista(produto.id);
-    if (atual + 1 > produto.quantidadeEstoque) {
+    if (qtdNaLista(produto.id) + 1 > produto.quantidadeEstoque) {
       setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
       return;
     }
     setItens((prev) => {
-      const existente = prev.find((i) => i.produto.id === produto.id);
-      if (existente) return prev.map((i) => (i.produto.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
-      return [...prev, { produto, quantidade: 1 }];
+      if (prev.some((i) => i.produtoId === produto.id)) {
+        return prev.map((i) => (i.produtoId === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
+      }
+      return [
+        ...prev,
+        {
+          produtoId: produto.id,
+          nome: produto.nome,
+          categoriaNome: produto.categoria?.nome ?? null,
+          preco: produto.precoVenda,
+          percentual: percentualComissaoConsignacao(produto.categoria?.nome),
+          quantidade: 1,
+        },
+      ];
     });
   }
 
-  function alterar(produtoId: number, delta: number) {
-    setItens((prev) =>
-      prev
-        .map((i) => {
-          if (i.produto.id !== produtoId) return i;
-          const nova = i.quantidade + delta;
-          if (nova > i.produto.quantidadeEstoque) {
-            setErro(`Estoque insuficiente para ${i.produto.nome} (disponível: ${i.produto.quantidadeEstoque})`);
-            return i;
-          }
-          return { ...i, quantidade: nova };
-        })
-        .filter((i) => i.quantidade > 0)
-    );
+  /** Define a quantidade exata de uma linha (digitada ou via +/−), respeitando o estoque. */
+  function definirQuantidade(produtoId: number, quantidade: number) {
+    if (quantidade < 1) return;
+    const item = itens.find((i) => i.produtoId === produtoId);
+    if (!item) return;
+    const limite = estoqueDe(produtoId);
+    if (quantidade > limite) {
+      setErro(`Estoque insuficiente para ${item.nome} (disponível: ${limite})`);
+      quantidade = limite;
+    } else {
+      setErro(null);
+    }
+    setItens((prev) => prev.map((i) => (i.produtoId === produtoId ? { ...i, quantidade } : i)));
   }
 
   // Enter: leitor de código de barras digita o código e dá Enter — adiciona direto o produto
@@ -304,7 +395,7 @@ function ModalNovaConsignacao({
     }
   }
 
-  const total = itens.reduce((acc, i) => acc + i.produto.precoVenda * i.quantidade, 0);
+  const total = itens.reduce((acc, i) => acc + i.preco * i.quantidade, 0);
   const totalUnidades = itens.reduce((acc, i) => acc + i.quantidade, 0);
   const podeSalvar = consignatario.trim() !== "" && itens.length > 0;
 
@@ -314,15 +405,18 @@ function ModalNovaConsignacao({
     setSalvando(true);
     setErro(null);
     try {
-      const { data } = await api.post<Consignacao>("/consignacoes", {
+      const corpo = {
         consignatario: consignatario.trim(),
         prazoDevolucao: prazo || undefined,
         observacao: observacao.trim() || undefined,
-        itens: itens.map((i) => ({ produtoId: i.produto.id, quantidade: i.quantidade })),
-      });
-      onCriada(data);
+        itens: itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade })),
+      };
+      const { data } = editando
+        ? await api.put<Consignacao>(`/consignacoes/${consignacao.id}`, corpo)
+        : await api.post<Consignacao>("/consignacoes", corpo);
+      onSalva(data);
     } catch (e) {
-      setErro(mensagemErro(e, "Não foi possível registrar a consignação."));
+      setErro(mensagemErro(e, editando ? "Não foi possível salvar as alterações." : "Não foi possível registrar a consignação."));
     } finally {
       enviandoRef.current = false;
       setSalvando(false);
@@ -339,8 +433,12 @@ function ModalNovaConsignacao({
       <div className="bg-surface rounded-2xl w-full max-w-3xl max-h-[94vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div>
-            <h2 className="font-semibold text-sm">Nova consignação</h2>
-            <p className="text-xs text-muted mt-0.5">O estoque só dá baixa quando a consignação for fechada.</p>
+            <h2 className="font-semibold text-sm">{editando ? `Editar consignação #${consignacao.id}` : "Nova consignação"}</h2>
+            <p className="text-xs text-muted mt-0.5">
+              {editando
+                ? "Acrescente produtos, mude quantidades ou remova itens. Itens que já estavam mantêm o preço original."
+                : "O estoque só dá baixa quando a consignação for fechada."}
+            </p>
           </div>
           <button onClick={onClose} className="p-1 rounded-md hover:bg-background text-muted" aria-label="Fechar">
             <X className="w-4 h-4" />
@@ -525,26 +623,24 @@ function ModalNovaConsignacao({
             ) : (
               <ul className="border border-border rounded-xl divide-y divide-border">
                 {itens.map((i) => (
-                  <li key={i.produto.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                    <div className="min-w-0 flex-1">
-                      <p className="truncate">{i.produto.nome}</p>
+                  <li key={i.produtoId} className="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2 text-sm">
+                    <div className="min-w-0 flex-1 basis-48">
+                      <p className="truncate">{i.nome}</p>
                       <p className="text-xs text-muted">
-                        {i.produto.categoria?.nome ?? "Sem categoria"} · comissão{" "}
-                        {percentualComissaoConsignacao(i.produto.categoria?.nome)}%
+                        {i.categoriaNome ?? "Sem categoria"} · {formatarMoeda(i.preco)} · comissão {i.percentual}%
                       </p>
                     </div>
-                    <div className="flex items-center gap-1">
-                      <button onClick={() => alterar(i.produto.id, -1)} className="p-1 rounded hover:bg-background" aria-label="Diminuir">
-                        <Minus className="w-3.5 h-3.5" />
-                      </button>
-                      <span className="w-8 text-center font-mono">{i.quantidade}</span>
-                      <button onClick={() => alterar(i.produto.id, 1)} className="p-1 rounded hover:bg-background" aria-label="Aumentar">
-                        <Plus className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                    <span className="w-24 text-right font-mono">{formatarMoeda(i.produto.precoVenda * i.quantidade)}</span>
+                    <QuantidadeInput
+                      valor={i.quantidade}
+                      onChange={(n) => definirQuantidade(i.produtoId, n)}
+                      onMais={() => definirQuantidade(i.produtoId, i.quantidade + 1)}
+                      onMenos={() => {
+                        if (i.quantidade > 1) definirQuantidade(i.produtoId, i.quantidade - 1);
+                      }}
+                    />
+                    <span className="w-24 text-right font-mono">{formatarMoeda(i.preco * i.quantidade)}</span>
                     <button
-                      onClick={() => setItens((prev) => prev.filter((x) => x.produto.id !== i.produto.id))}
+                      onClick={() => setItens((prev) => prev.filter((x) => x.produtoId !== i.produtoId))}
                       className="p-1 rounded hover:bg-background text-danger"
                       aria-label="Remover"
                     >
@@ -569,7 +665,7 @@ function ModalNovaConsignacao({
             className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
           >
             {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-            Registrar consignação
+            {editando ? "Salvar alterações" : "Registrar consignação"}
           </button>
         </div>
       </div>
@@ -586,6 +682,7 @@ function ModalDetalhe({
   onAtualizada,
   onExcluida,
   onImprimir,
+  onEditar,
 }: {
   consignacao: Consignacao;
   ehAdmin: boolean;
@@ -593,6 +690,7 @@ function ModalDetalhe({
   onAtualizada: (c: Consignacao) => void;
   onExcluida: () => void;
   onImprimir: (c: Consignacao) => void;
+  onEditar: (c: Consignacao) => void;
 }) {
   const aberta = consignacao.status === "ABERTA";
   const [vendidas, setVendidas] = useState<Record<number, number>>({});
@@ -762,6 +860,15 @@ function ModalDetalhe({
               <Printer className="w-4 h-4" />
               Visualizar / imprimir / salvar
             </button>
+            {aberta && (
+              <button
+                onClick={() => onEditar(consignacao)}
+                className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
+              >
+                <Pencil className="w-4 h-4" />
+                Editar / acrescentar produtos
+              </button>
+            )}
             {ehAdmin && (
               <button
                 onClick={excluir}
