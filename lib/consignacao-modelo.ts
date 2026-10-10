@@ -62,19 +62,14 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
     porCategoria.set(chave, [...(porCategoria.get(chave) ?? []), item]);
   }
 
-  // código = letra inicial da categoria + sequência (C001, C002...); se duas categorias
-  // começarem com a mesma letra, a segunda ganha um número (C2001) para não repetir
-  const letrasUsadas = new Map<string, number>();
+  // COD. = o código de barras do produto, exatamente como está cadastrado no estoque
+  // (sem prefixo inventado). Produto sem código de barras sai com a coluna em branco.
   const grupos: GrupoModelo[] = [];
   for (const [categoria, itens] of porCategoria) {
-    const base = categoria.normalize("NFD").replace(/[̀-ͯ]/g, "").charAt(0) || "X";
-    const n = (letrasUsadas.get(base) ?? 0) + 1;
-    letrasUsadas.set(base, n);
-    const prefixo = n === 1 ? base : `${base}${n}`;
     grupos.push({
       categoria,
-      linhas: itens.map((i, idx) => ({
-        cod: `${prefixo}${String(idx + 1).padStart(3, "0")}`,
+      linhas: itens.map((i) => ({
+        cod: i.codigoBarras ?? "",
         produto: i.produtoNome,
         qtdEnviada: i.quantidadeEnviada,
         vlrUnitario: i.precoUnitario,

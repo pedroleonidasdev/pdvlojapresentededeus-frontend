@@ -147,7 +147,7 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
   ];
 
   // ------------------------------ Relatório ------------------------------
-  const larguras = [800, 3200, 950, 1250, 1250, 950, 1400]; // soma 9800
+  const larguras = [1500, 2500, 950, 1250, 1250, 950, 1400]; // soma 9800
   const total = larguras.reduce((a, b) => a + b, 0);
 
   function celula(

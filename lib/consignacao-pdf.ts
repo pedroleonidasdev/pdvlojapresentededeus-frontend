@@ -147,8 +147,8 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
     headStyles: { fillColor: CINZA, textColor: [0, 0, 0], fontStyle: "bold", halign: "center", fontSize: 7.5 },
     footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
     columnStyles: {
-      0: { cellWidth: 16 },
-      1: { cellWidth: 62 },
+      0: { cellWidth: 26 },
+      1: { cellWidth: 52 },
       2: { cellWidth: 18, ...centro },
       3: { cellWidth: 22, ...direita },
       4: { cellWidth: 22, ...direita },
