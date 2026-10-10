@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Consignacao, Produto } from "@/lib/types";
+import { Categoria, Consignacao, Produto } from "@/lib/types";
 import {
   formatarMoeda,
   formatarDataHora,
@@ -185,6 +185,14 @@ interface ItemNovo {
   quantidade: number;
 }
 
+/** minúsculas e sem acento: "Bíblia" e "biblia" são a mesma busca */
+function semAcento(texto: string): string {
+  return texto.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+}
+
+const SEM_CATEGORIA = "sem-categoria";
+const LIMITE_RESULTADOS = 40;
+
 function ModalNovaConsignacao({
   onClose,
   onCriada,
@@ -195,58 +203,73 @@ function ModalNovaConsignacao({
   const [consignatario, setConsignatario] = useState("");
   const [prazo, setPrazo] = useState("");
   const [observacao, setObservacao] = useState("");
-  const [busca, setBusca] = useState("");
-  const [resultados, setResultados] = useState<Produto[]>([]);
-  const [buscando, setBuscando] = useState(false);
   const [itens, setItens] = useState<ItemNovo[]>([]);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
   const buscaRef = useRef<HTMLInputElement>(null);
 
+  // catálogo carregado uma vez ao abrir: a busca e o filtro por categoria passam a ser
+  // instantâneos (sem esperar o servidor a cada letra digitada)
+  const [catalogo, setCatalogo] = useState<Produto[]>([]);
+  const [categorias, setCategorias] = useState<Categoria[]>([]);
+  const [carregandoCatalogo, setCarregandoCatalogo] = useState(true);
+  const [busca, setBusca] = useState("");
+  const [categoriaSel, setCategoriaSel] = useState<string | null>(null); // id da categoria, SEM_CATEGORIA ou null (todas)
+
   useEffect(() => {
-    const termo = busca.trim();
-    if (termo.length < 2) {
-      setResultados([]);
-      return;
-    }
-    const somenteNumeros = /^[0-9]+$/.test(termo);
-    const t = setTimeout(async () => {
-      setBuscando(true);
-      try {
-        if (somenteNumeros) {
-          try {
-            const { data } = await api.get<Produto>(`/produtos/codigo-barras/${termo}`);
-            setResultados([data]);
-          } catch {
-            setResultados([]);
-          }
-        } else {
-          const { data } = await api.get<Produto[]>("/produtos", { params: { nome: termo } });
-          setResultados(data);
-        }
-      } finally {
-        setBuscando(false);
-      }
-    }, 300);
-    return () => clearTimeout(t);
-  }, [busca]);
+    let ativo = true;
+    Promise.all([api.get<Produto[]>("/produtos"), api.get<Categoria[]>("/categorias")])
+      .then(([prods, cats]) => {
+        if (!ativo) return;
+        setCatalogo(prods.data);
+        setCategorias([...cats.data].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" })));
+      })
+      .catch(() => ativo && setErro("Não foi possível carregar os produtos."))
+      .finally(() => ativo && setCarregandoCatalogo(false));
+    return () => {
+      ativo = false;
+    };
+  }, []);
+
+  const chaveCategoria = (p: Produto) => (p.categoria ? String(p.categoria.id) : SEM_CATEGORIA);
+
+  const contagemPorCategoria = new Map<string, number>();
+  for (const p of catalogo) contagemPorCategoria.set(chaveCategoria(p), (contagemPorCategoria.get(chaveCategoria(p)) ?? 0) + 1);
+
+  const termo = semAcento(busca.trim());
+  const palavras = termo.split(/\s+/).filter(Boolean);
+  const buscando = palavras.length > 0 || categoriaSel !== null;
+
+  const filtrados = !buscando
+    ? []
+    : catalogo
+        .filter((p) => categoriaSel === null || chaveCategoria(p) === categoriaSel)
+        .filter((p) => {
+          if (palavras.length === 0) return true;
+          const texto = semAcento(`${p.nome} ${p.codigoBarras ?? ""} ${p.categoria?.nome ?? ""}`);
+          // palavras de 3+ letras casam em qualquer parte do texto ("roma" acha "aromática");
+          // 1-2 letras só casam no INÍCIO de uma palavra, senão o "g" de "camiseta agape g"
+          // acharia qualquer coisa que tenha a letra g no meio
+          const inicios = texto.split(/[^a-z0-9]+/);
+          return palavras.every((w) => (w.length >= 3 ? texto.includes(w) : inicios.some((x) => x.startsWith(w))));
+        })
+        .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+
+  const qtdNaLista = (produtoId: number) => itens.find((i) => i.produto.id === produtoId)?.quantidade ?? 0;
 
   function adicionar(produto: Produto) {
     setErro(null);
+    const atual = qtdNaLista(produto.id);
+    if (atual + 1 > produto.quantidadeEstoque) {
+      setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
+      return;
+    }
     setItens((prev) => {
       const existente = prev.find((i) => i.produto.id === produto.id);
-      const qtd = (existente?.quantidade ?? 0) + 1;
-      if (qtd > produto.quantidadeEstoque) {
-        setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
-        return prev;
-      }
-      if (existente) return prev.map((i) => (i.produto.id === produto.id ? { ...i, quantidade: qtd } : i));
+      if (existente) return prev.map((i) => (i.produto.id === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
       return [...prev, { produto, quantidade: 1 }];
     });
-    setBusca("");
-    setResultados([]);
-    buscaRef.current?.focus();
   }
 
   function alterar(produtoId: number, delta: number) {
@@ -265,7 +288,24 @@ function ModalNovaConsignacao({
     );
   }
 
+  // Enter: leitor de código de barras digita o código e dá Enter — adiciona direto o produto
+  // com aquele código; senão, se a busca achou um único produto, adiciona esse.
+  function aoApertarEnter() {
+    const texto = busca.trim();
+    if (texto === "") return;
+    const porCodigo = catalogo.find((p) => p.codigoBarras === texto);
+    const alvo = porCodigo ?? (filtrados.length === 1 ? filtrados[0] : null);
+    if (alvo && alvo.quantidadeEstoque > 0) {
+      adicionar(alvo);
+      setBusca("");
+      buscaRef.current?.focus();
+    } else if (!alvo && /^[0-9]{4,}$/.test(texto)) {
+      setErro(`Nenhum produto com o código ${texto}`);
+    }
+  }
+
   const total = itens.reduce((acc, i) => acc + i.produto.precoVenda * i.quantidade, 0);
+  const totalUnidades = itens.reduce((acc, i) => acc + i.quantidade, 0);
   const podeSalvar = consignatario.trim() !== "" && itens.length > 0;
 
   async function salvar() {
@@ -289,20 +329,25 @@ function ModalNovaConsignacao({
     }
   }
 
+  const chip = (ativo: boolean) =>
+    `inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 text-xs font-medium transition ${
+      ativo ? "bg-primary text-white border-primary" : "bg-surface border-border text-foreground hover:border-primary"
+    }`;
+
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 no-print">
-      <div className="bg-surface rounded-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden">
+      <div className="bg-surface rounded-2xl w-full max-w-3xl max-h-[94vh] flex flex-col overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
           <div>
             <h2 className="font-semibold text-sm">Nova consignação</h2>
             <p className="text-xs text-muted mt-0.5">O estoque só dá baixa quando a consignação for fechada.</p>
           </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-background text-muted">
+          <button onClick={onClose} className="p-1 rounded-md hover:bg-background text-muted" aria-label="Fechar">
             <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-5 space-y-4">
+        <div className="flex-1 overflow-y-auto p-5 space-y-5">
           <div className="grid sm:grid-cols-2 gap-3">
             <label className="text-xs text-muted block sm:col-span-2">
               Consignatário (quem recebe a mercadoria)
@@ -329,70 +374,187 @@ function ModalNovaConsignacao({
             </label>
           </div>
 
-          <div>
+          {/* ------------------------------ Adicionar produtos ------------------------------ */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">Adicionar produtos</h3>
+
             <div className="relative">
-              <Search className="w-4 h-4 text-muted absolute left-3 top-1/2 -translate-y-1/2" />
+              <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
                 ref={buscaRef}
-                className="input pl-9"
-                placeholder="Buscar produto por nome ou código de barras"
+                className="input"
+                style={{ paddingLeft: "2.5rem", paddingRight: busca ? "2.5rem" : undefined }}
+                placeholder="Buscar por nome, categoria ou código de barras"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && aoApertarEnter()}
               />
-              {buscando && <Loader2 className="w-4 h-4 animate-spin text-muted absolute right-3 top-1/2 -translate-y-1/2" />}
+              {busca && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setBusca("");
+                    buscaRef.current?.focus();
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted hover:bg-background"
+                  aria-label="Limpar busca"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
             </div>
-            {resultados.length > 0 && (
-              <ul className="mt-2 border border-border rounded-lg divide-y divide-border max-h-48 overflow-y-auto">
-                {resultados.map((p) => (
-                  <li key={p.id}>
+
+            {/* categorias: toque para listar só os produtos daquela categoria */}
+            <div className="flex flex-wrap gap-2">
+              <button type="button" className={chip(categoriaSel === null)} onClick={() => setCategoriaSel(null)}>
+                Todas
+                <span className={categoriaSel === null ? "text-white/80" : "text-muted"}>{catalogo.length}</span>
+              </button>
+              {categorias
+                .filter((c) => (contagemPorCategoria.get(String(c.id)) ?? 0) > 0)
+                .map((c) => {
+                  const ativo = categoriaSel === String(c.id);
+                  const pct = percentualComissaoConsignacao(c.nome);
+                  return (
                     <button
-                      onClick={() => adicionar(p)}
-                      disabled={p.quantidadeEstoque <= 0}
-                      className="w-full text-left px-3 py-2 text-sm hover:bg-background disabled:opacity-40 flex justify-between gap-3"
+                      key={c.id}
+                      type="button"
+                      className={chip(ativo)}
+                      onClick={() => setCategoriaSel(ativo ? null : String(c.id))}
+                      title={`Comissão do consignatário: ${pct}%`}
                     >
-                      <span className="truncate">{p.nome}</span>
-                      <span className="text-xs text-muted shrink-0">
-                        {formatarMoeda(p.precoVenda)} · estoque {p.quantidadeEstoque} ·{" "}
-                        {percentualComissaoConsignacao(p.categoria?.nome)}%
+                      {c.nome}
+                      <span className={ativo ? "text-white/80" : "text-muted"}>{contagemPorCategoria.get(String(c.id))}</span>
+                      <span
+                        className={`rounded px-1 text-[10px] ${
+                          ativo ? "bg-white/20 text-white" : pct === 15 ? "bg-amber-100 text-amber-700" : "bg-background text-muted"
+                        }`}
+                      >
+                        {pct}%
                       </span>
+                    </button>
+                  );
+                })}
+              {(contagemPorCategoria.get(SEM_CATEGORIA) ?? 0) > 0 && (
+                <button
+                  type="button"
+                  className={chip(categoriaSel === SEM_CATEGORIA)}
+                  onClick={() => setCategoriaSel(categoriaSel === SEM_CATEGORIA ? null : SEM_CATEGORIA)}
+                >
+                  Sem categoria
+                  <span className={categoriaSel === SEM_CATEGORIA ? "text-white/80" : "text-muted"}>
+                    {contagemPorCategoria.get(SEM_CATEGORIA)}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {/* resultados */}
+            <div className="border border-border rounded-xl overflow-hidden">
+              {carregandoCatalogo ? (
+                <div className="flex items-center justify-center gap-2 py-8 text-sm text-muted">
+                  <Loader2 className="w-4 h-4 animate-spin" /> Carregando produtos...
+                </div>
+              ) : !buscando ? (
+                <p className="text-sm text-muted text-center py-8 px-4">
+                  Escolha uma categoria acima ou digite o nome do produto. Com leitor, é só passar o código de barras.
+                </p>
+              ) : filtrados.length === 0 ? (
+                <p className="text-sm text-muted text-center py-8 px-4">Nenhum produto encontrado.</p>
+              ) : (
+                <>
+                  <ul className="divide-y divide-border max-h-72 overflow-y-auto">
+                    {filtrados.slice(0, LIMITE_RESULTADOS).map((p) => {
+                      const naLista = qtdNaLista(p.id);
+                      const semEstoque = p.quantidadeEstoque <= 0;
+                      const esgotou = naLista >= p.quantidadeEstoque;
+                      return (
+                        <li key={p.id}>
+                          <button
+                            type="button"
+                            onClick={() => adicionar(p)}
+                            disabled={semEstoque || esgotou}
+                            className="w-full text-left px-3 py-2.5 flex items-center gap-3 hover:bg-background disabled:opacity-50 disabled:hover:bg-transparent"
+                          >
+                            <div className="min-w-0 flex-1">
+                              <p className="text-sm font-medium truncate">{p.nome}</p>
+                              <p className="text-xs text-muted truncate">
+                                {p.categoria?.nome ?? "Sem categoria"} · comissão{" "}
+                                {percentualComissaoConsignacao(p.categoria?.nome)}%
+                                {p.codigoBarras ? ` · ${p.codigoBarras}` : ""}
+                              </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                              <p className="text-sm font-mono">{formatarMoeda(p.precoVenda)}</p>
+                              <p className={`text-xs ${semEstoque ? "text-danger" : "text-muted"}`}>
+                                {semEstoque ? "Sem estoque" : `estoque ${p.quantidadeEstoque}`}
+                              </p>
+                            </div>
+                            {naLista > 0 && (
+                              <span className="shrink-0 rounded-full bg-primary/10 text-primary text-xs font-medium px-2 py-0.5">
+                                {naLista} na lista
+                              </span>
+                            )}
+                            <span className="shrink-0 flex items-center justify-center w-8 h-8 rounded-lg bg-primary text-white">
+                              <Plus className="w-4 h-4" />
+                            </span>
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                  <p className="text-xs text-muted bg-background px-3 py-1.5">
+                    {filtrados.length > LIMITE_RESULTADOS
+                      ? `Mostrando ${LIMITE_RESULTADOS} de ${filtrados.length} produtos — digite mais letras para refinar.`
+                      : `${filtrados.length} produto${filtrados.length === 1 ? "" : "s"}`}
+                  </p>
+                </>
+              )}
+            </div>
+          </section>
+
+          {/* ------------------------------ Itens da consignação ------------------------------ */}
+          <section className="space-y-2">
+            <h3 className="text-xs font-semibold uppercase tracking-wide text-muted">
+              Itens da consignação{itens.length > 0 ? ` (${totalUnidades} unidade${totalUnidades === 1 ? "" : "s"})` : ""}
+            </h3>
+            {itens.length === 0 ? (
+              <p className="text-sm text-muted border border-dashed border-border rounded-xl text-center py-5">
+                Nenhum produto adicionado ainda.
+              </p>
+            ) : (
+              <ul className="border border-border rounded-xl divide-y divide-border">
+                {itens.map((i) => (
+                  <li key={i.produto.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate">{i.produto.nome}</p>
+                      <p className="text-xs text-muted">
+                        {i.produto.categoria?.nome ?? "Sem categoria"} · comissão{" "}
+                        {percentualComissaoConsignacao(i.produto.categoria?.nome)}%
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button onClick={() => alterar(i.produto.id, -1)} className="p-1 rounded hover:bg-background" aria-label="Diminuir">
+                        <Minus className="w-3.5 h-3.5" />
+                      </button>
+                      <span className="w-8 text-center font-mono">{i.quantidade}</span>
+                      <button onClick={() => alterar(i.produto.id, 1)} className="p-1 rounded hover:bg-background" aria-label="Aumentar">
+                        <Plus className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <span className="w-24 text-right font-mono">{formatarMoeda(i.produto.precoVenda * i.quantidade)}</span>
+                    <button
+                      onClick={() => setItens((prev) => prev.filter((x) => x.produto.id !== i.produto.id))}
+                      className="p-1 rounded hover:bg-background text-danger"
+                      aria-label="Remover"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </li>
                 ))}
               </ul>
             )}
-          </div>
-
-          {itens.length > 0 && (
-            <ul className="border border-border rounded-lg divide-y divide-border">
-              {itens.map((i) => (
-                <li key={i.produto.id} className="flex items-center gap-3 px-3 py-2 text-sm">
-                  <div className="min-w-0 flex-1">
-                    <p className="truncate">{i.produto.nome}</p>
-                    <p className="text-xs text-muted">
-                      {i.produto.categoria?.nome ?? "Sem categoria"} · comissão{" "}
-                      {percentualComissaoConsignacao(i.produto.categoria?.nome)}%
-                    </p>
-                  </div>
-                  <div className="flex items-center gap-1">
-                    <button onClick={() => alterar(i.produto.id, -1)} className="p-1 rounded hover:bg-background">
-                      <Minus className="w-3.5 h-3.5" />
-                    </button>
-                    <span className="w-8 text-center font-mono">{i.quantidade}</span>
-                    <button onClick={() => alterar(i.produto.id, 1)} className="p-1 rounded hover:bg-background">
-                      <Plus className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                  <span className="w-24 text-right font-mono">{formatarMoeda(i.produto.precoVenda * i.quantidade)}</span>
-                  <button
-                    onClick={() => setItens((prev) => prev.filter((x) => x.produto.id !== i.produto.id))}
-                    className="p-1 rounded hover:bg-background text-danger"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
-                </li>
-              ))}
-            </ul>
-          )}
+          </section>
 
           {erro && <p className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2">{erro}</p>}
         </div>
