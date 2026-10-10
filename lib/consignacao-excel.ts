@@ -27,8 +27,8 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
   const ws = wb.addWorksheet("Relatório", {
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
   });
-  const LARGURA_PRODUTO = 50;
-  ws.columns = [{ width: 9 }, { width: LARGURA_PRODUTO }, { width: 11 }, { width: 14 }, { width: 14 }, { width: 11 }, { width: 16 }];
+  const LARGURA_PRODUTO = 46;
+  ws.columns = [{ width: 16 }, { width: LARGURA_PRODUTO }, { width: 11 }, { width: 14 }, { width: 14 }, { width: 11 }, { width: 16 }];
 
   // cabeçalho da loja (linhas 1 a 5) — logo à esquerda, textos ao lado
   const cabecalhoLinhas: [string, boolean, string?][] = [

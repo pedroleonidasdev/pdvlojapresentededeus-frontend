@@ -175,13 +175,13 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
         footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
         // soma = 180 mm (largura útil da página); a coluna do produto é a mais larga
         columnStyles: {
-          0: { cellWidth: 15 },
-          1: { cellWidth: 65 },
+          0: { cellWidth: 27 }, // cabe um código de barras de 13 dígitos
+          1: { cellWidth: 56 },
           2: { cellWidth: 15, ...centro },
-          3: { cellWidth: 22, ...direita },
-          4: { cellWidth: 22, ...direita },
+          3: { cellWidth: 21, ...direita },
+          4: { cellWidth: 21, ...direita },
           5: { cellWidth: 15, ...centro },
-          6: { cellWidth: 26, ...direita },
+          6: { cellWidth: 25, ...direita },
         },
         head: [
           [
