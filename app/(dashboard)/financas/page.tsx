@@ -2,7 +2,8 @@
 
 import { Fragment, useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
-import { Despesa, TipoDespesa, FormaPagamento, Venda } from "@/lib/types";
+import { Despesa, TipoDespesa, FormaPagamento, Venda, Consignacao } from "@/lib/types";
+import { consignacoesFechadasNoPeriodo, resumirConsignacoes, ResumoConsignados } from "@/lib/consignacao-faturamento";
 import {
   formatarMoeda,
   formatarDataCurta,
@@ -197,6 +198,14 @@ export default function FinancasPage() {
   const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [totalFaturado, setTotalFaturado] = useState(0);
+  // consignações FECHADAS no período: o vendido entra no faturamento bruto e a
+  // comissão do consignatário é descontada do lucro estimado
+  const [consignados, setConsignados] = useState<ResumoConsignados>({
+    quantidade: 0,
+    totalVendido: 0,
+    totalComissao: 0,
+    totalLiquido: 0,
+  });
   const [carregando, setCarregando] = useState(false);
   // só passa a "true" depois do primeiro clique em Filtrar — evita buscar
   // automaticamente ao abrir a tela, antes do usuário escolher o período
@@ -228,12 +237,16 @@ export default function FinancasPage() {
         inicio: limiteDiaBrasiliaParaUtc(inicio, false),
         fim: limiteDiaBrasiliaParaUtc(fim, true),
       };
-      const [resDespesas, resVendas] = await Promise.all([
+      const [resDespesas, resVendas, resConsignacoes] = await Promise.all([
         api.get<Despesa[]>("/despesas", { params }),
         api.get<Venda[]>("/vendas", { params }),
+        api.get<Consignacao[]>("/consignacoes"),
       ]);
       setDespesas(resDespesas.data);
       setTotalFaturado(resVendas.data.reduce((acc, v) => acc + v.total, 0));
+      setConsignados(
+        resumirConsignacoes(consignacoesFechadasNoPeriodo(resConsignacoes.data, params.inicio, params.fim))
+      );
     } catch {
       setErro("Não foi possível carregar os dados financeiros do período.");
     } finally {
@@ -318,7 +331,7 @@ export default function FinancasPage() {
       totalDespesas,
       totalSangrias,
       totalSuprimentos,
-      lucroLiquido: totalFaturado - totalDespesas,
+      lucroLiquido: totalFaturado + consignados.totalLiquido - totalDespesas,
       categoriasOrdenadas,
       // quanto ainda falta pagar, somando lançamentos à vista em aberto e
       // parcelas não pagas — só DESPESA (sangria/suprimento já aconteceram).
@@ -339,7 +352,7 @@ export default function FinancasPage() {
           );
         }, 0),
     };
-  }, [despesas, totalFaturado]);
+  }, [despesas, totalFaturado, consignados]);
 
   // ordenação da lista: por padrão, vencimento do mais antigo pro mais novo —
   // é o que faz mais sentido pra acompanhar o que vence primeiro. O usuário
@@ -455,7 +468,7 @@ export default function FinancasPage() {
               <CardResumo
                 icone={<TrendingUp className="w-4 h-4" />}
                 label="Faturamento bruto"
-                valor={totalFaturado}
+                valor={totalFaturado + consignados.totalVendido}
                 oculto={valoresOcultos}
                 cor="text-info"
               />
@@ -509,9 +522,16 @@ export default function FinancasPage() {
               />
             </div>
             <p className="text-xs text-muted -mt-3">
-              Lucro líquido estimado = faturamento bruto do período − despesas. Sangria e suprimento não
-              entram nessa conta: são só dinheiro mudando de lugar, não um custo novo.
+              Lucro líquido estimado = faturamento bruto do período − comissão dos consignados − despesas.
+              Sangria e suprimento não entram nessa conta: são só dinheiro mudando de lugar, não um custo novo.
             </p>
+            {consignados.quantidade > 0 && (
+              <p className="text-xs text-muted -mt-3">
+                Inclui {consignados.quantidade} consignação(ões) fechada(s) no período:{" "}
+                {moeda(consignados.totalVendido)} vendidos, dos quais {moeda(consignados.totalComissao)} ficam de
+                comissão com o consignatário.
+              </p>
+            )}
 
             {/* despesas por categoria */}
             {resumo.categoriasOrdenadas.length > 0 && (

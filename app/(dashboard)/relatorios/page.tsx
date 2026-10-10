@@ -6,7 +6,8 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
+import { Venda, FormaPagamento, Caixa, Troca, Despesa, Consignacao } from "@/lib/types";
+import { consignacoesFechadasNoPeriodo, resumirConsignacoes } from "@/lib/consignacao-faturamento";
 import {
   formatarMoeda,
   formatarDataHora,
@@ -33,6 +34,7 @@ import {
   RotateCcw,
   FileText,
   ArrowRight,
+  Handshake,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
@@ -49,6 +51,7 @@ export default function RelatoriosPage() {
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [trocas, setTrocas] = useState<Troca[]>([]);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
+  const [consignacoes, setConsignacoes] = useState<Consignacao[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [jaGerou, setJaGerou] = useState(false);
 
@@ -110,12 +113,14 @@ export default function RelatoriosPage() {
         inicio: limiteDiaBrasiliaParaUtc(inicio, false),
         fim: limiteDiaBrasiliaParaUtc(fim, true),
       };
-      const [resVendas, resCaixas, resTrocas, resDespesas] = await Promise.all([
+      const [resVendas, resCaixas, resTrocas, resDespesas, resConsignacoes] = await Promise.all([
         api.get<Venda[]>("/vendas", { params }),
         api.get<Caixa[]>("/caixa", { params }),
         api.get<Troca[]>("/trocas", { params }),
         api.get<Despesa[]>("/despesas", { params }),
+        api.get<Consignacao[]>("/consignacoes"),
       ]);
+      setConsignacoes(consignacoesFechadasNoPeriodo(resConsignacoes.data, params.inicio, params.fim));
       setVendas(resVendas.data);
       setHistoricoCaixas(resCaixas.data);
       setTrocas(resTrocas.data);
@@ -133,9 +138,10 @@ export default function RelatoriosPage() {
     const nomes = new Set([
       ...vendas.map((v) => v.usuarioNome),
       ...trocas.map((t) => t.usuarioNome),
+      ...consignacoes.map((c) => c.usuarioNome),
     ]);
     return Array.from(nomes).sort();
-  }, [vendas, trocas]);
+  }, [vendas, trocas, consignacoes]);
 
   function alternarForma(forma: FormaPagamento) {
     setFormasSelecionadas((prev) => {
@@ -170,6 +176,16 @@ export default function RelatoriosPage() {
     });
   }, [trocas, formasSelecionadas, usuarioSelecionado]);
 
+  // Consignações fechadas no período. Não têm forma de pagamento (o consignatário
+  // presta contas e repassa o líquido), então só entram quando nenhuma forma foi
+  // desmarcada; o filtro de vendedor vale pelo usuário que registrou a consignação.
+  const consignacoesFiltradas = useMemo(() => {
+    if (formasSelecionadas.size < FORMAS.length) return [];
+    return consignacoes.filter(
+      (c) => usuarioSelecionado === "TODOS" || c.usuarioNome === usuarioSelecionado
+    );
+  }, [consignacoes, formasSelecionadas, usuarioSelecionado]);
+
   // métricas calculadas a partir do que está filtrado, garantindo consistência
   // entre os cards, o gráfico e a lista de vendas exibida
   const metricas = useMemo(() => {
@@ -180,7 +196,9 @@ export default function RelatoriosPage() {
     // negativa = loja devolveu troco (sai dinheiro) — soma líquida das duas.
     const totalTrocas = trocasFiltradas.reduce((acc, t) => acc + t.diferenca, 0);
     const quantidadeTrocas = trocasFiltradas.length;
-    const totalLiquido = totalFaturado + totalTrocas;
+    const consignados = resumirConsignacoes(consignacoesFiltradas);
+    // faturamento líquido = vendas + ajuste de trocas + o que sobrou para a loja nos consignados
+    const totalLiquido = totalFaturado + totalTrocas + consignados.totalLiquido;
 
     const totalPorFormaPagamento: Record<string, number> = {};
     for (const v of vendasFiltradas) {
@@ -223,10 +241,11 @@ export default function RelatoriosPage() {
       totalTrocas,
       quantidadeTrocas,
       totalLiquido,
+      consignados,
       totalPorFormaPagamento,
       produtosMaisVendidos,
     };
-  }, [vendasFiltradas, trocasFiltradas]);
+  }, [vendasFiltradas, trocasFiltradas, consignacoesFiltradas]);
 
   // agrupamento por dia (no fuso de Brasília) para o gráfico
   const vendasPorDia = useMemo(() => {
@@ -371,6 +390,27 @@ export default function RelatoriosPage() {
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Vendas");
     XLSX.utils.book_append_sheet(livro, planilhaTrocas, "Trocas");
+
+    const linhasConsignados = consignacoesFiltradas.map((c) => ({
+      Consignação: c.id,
+      Consignatário: c.consignatario,
+      "Fechada em": c.dataFechamento ? formatarDataHora(c.dataFechamento) : "",
+      Responsável: c.usuarioNome,
+      "Total vendido": c.totalVendido,
+      Comissão: c.totalComissao,
+      "Líquido da loja": c.totalLiquidoLoja,
+    }));
+    const planilhaConsignados = XLSX.utils.json_to_sheet(linhasConsignados);
+    planilhaConsignados["!cols"] = [
+      { wch: 12 },
+      { wch: 30 },
+      { wch: 18 },
+      { wch: 16 },
+      { wch: 14 },
+      { wch: 12 },
+      { wch: 16 },
+    ];
+    XLSX.utils.book_append_sheet(livro, planilhaConsignados, "Consignados");
     XLSX.writeFile(livro, `relatorio-vendas_${inicio}_a_${fim}.xlsx`);
   }
 
@@ -393,11 +433,12 @@ export default function RelatoriosPage() {
       startY: y,
       margin: { left: margem, right: margem },
       theme: "grid",
-      head: [["Faturamento líquido", "Vendas", "Trocas", "Ticket médio"]],
+      head: [["Faturamento líquido", "Vendas", "Trocas", "Consignados (líquido)", "Ticket médio"]],
       body: [[
         formatarMoeda(metricas.totalLiquido),
         metricas.quantidadeVendas.toString(),
         metricas.quantidadeTrocas.toString(),
+        formatarMoeda(metricas.consignados.totalLiquido),
         formatarMoeda(
           metricas.quantidadeVendas > 0 ? metricas.totalFaturado / metricas.quantidadeVendas : 0
         ),
@@ -652,14 +693,24 @@ export default function RelatoriosPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
               <CardMetrica
                 icon={TrendingUp}
                 label="Faturamento líquido"
                 valor={formatarMoeda(metricas.totalLiquido)}
                 subtitulo={
-                  metricas.totalTrocas !== 0
-                    ? `${formatarMoeda(metricas.totalFaturado)} em vendas ${metricas.totalTrocas > 0 ? "+" : "-"} ${formatarMoeda(Math.abs(metricas.totalTrocas))} em trocas`
+                  metricas.totalTrocas !== 0 || metricas.consignados.quantidade > 0
+                    ? [
+                        `${formatarMoeda(metricas.totalFaturado)} em vendas`,
+                        metricas.totalTrocas !== 0
+                          ? `${metricas.totalTrocas > 0 ? "+" : "-"} ${formatarMoeda(Math.abs(metricas.totalTrocas))} em trocas`
+                          : "",
+                        metricas.consignados.quantidade > 0
+                          ? `+ ${formatarMoeda(metricas.consignados.totalLiquido)} em consignados`
+                          : "",
+                      ]
+                        .filter(Boolean)
+                        .join(" ")
                     : undefined
                 }
               />
@@ -676,6 +727,16 @@ export default function RelatoriosPage() {
                   metricas.quantidadeTrocas > 0
                     ? `${metricas.totalTrocas >= 0 ? "+" : "-"}${formatarMoeda(Math.abs(metricas.totalTrocas))} de ajuste`
                     : undefined
+                }
+              />
+              <CardMetrica
+                icon={Handshake}
+                label="Consignados fechados"
+                valor={formatarMoeda(metricas.consignados.totalLiquido)}
+                subtitulo={
+                  metricas.consignados.quantidade > 0
+                    ? `${metricas.consignados.quantidade} fechamento(s): ${formatarMoeda(metricas.consignados.totalVendido)} vendidos − ${formatarMoeda(metricas.consignados.totalComissao)} de comissão`
+                    : "Nenhum fechamento no período"
                 }
               />
               <CardMetrica
@@ -724,7 +785,9 @@ export default function RelatoriosPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-surface border border-border rounded-xl p-5">
                 <h3 className="text-sm font-semibold mb-1">Por forma de pagamento</h3>
-                <p className="text-[11px] text-muted mb-3">Vendas e ajuste de trocas já somados</p>
+                <p className="text-[11px] text-muted mb-3">
+                  Vendas e ajuste de trocas já somados. Consignados não entram aqui (não têm forma de pagamento).
+                </p>
                 <ul className="space-y-3">
                   {Object.entries(metricas.totalPorFormaPagamento).map(([forma, valor]) => (
                     <li key={forma} className="flex items-center justify-between text-sm">

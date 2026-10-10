@@ -266,7 +266,30 @@ function ModalNovaConsignacao({
   }
 
   const total = itens.reduce((acc, i) => acc + i.produto.precoVenda * i.quantidade, 0);
-  const podeSalvar = consignatario.trim() !== "" && itens.length > 0;
+  // itens cuja quantidade passa do estoque (o estoque pode ter mudado desde a busca)
+  const itensSemEstoque = itens.filter((i) => i.quantidade > i.produto.quantidadeEstoque);
+  const podeSalvar = consignatario.trim() !== "" && itens.length > 0 && itensSemEstoque.length === 0;
+
+  function removerItem(produtoId: number) {
+    setItens((prev) => prev.filter((x) => x.produto.id !== produtoId));
+    setErro(null);
+  }
+
+  // Quando o servidor recusa por estoque, rebusca o estoque atual de cada item
+  // para marcar exatamente quais precisam sair (ou ter a quantidade reduzida).
+  async function atualizarEstoqueDosItens() {
+    const atualizados = await Promise.all(
+      itens.map(async (i) => {
+        try {
+          const { data } = await api.get<Produto>(`/produtos/${i.produto.id}`);
+          return { ...i, produto: data };
+        } catch {
+          return i;
+        }
+      })
+    );
+    setItens(atualizados);
+  }
 
   async function salvar() {
     if (!podeSalvar || enviandoRef.current) return;
@@ -282,7 +305,13 @@ function ModalNovaConsignacao({
       });
       onCriada(data);
     } catch (e) {
-      setErro(mensagemErro(e, "Não foi possível registrar a consignação."));
+      const msg = mensagemErro(e, "Não foi possível registrar a consignação.");
+      setErro(
+        /estoque insuficiente/i.test(msg)
+          ? `${msg}. Remova o item marcado em vermelho ou diminua a quantidade.`
+          : msg
+      );
+      if (/estoque insuficiente/i.test(msg)) await atualizarEstoqueDosItens();
     } finally {
       enviandoRef.current = false;
       setSalvando(false);
@@ -364,14 +393,27 @@ function ModalNovaConsignacao({
 
           {itens.length > 0 && (
             <ul className="border border-border rounded-lg divide-y divide-border">
-              {itens.map((i) => (
-                <li key={i.produto.id} className="flex items-center gap-3 px-3 py-2 text-sm">
+              {itens.map((i) => {
+                const semEstoque = i.quantidade > i.produto.quantidadeEstoque;
+                return (
+                <li
+                  key={i.produto.id}
+                  className={`flex items-center gap-3 px-3 py-2 text-sm ${semEstoque ? "bg-danger/10" : ""}`}
+                >
                   <div className="min-w-0 flex-1">
                     <p className="truncate">{i.produto.nome}</p>
                     <p className="text-xs text-muted">
                       {i.produto.categoria?.nome ?? "Sem categoria"} · comissão{" "}
                       {percentualComissaoConsignacao(i.produto.categoria?.nome)}%
                     </p>
+                    {semEstoque && (
+                      <p className="text-xs text-danger font-medium mt-0.5">
+                        {i.produto.quantidadeEstoque <= 0
+                          ? "Sem estoque deste produto."
+                          : `Estoque insuficiente (disponível: ${i.produto.quantidadeEstoque}).`}{" "}
+                        Remova o item ou reduza a quantidade.
+                      </p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1">
                     <button onClick={() => alterar(i.produto.id, -1)} className="p-1 rounded hover:bg-background">
@@ -384,14 +426,27 @@ function ModalNovaConsignacao({
                   </div>
                   <span className="w-24 text-right font-mono">{formatarMoeda(i.produto.precoVenda * i.quantidade)}</span>
                   <button
-                    onClick={() => setItens((prev) => prev.filter((x) => x.produto.id !== i.produto.id))}
-                    className="p-1 rounded hover:bg-background text-danger"
+                    onClick={() => removerItem(i.produto.id)}
+                    title="Remover este item da consignação"
+                    aria-label={`Remover ${i.produto.nome}`}
+                    className="flex items-center gap-1 px-2 py-1 rounded text-xs font-medium text-danger hover:bg-danger/10"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
+                    Remover
                   </button>
                 </li>
-              ))}
+                );
+              })}
             </ul>
+          )}
+
+          {itensSemEstoque.length > 0 && (
+            <p className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2">
+              {itensSemEstoque.length === 1
+                ? "1 item está sem estoque suficiente."
+                : `${itensSemEstoque.length} itens estão sem estoque suficiente.`}{" "}
+              Remova-os (botão “Remover”) para poder registrar a consignação.
+            </p>
           )}
 
           {erro && <p className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2">{erro}</p>}
@@ -480,6 +535,26 @@ function ModalDetalhe({
     }
   }
 
+  async function removerItem(itemId: number, nome: string) {
+    if (enviandoRef.current) return;
+    if (!confirm(`Remover "${nome}" desta consignação? O estoque não foi alterado, então nada volta.`)) return;
+    enviandoRef.current = true;
+    setErro(null);
+    try {
+      const { data } = await api.delete<Consignacao>(`/consignacoes/${consignacao.id}/itens/${itemId}`);
+      setVendidas((prev) => {
+        const novo = { ...prev };
+        delete novo[itemId];
+        return novo;
+      });
+      onAtualizada(data);
+    } catch (e) {
+      setErro(mensagemErro(e, "Não foi possível remover o item."));
+    } finally {
+      enviandoRef.current = false;
+    }
+  }
+
   async function excluir() {
     const aviso = aberta
       ? "Excluir esta consignação? O estoque não foi alterado, então nada volta."
@@ -531,6 +606,7 @@ function ModalDetalhe({
                 <th className="py-2 px-2 font-medium text-right">Vendida</th>
                 <th className="py-2 px-2 font-medium text-right">Devolvida</th>
                 <th className="py-2 pl-2 font-medium text-right">Valor vendido</th>
+                {aberta && consignacao.itens.length > 1 && <th className="py-2 pl-2 w-8" />}
               </tr>
             </thead>
             <tbody>
@@ -563,6 +639,18 @@ function ModalDetalhe({
                     </td>
                     <td className="py-2 px-2 text-right font-mono">{i.quantidadeEnviada - q}</td>
                     <td className="py-2 pl-2 text-right font-mono">{formatarMoeda(q * i.precoUnitario)}</td>
+                    {aberta && consignacao.itens.length > 1 && (
+                      <td className="py-2 pl-2 text-right">
+                        <button
+                          onClick={() => removerItem(i.id, i.produtoNome)}
+                          title="Remover este item da consignação"
+                          aria-label={`Remover ${i.produtoNome}`}
+                          className="p-1 rounded hover:bg-danger/10 text-danger"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 );
               })}
