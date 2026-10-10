@@ -163,7 +163,7 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
         rowPageBreak: "avoid",
         styles: {
           font: "helvetica",
-          fontSize: 8.5,
+          fontSize: 9.5,
           cellPadding: 1.6,
           lineColor: [0, 0, 0],
           lineWidth: 0.2,
@@ -171,16 +171,16 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
           overflow: "linebreak",
           valign: "middle",
         },
-        headStyles: { fillColor: CINZA, textColor: [0, 0, 0], fontStyle: "bold", halign: "center", fontSize: 7.5 },
+        headStyles: { fillColor: CINZA, textColor: [0, 0, 0], fontStyle: "bold", halign: "center", fontSize: 8 },
         footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
         // soma = 180 mm (largura útil da página); a coluna do produto é a mais larga
         columnStyles: {
-          0: { cellWidth: 27 }, // cabe um código de barras de 13 dígitos
-          1: { cellWidth: 56 },
-          2: { cellWidth: 15, ...centro },
-          3: { cellWidth: 21, ...direita },
-          4: { cellWidth: 21, ...direita },
-          5: { cellWidth: 15, ...centro },
+          0: { cellWidth: 28 }, // cabe um código de barras de 13 dígitos
+          1: { cellWidth: 46 },
+          2: { cellWidth: 17, ...centro },
+          3: { cellWidth: 22, ...direita },
+          4: { cellWidth: 25, ...direita }, // cabe o total em negrito (ex.: R$ 10.852,40) sem quebrar
+          5: { cellWidth: 17, ...centro },
           6: { cellWidth: 25, ...direita },
         },
         head: [
@@ -188,7 +188,7 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
             {
               content: `RELATÓRIO DE MERCADORIAS EM CONSIGNAÇÃO\n${m.consignatario.toUpperCase()}`,
               colSpan: 7,
-              styles: { halign: "center", fontSize: 10, cellPadding: 2.2 },
+              styles: { halign: "center", fontSize: 11, cellPadding: 2.2 },
             },
           ],
           ["COD.", "PRODUTO", "QTDE ENVIADA", "VLR UNITÁRIO", "VALOR TOTAL", "QTDE VENDIDA", "VLR TOTAL VENDIDO"],
@@ -236,11 +236,11 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
     autoTable(doc, {
       startY: finalY + 8,
       margin: { left: MARGEM, right: MARGEM, top: MARGEM, bottom: MARGEM },
-      tableWidth: 112,
+      tableWidth: 134,
       theme: "grid",
-      styles: { font: "helvetica", fontSize: 8.5, cellPadding: 1.6, lineColor: [0, 0, 0], lineWidth: 0.2, textColor: [0, 0, 0] },
-      headStyles: { fillColor: CINZA, textColor: [0, 0, 0], fontStyle: "bold", fontSize: 7.5 },
-      columnStyles: { 0: { cellWidth: 60 }, 1: { cellWidth: 26, ...direita }, 2: { cellWidth: 26, ...direita } },
+      styles: { font: "helvetica", fontSize: 9.5, cellPadding: 1.6, lineColor: [0, 0, 0], lineWidth: 0.2, textColor: [0, 0, 0] },
+      headStyles: { fillColor: CINZA, textColor: [0, 0, 0], fontStyle: "bold", fontSize: 8 },
+      columnStyles: { 0: { cellWidth: 68 }, 1: { cellWidth: 33, ...direita }, 2: { cellWidth: 33, ...direita } },
       head: [["ACERTO", { content: "VENDIDO", styles: direita }, { content: "COMISSÃO", styles: direita }]] as never,
       body: [
         ...acerto.faixas.map((f) => [f.rotulo, formatarMoeda(f.vendido), formatarMoeda(f.comissao)]),

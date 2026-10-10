@@ -28,7 +28,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
     pageSetup: { paperSize: 9, orientation: "portrait", fitToPage: true, fitToWidth: 1, fitToHeight: 0, margins: { left: 0.4, right: 0.4, top: 0.5, bottom: 0.5, header: 0.2, footer: 0.2 } },
   });
   const LARGURA_PRODUTO = 46;
-  ws.columns = [{ width: 16 }, { width: LARGURA_PRODUTO }, { width: 11 }, { width: 14 }, { width: 14 }, { width: 11 }, { width: 16 }];
+  ws.columns = [{ width: 17 }, { width: LARGURA_PRODUTO }, { width: 12 }, { width: 16 }, { width: 17 }, { width: 12 }, { width: 18 }];
 
   // cabeçalho da loja (linhas 1 a 5) — logo à esquerda, textos ao lado
   const cabecalhoLinhas: [string, boolean, string?][] = [
@@ -66,7 +66,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
   ["COD.", "PRODUTO", "QTDE ENVIADA", "VLR UNITÁRIO", "VALOR TOTAL", "QTDE VENDIDA", "VLR TOTAL VENDIDO"].forEach((t, i) => {
     const c = ws.getCell(linha, i + 1);
     c.value = t;
-    c.font = { bold: true, size: 9 };
+    c.font = { bold: true, size: 10 };
     c.alignment = { horizontal: "center", vertical: "middle", wrapText: true };
     c.fill = cinza;
     c.border = borda;
@@ -81,7 +81,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
     ws.mergeCells(linha, 1, linha, 7);
     const gc = ws.getCell(linha, 1);
     gc.value = `${g.categoria}:`;
-    gc.font = { bold: true, underline: true, size: 10 };
+    gc.font = { bold: true, underline: true, size: 11 };
     for (let c = 1; c <= 7; c++) ws.getCell(linha, c).border = borda;
 
     for (const l of g.linhas) {
@@ -91,7 +91,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
       r.getCell(2).value = l.produto;
       // nome longo quebra em mais de uma linha (com a altura da linha ajustada) em vez de ser cortado
       const linhasNome = Math.max(1, Math.ceil(l.produto.length / (LARGURA_PRODUTO - 6)));
-      if (linhasNome > 1) r.height = linhasNome * 14;
+      if (linhasNome > 1) r.height = linhasNome * 15;
       r.getCell(3).value = l.qtdEnviada;
       r.getCell(4).value = l.vlrUnitario;
       r.getCell(5).value = { formula: `C${linha}*D${linha}`, result: l.vlrTotal };
@@ -101,7 +101,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
       for (let c = 1; c <= 7; c++) {
         const cell = r.getCell(c);
         cell.border = borda;
-        cell.font = { size: 10 };
+        cell.font = { size: 11 };
         cell.alignment = { vertical: "middle", wrapText: c === 2 };
         if (c === 3 || c === 6) cell.alignment = { vertical: "middle", horizontal: "center" };
         if (c === 4 || c === 5 || c === 7) {
@@ -126,7 +126,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
   }
   for (let c = 1; c <= 7; c++) {
     const cell = t.getCell(c);
-    cell.font = { bold: true, size: 10 };
+    cell.font = { bold: true, size: 11 };
     cell.fill = cinzaClaro;
     cell.border = borda;
     if (c === 3 || c === 6) cell.alignment = { horizontal: "center" };
@@ -143,7 +143,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
     ["ACERTO", "", "", "VENDIDO", "COMISSÃO"].forEach((tx, i) => {
       const c = ws.getCell(linha, i + 1);
       c.value = tx || null;
-      c.font = { bold: true, size: 9 };
+      c.font = { bold: true, size: 10 };
       c.fill = cinza;
       c.border = borda;
       if (i >= 3) c.alignment = { horizontal: "right" };
@@ -160,7 +160,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
       for (let c = 1; c <= 5; c++) {
         const cell = ws.getCell(linha, c);
         cell.border = borda;
-        cell.font = { size: 10 };
+        cell.font = { size: 11 };
         if (c >= 4) cell.numFmt = MOEDA;
       }
     }
@@ -172,7 +172,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
     for (let c = 1; c <= 5; c++) {
       const cell = ws.getCell(linha, c);
       cell.border = borda;
-      cell.font = { bold: true, size: 10 };
+      cell.font = { bold: true, size: 11 };
       cell.fill = cinzaClaro;
       if (c >= 4) cell.numFmt = MOEDA;
     }
@@ -184,7 +184,7 @@ export async function gerarExcelConsignacao(m: ModeloConsignacao): Promise<Blob>
     for (let c = 1; c <= 5; c++) {
       const cell = ws.getCell(linha, c);
       cell.border = borda;
-      cell.font = { bold: true, size: 10 };
+      cell.font = { bold: true, size: 11 };
       if (c === 5) cell.numFmt = MOEDA;
     }
     void linhaTotal;

@@ -148,7 +148,8 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
   ];
 
   // ------------------------------ Relatório ------------------------------
-  const larguras = [1550, 2900, 850, 1200, 1200, 850, 1250]; // soma 9800
+  // soma 10200 (largura útil com margens de 15 mm); colunas de valores cabem o total em negrito
+  const larguras = [1600, 2650, 900, 1250, 1450, 900, 1450];
   const total = larguras.reduce((a, b) => a + b, 0);
 
   function celula(
@@ -167,7 +168,7 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
           new Paragraph({
             alignment: opcoes.alinhar,
             keepNext: opcoes.manterComProxima,
-            children: [new TextRun({ text: linha, bold: opcoes.negrito, size: opcoes.tam ?? 18 })],
+            children: [new TextRun({ text: linha, bold: opcoes.negrito, size: opcoes.tam ?? 19 })],
           })
       ),
     });
@@ -299,7 +300,7 @@ export async function gerarWordConsignacao(m: ModeloConsignacao): Promise<Blob> 
     styles: { default: { document: { run: { font: "Arial" } } } },
     sections: [
       {
-        properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 850, bottom: 850, left: 1050, right: 1050 } } },
+        properties: { page: { size: { width: 11906, height: 16838 }, margin: { top: 850, bottom: 850, left: 850, right: 850 } } },
         children: [...termo, ...relatorio],
       },
     ],
