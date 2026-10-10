@@ -531,7 +531,7 @@ function ModalConsignacaoForm({
             <h3 className="hidden lg:block text-sm font-semibold">Adicionar produtos</h3>
 
             <div className="flex flex-col sm:flex-row gap-2 shrink-0">
-              <div className="relative flex-1">
+              <div className="relative flex-1 min-w-0">
                 <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                 <input
                   ref={buscaRef}
@@ -556,24 +556,26 @@ function ModalConsignacaoForm({
                   </button>
                 )}
               </div>
-              <select
-                value={categoriaSel ?? ""}
-                onChange={(e) => alterarCategoria(e.target.value || null)}
-                className="input sm:w-64"
-                aria-label="Filtrar por categoria"
-              >
-                <option value="">Todas as categorias ({catalogo.length})</option>
-                {categorias
-                  .filter((c) => (contagemPorCategoria.get(String(c.id)) ?? 0) > 0)
-                  .map((c) => (
-                    <option key={c.id} value={String(c.id)}>
-                      {c.nome} ({contagemPorCategoria.get(String(c.id))}) · comissão {percentualComissaoConsignacao(c.nome)}%
-                    </option>
-                  ))}
-                {(contagemPorCategoria.get(SEM_CATEGORIA) ?? 0) > 0 && (
-                  <option value={SEM_CATEGORIA}>Sem categoria ({contagemPorCategoria.get(SEM_CATEGORIA)})</option>
-                )}
-              </select>
+              <div className="sm:w-64 sm:shrink-0">
+                <select
+                  value={categoriaSel ?? ""}
+                  onChange={(e) => alterarCategoria(e.target.value || null)}
+                  className="input"
+                  aria-label="Filtrar por categoria"
+                >
+                  <option value="">Todas as categorias ({catalogo.length})</option>
+                  {categorias
+                    .filter((c) => (contagemPorCategoria.get(String(c.id)) ?? 0) > 0)
+                    .map((c) => (
+                      <option key={c.id} value={String(c.id)}>
+                        {c.nome} ({contagemPorCategoria.get(String(c.id))}) · comissão {percentualComissaoConsignacao(c.nome)}%
+                      </option>
+                    ))}
+                  {(contagemPorCategoria.get(SEM_CATEGORIA) ?? 0) > 0 && (
+                    <option value={SEM_CATEGORIA}>Sem categoria ({contagemPorCategoria.get(SEM_CATEGORIA)})</option>
+                  )}
+                </select>
+              </div>
             </div>
 
             {/* resultados: a única rolagem desta coluna */}
