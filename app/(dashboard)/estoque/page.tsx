@@ -6,7 +6,7 @@ import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag } from "lucide-react";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
 
@@ -30,6 +30,9 @@ export default function EstoquePage() {
   const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
   const [gerandoCodigos, setGerandoCodigos] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
+  // troca de categoria em lote: "" = nada escolhido, "sem-categoria" = remover a categoria
+  const [categoriaLote, setCategoriaLote] = useState<string>("");
+  const [aplicandoCategoria, setAplicandoCategoria] = useState(false);
 
   async function carregar() {
     setCarregando(true);
@@ -65,6 +68,32 @@ export default function EstoquePage() {
       setTimeout(() => setMensagem(null), 5000);
     } finally {
       setGerandoCodigos(false);
+    }
+  }
+
+  async function aplicarCategoriaLote() {
+    if (!categoriaLote || selecionados.size === 0) return;
+    const semCategoria = categoriaLote === "sem-categoria";
+    const nomeCategoria = semCategoria
+      ? "Sem categoria"
+      : categorias.find((c) => String(c.id) === categoriaLote)?.nome ?? "";
+    if (!confirm(`Mudar a categoria de ${selecionados.size} produto(s) para "${nomeCategoria}"?`)) return;
+
+    setAplicandoCategoria(true);
+    try {
+      const { data } = await api.post<{ produtosAtualizados: number }>("/produtos/categoria-em-lote", {
+        produtoIds: Array.from(selecionados),
+        categoriaId: semCategoria ? null : Number(categoriaLote),
+      });
+      await carregar();
+      setSelecionados(new Set());
+      setCategoriaLote("");
+      setMensagem(`${data.produtosAtualizados} produto(s) agora estão na categoria "${nomeCategoria}".`);
+      setTimeout(() => setMensagem(null), 5000);
+    } catch {
+      alert("Não foi possível alterar a categoria. Tente novamente.");
+    } finally {
+      setAplicandoCategoria(false);
     }
   }
 
@@ -159,6 +188,12 @@ export default function EstoquePage() {
     );
     return ordenacao === "nome-desc" ? ordenada.reverse() : ordenada;
   }, [produtos, busca, categoriaFiltro, ordenacao, filtroEspecial, duplicados]);
+
+  // produtos marcados que não aparecem na lista com o filtro atual (a seleção é mantida ao trocar de filtro)
+  const selecionadosForaDoFiltro = useMemo(() => {
+    const visiveis = new Set(produtosFiltrados.map((p) => p.id));
+    return Array.from(selecionados).filter((id) => !visiveis.has(id)).length;
+  }, [selecionados, produtosFiltrados]);
 
   const semCodigoCount = useMemo(
     () => produtos.filter((p) => !p.codigoBarras).length,
@@ -316,6 +351,46 @@ export default function EstoquePage() {
             {produtosFiltrados.length !== produtos.length && ` (${produtosFiltrados.length})`}
           </button>
         </div>
+
+        {isAdmin && selecionados.size > 0 && (
+          <div className="mb-4 rounded-lg border border-border bg-surface px-4 py-3 flex flex-wrap items-center gap-3">
+            <span className="text-sm font-medium">
+              {selecionados.size} produto(s) selecionado(s)
+              {selecionadosForaDoFiltro > 0 && (
+                <span className="text-muted font-normal"> ({selecionadosForaDoFiltro} fora do filtro atual)</span>
+              )}
+            </span>
+            <select
+              value={categoriaLote}
+              onChange={(e) => setCategoriaLote(e.target.value)}
+              className="input py-2"
+            >
+              <option value="">Escolher a nova categoria...</option>
+              <option value="sem-categoria">Sem categoria</option>
+              {[...categorias]
+                .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }))
+                .map((categoria) => (
+                  <option key={categoria.id} value={String(categoria.id)}>
+                    {categoria.nome}
+                  </option>
+                ))}
+            </select>
+            <button
+              onClick={aplicarCategoriaLote}
+              disabled={!categoriaLote || aplicandoCategoria}
+              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
+            >
+              {aplicandoCategoria ? <Loader2 className="w-4 h-4 animate-spin" /> : <Tag className="w-4 h-4" />}
+              Aplicar categoria aos selecionados
+            </button>
+            <button
+              onClick={() => setSelecionados(new Set())}
+              className="text-sm text-muted hover:text-foreground px-2 py-2 transition"
+            >
+              Limpar seleção
+            </button>
+          </div>
+        )}
 
         {carregando ? (
           <div className="flex justify-center py-16">
