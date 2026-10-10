@@ -371,8 +371,9 @@ function ModalNovaConsignacao({
           </div>
 
           <div>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <div className="relative flex-1">
+            <div className="flex flex-wrap gap-2">
+              {/* larguras inline de propósito: .input (globals.css) tem width:100% e vence as utilitárias do Tailwind */}
+              <div className="relative" style={{ flex: "1 1 16rem", minWidth: 0 }}>
                 <Search className="w-5 h-5 text-muted absolute left-4 top-1/2 -translate-y-1/2 pointer-events-none" />
                 {/* estilos inline de propósito: a classe .input (globals.css) tem prioridade sobre as utilitárias do Tailwind */}
                 <input
@@ -392,8 +393,8 @@ function ModalNovaConsignacao({
                 />
               </div>
               <select
-                className="input sm:w-60"
-                style={{ fontSize: "1rem", padding: "0.8rem 0.75rem" }}
+                className="input"
+                style={{ flex: "0 1 13rem", width: "auto", minWidth: 0, fontSize: "1rem", padding: "0.8rem 0.75rem" }}
                 value={filtroCategoria}
                 onChange={(e) => setFiltroCategoria(e.target.value)}
               >
@@ -417,8 +418,12 @@ function ModalNovaConsignacao({
                 <div className="flex justify-center py-6">
                   <Loader2 className="w-5 h-5 animate-spin text-muted" />
                 </div>
+              ) : produtos.length === 0 ? (
+                <p className="text-sm text-muted text-center py-6">
+                  Nenhum produto ativo cadastrado no estoque.
+                </p>
               ) : produtosFiltrados.length === 0 ? (
-                <p className="text-sm text-muted text-center py-6">Nenhum produto encontrado.</p>
+                <p className="text-sm text-muted text-center py-6">Nenhum produto encontrado com esse filtro.</p>
               ) : (
                 <ul className="divide-y divide-border max-h-64 overflow-y-auto">
                   {produtosFiltrados.map((p) => {
