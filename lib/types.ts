@@ -123,6 +123,10 @@ export interface Caixa {
   aberto: boolean;
   usuarioReaberturaNome: string | null;
   dataReabertura: string | null;
+  /** Valor digitado originalmente, quando o valor de abertura foi corrigido (senão null). */
+  valorInicialOriginal: number | null;
+  usuarioEdicaoAberturaNome: string | null;
+  dataEdicaoAbertura: string | null;
 }
 
 export type TipoDespesa = "DESPESA" | "SANGRIA" | "SUPRIMENTO";

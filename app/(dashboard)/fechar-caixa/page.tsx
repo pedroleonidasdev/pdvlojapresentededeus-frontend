@@ -6,6 +6,7 @@ import { Caixa } from "@/lib/types";
 import { formatarMoeda, formatarDataHora } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
+import EditarAberturaCaixa from "@/components/EditarAberturaCaixa";
 import { Loader2, Unlock, User, Clock, CheckCircle2, Vault, AlertTriangle } from "lucide-react";
 
 /**
@@ -106,7 +107,16 @@ export default function FecharCaixaPage() {
                     <Clock className="w-3 h-3" />
                     {formatarDataHora(caixa.dataAbertura)}
                   </span>
-                  <span>Valor inicial: {formatarMoeda(caixa.valorInicial)}</span>
+                  <span className="flex items-center gap-1">
+                    Valor inicial: {formatarMoeda(caixa.valorInicial)}
+                    {caixa.valorInicialOriginal !== null && " (corrigido)"}
+                    <EditarAberturaCaixa
+                      caixa={caixa}
+                      onAtualizado={setCaixa}
+                      rotulo="Corrigir"
+                      className="text-primary-dark hover:bg-primary/10"
+                    />
+                  </span>
                 </div>
               </div>
             </div>

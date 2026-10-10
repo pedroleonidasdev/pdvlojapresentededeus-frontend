@@ -3,7 +3,8 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Caixa } from "@/lib/types";
-import { formatarDataHora, horasDesde } from "@/lib/format";
+import { formatarDataHora, formatarMoeda, horasDesde } from "@/lib/format";
+import EditarAberturaCaixa from "./EditarAberturaCaixa";
 
 /**
  * Bolinha de status do caixa: verde = aberto, vermelha = fechado.
@@ -86,6 +87,22 @@ export default function CaixaStatusBadge({
           >
             <span className="block truncate">{caixa.usuarioAberturaNome}</span>
             <span className="block">{formatarDataHora(caixa.dataAbertura)}</span>
+          </p>
+        )}
+        {aberto && caixa && (
+          <p
+            className="mt-0.5 pl-4 text-[10px] leading-tight text-white/60 flex items-center gap-0.5"
+            title={
+              caixa.valorInicialOriginal !== null
+                ? `Valor corrigido por ${caixa.usuarioEdicaoAberturaNome ?? "—"} (era ${formatarMoeda(caixa.valorInicialOriginal)})`
+                : "Valor de abertura do caixa"
+            }
+          >
+            <span>
+              Abertura: {formatarMoeda(caixa.valorInicial)}
+              {caixa.valorInicialOriginal !== null && " (corrigido)"}
+            </span>
+            <EditarAberturaCaixa caixa={caixa} onAtualizado={setCaixa} className="text-white/70 hover:bg-white/10" />
           </p>
         )}
         {caixaEsquecido && (
