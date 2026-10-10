@@ -53,6 +53,10 @@ export interface ModeloConsignacao {
   nomeArquivoBase: string;
 }
 
+/** Comparação alfabética em pt-BR, ignorando acentos e maiúsculas/minúsculas. */
+const compararAlfabetico = (a: string, b: string) =>
+  a.localeCompare(b, "pt-BR", { sensitivity: "base", numeric: true });
+
 export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
   const fechada = c.status === "FECHADA";
 
@@ -66,7 +70,10 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
   // começarem com a mesma letra, a segunda ganha um número (C2001) para não repetir
   const letrasUsadas = new Map<string, number>();
   const grupos: GrupoModelo[] = [];
-  for (const [categoria, itens] of porCategoria) {
+  // subgrupos (categorias) em ordem alfabética; os produtos de cada um também
+  const categoriasOrdenadas = [...porCategoria.entries()].sort(([a], [b]) => compararAlfabetico(a, b));
+  for (const [categoria, itensCategoria] of categoriasOrdenadas) {
+    const itens = [...itensCategoria].sort((a, b) => compararAlfabetico(a.produtoNome, b.produtoNome));
     const base = categoria.normalize("NFD").replace(/[̀-ͯ]/g, "").charAt(0) || "X";
     const n = (letrasUsadas.get(base) ?? 0) + 1;
     letrasUsadas.set(base, n);
@@ -96,7 +103,7 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
   const faixas: FaixaModelo[] = [15, 20].map((pct) => {
     const itens = c.itens.filter((i) => i.percentualComissao === pct);
     return {
-      rotulo: pct === 15 ? "Livros e Bíblias (15%)" : "Demais artigos (20%)",
+      rotulo: pct === 15 ? "Livros, Bíblias e Paulinas (15%)" : "Demais artigos (20%)",
       vendido: itens.reduce((acc, i) => acc + i.valorVendido, 0),
       comissao: itens.reduce((acc, i) => acc + i.comissao, 0),
     };
@@ -116,7 +123,7 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
     consignatario: c.consignatario,
     paragrafos,
     porcentagens: [
-      "15% do total vendido referente a Livros e Bíblias",
+      "15% do total vendido referente a Livros, Bíblias e Paulinas",
       "20% do total vendido referente aos demais Artigos Religiosos",
     ],
     observacao: c.observacao,

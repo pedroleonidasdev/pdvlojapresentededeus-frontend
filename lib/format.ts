@@ -150,11 +150,11 @@ export function formatarDataExtenso(iso: string): string {
 }
 
 /**
- * Comissão do consignatário: Livros e Bíblias = 15%, demais artigos = 20%.
+ * Comissão do consignatário: Livros, Bíblias e Paulinas = 15%, demais artigos = 20%.
  * Mesma regra do backend (ConsignacaoService.percentualComissaoPara): decide
  * pelo nome da categoria, ignorando acento e maiúscula.
  */
 export function percentualComissaoConsignacao(categoriaNome: string | null | undefined): number {
   const nome = (categoriaNome ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase();
-  return nome.includes("livro") || nome.includes("biblia") ? 15 : 20;
+  return nome.includes("livro") || nome.includes("biblia") || nome.includes("paulina") ? 15 : 20;
 }
