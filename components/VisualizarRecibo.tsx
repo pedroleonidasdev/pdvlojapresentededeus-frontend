@@ -23,6 +23,7 @@ export default function VisualizarRecibo({
   onFechar: () => void;
 }) {
   const [quantidade, setQuantidade] = useState(1);
+  const [completar, setCompletar] = useState(true);
   const [urlPdf, setUrlPdf] = useState<string | null>(null);
   const [atualizando, setAtualizando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
@@ -32,6 +33,8 @@ export default function VisualizarRecibo({
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
   const folhas = Math.ceil(quantidade / POR_FOLHA);
+  // com "completar" ligado, a última folha também sai com 3 recibos (repete o mesmo recibo)
+  const totalImpresso = completar ? folhas * POR_FOLHA : quantidade;
 
   // gera o PDF ao abrir e sempre que a quantidade muda (com pequena espera enquanto digita)
   useEffect(() => {
@@ -39,7 +42,7 @@ export default function VisualizarRecibo({
     const espera = setTimeout(async () => {
       try {
         const { gerarPdfRecibos } = await import("@/lib/consignacao-recibo-pdf");
-        const blob = await gerarPdfRecibos(montarModeloConsignacao(consignacao), quantidade);
+        const blob = await gerarPdfRecibos(montarModeloConsignacao(consignacao), totalImpresso);
         if (cancelado) return;
         const nova = URL.createObjectURL(blob);
         const anterior = urlAtualRef.current;
@@ -58,7 +61,7 @@ export default function VisualizarRecibo({
       cancelado = true;
       clearTimeout(espera);
     };
-  }, [consignacao, quantidade]);
+  }, [consignacao, totalImpresso]);
 
   // libera o PDF da memória ao fechar
   useEffect(() => {
@@ -85,7 +88,7 @@ export default function VisualizarRecibo({
         baixarArquivo(blob, `${nomeBase}.pdf`);
       } else {
         const { gerarReciboConsignacao } = await import("@/lib/consignacao-recibo");
-        baixarArquivo(await gerarReciboConsignacao(montarModeloConsignacao(consignacao), quantidade), `${nomeBase}.docx`);
+        baixarArquivo(await gerarReciboConsignacao(montarModeloConsignacao(consignacao), totalImpresso), `${nomeBase}.docx`);
       }
     } catch {
       setErro(`Não foi possível gerar o arquivo ${formato === "word" ? "Word" : "PDF"}.`);
@@ -161,9 +164,22 @@ export default function VisualizarRecibo({
               </button>
             </div>
             <span className="text-xs text-muted">
-              = {folhas} {folhas === 1 ? "folha" : "folhas"} A4
+              = {folhas} {folhas === 1 ? "folha" : "folhas"} A4 ({totalImpresso} {totalImpresso === 1 ? "recibo" : "recibos"})
             </span>
           </div>
+
+          <label className="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={completar}
+              onChange={(e) => {
+                setAtualizando(true);
+                setCompletar(e.target.checked);
+              }}
+              className="accent-primary"
+            />
+            Completar a última folha (3 por folha)
+          </label>
 
           <button
             onClick={imprimir}
