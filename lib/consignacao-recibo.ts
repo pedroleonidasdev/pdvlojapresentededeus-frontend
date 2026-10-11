@@ -138,7 +138,7 @@ export async function gerarReciboConsignacao(m: ModeloConsignacao, quantidade = 
     const ultima = i === total - 1;
     return new TableRow({
       cantSplit: true,
-      height: { value: 5380, rule: HeightRule.EXACT },
+      height: { value: 5300, rule: HeightRule.EXACT },
       children: [
         new TableCell({
           width: { size: larguraTabela, type: WidthType.DXA },
