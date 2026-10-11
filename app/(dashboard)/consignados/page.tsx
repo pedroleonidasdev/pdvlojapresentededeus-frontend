@@ -28,6 +28,7 @@ import {
   Pencil,
   Package,
   Receipt,
+  AlertTriangle,
 } from "lucide-react";
 
 function mensagemErro(e: unknown, padrao: string): string {
@@ -830,6 +831,7 @@ function ModalDetalhe({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [reciboAberto, setReciboAberto] = useState(false);
+  const [confirmandoFechamento, setConfirmandoFechamento] = useState(false);
   const enviandoRef = useRef(false);
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
@@ -848,13 +850,23 @@ function ModalDetalhe({
   }
   totalComissao = Math.round(totalComissao * 100) / 100;
 
+  /** Sair desta tela SEM fechar a consignação (nada é baixado do estoque). */
+  function sairSemFechar() {
+    const digitou = aberta && Object.values(vendidas).some((q) => q > 0);
+    if (digitou && !confirm("Você já digitou quantidades vendidas. Sair sem fechar? As quantidades digitadas serão perdidas e nada será baixado do estoque.")) return;
+    onClose();
+  }
+
+  /** Primeiro passo: mostra o aviso com o resumo do que vai acontecer. */
+  function pedirFechamento() {
+    if (enviandoRef.current) return;
+    setErro(null);
+    setConfirmandoFechamento(true);
+  }
+
+  /** Segundo passo (depois do "Sim" no aviso): fecha de verdade e dá a baixa. */
   async function fechar() {
     if (enviandoRef.current) return;
-    const msg =
-      totalUnidadesVendidas > 0
-        ? `Fechar a consignação e dar baixa de ${totalUnidadesVendidas} unidade(s) vendida(s) no estoque? Essa ação só pode ser desfeita por um administrador, excluindo a consignação.`
-        : "Nenhuma unidade foi marcada como vendida. Fechar mesmo assim (sem baixa no estoque)?";
-    if (!confirm(msg)) return;
     enviandoRef.current = true;
     setSalvando(true);
     setErro(null);
@@ -871,6 +883,7 @@ function ModalDetalhe({
     } finally {
       enviandoRef.current = false;
       setSalvando(false);
+      setConfirmandoFechamento(false);
     }
   }
 
@@ -903,8 +916,13 @@ function ModalDetalhe({
             </p>
             {consignacao.observacao && <p className="text-xs text-muted mt-0.5">Obs: {consignacao.observacao}</p>}
           </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-background text-muted shrink-0">
+          <button
+            onClick={sairSemFechar}
+            title={aberta ? "Só sai desta tela: a consignação continua em aberto e nada é baixado do estoque" : "Fechar esta janela"}
+            className="flex items-center gap-1.5 border border-border hover:bg-background text-xs font-medium text-muted hover:text-foreground px-3 py-1.5 rounded-lg transition shrink-0"
+          >
             <X className="w-4 h-4" />
+            {aberta ? "Fechar sem dar baixa" : "Fechar"}
           </button>
         </div>
 
@@ -986,6 +1004,16 @@ function ModalDetalhe({
         </div>
 
         <div className="p-4 border-t border-border shrink-0 flex flex-wrap items-center justify-between gap-2">
+          {aberta && (
+            <div className="w-full flex items-start gap-2 text-xs rounded-lg px-3 py-2 bg-accent-light text-accent-dark">
+              <AlertTriangle className="w-4 h-4 shrink-0 mt-px" />
+              <p>
+                <strong>Atenção:</strong> “Fechar e dar baixa no estoque” encerra a consignação e tira do estoque as
+                unidades marcadas como vendidas ({totalUnidadesVendidas} no momento). Para apenas sair desta tela, use
+                “Fechar sem dar baixa”, no canto superior direito.
+              </p>
+            </div>
+          )}
           <div className="flex gap-2">
             <button
               onClick={() => onImprimir(consignacao)}
@@ -1022,7 +1050,7 @@ function ModalDetalhe({
           </div>
           {aberta && (
             <button
-              onClick={fechar}
+              onClick={pedirFechamento}
               disabled={salvando}
               className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
             >
@@ -1032,6 +1060,66 @@ function ModalDetalhe({
           )}
         </div>
       </div>
+
+      {confirmandoFechamento && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-[60] no-print">
+          <div className="bg-surface rounded-2xl w-full max-w-md p-5 shadow-xl">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-accent-light text-accent-dark flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div className="min-w-0">
+                <h3 className="font-semibold text-base">Fechar e dar baixa no estoque?</h3>
+                <p className="text-sm text-muted mt-1">
+                  {totalUnidadesVendidas > 0
+                    ? `Vão sair do estoque ${totalUnidadesVendidas} unidade(s) vendida(s). As outras ${
+                        consignacao.itens.reduce((acc, i) => acc + i.quantidadeEnviada, 0) - totalUnidadesVendidas
+                      } unidade(s) continuam no estoque da loja.`
+                    : "Nenhuma unidade foi marcada como vendida: a consignação será fechada sem baixa no estoque."}
+                </p>
+              </div>
+            </div>
+
+            <div className="mt-4 space-y-1 text-sm border border-border rounded-lg px-3 py-2">
+              <div className="flex justify-between">
+                <span>Total vendido</span>
+                <span className="font-mono">{formatarMoeda(totalVendido)}</span>
+              </div>
+              <div className="flex justify-between text-muted">
+                <span>Comissão do consignatário</span>
+                <span className="font-mono">{formatarMoeda(totalComissao)}</span>
+              </div>
+              <div className="flex justify-between font-semibold border-t border-border pt-1">
+                <span>Líquido para a loja</span>
+                <span className="font-mono">{formatarMoeda(totalVendido - totalComissao)}</span>
+              </div>
+            </div>
+
+            <p className="text-xs text-danger mt-3">
+              Depois de fechada, as quantidades não podem mais ser alteradas. Só um administrador consegue desfazer,
+              excluindo a consignação.
+            </p>
+
+            <div className="flex justify-end gap-2 mt-4">
+              <button
+                onClick={() => setConfirmandoFechamento(false)}
+                disabled={salvando}
+                className="border border-border hover:bg-background text-sm font-medium px-4 py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                Voltar e conferir
+              </button>
+              <button
+                onClick={fechar}
+                disabled={salvando}
+                className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-4 py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Sim, fechar e dar baixa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {reciboAberto && (
         <ReciboConsignacao
