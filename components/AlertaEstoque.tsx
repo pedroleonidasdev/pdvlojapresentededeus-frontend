@@ -13,6 +13,7 @@ import {
   descricaoNivel,
   resumirEstoque,
   sanearConfig,
+  situacaoEstoque,
 } from "@/lib/estoque-alerta";
 
 const ORDEM_CARTOES: NivelEstoque[] = ["RUPTURA", "CRITICO", "BAIXO", "ATENCAO", "OK", "SEM_MINIMO"];
@@ -38,10 +39,21 @@ export default function AlertaEstoque({ produtos, config, onSalvarConfig, onRest
   const [aberto, setAberto] = useState(true);
   const [configAberta, setConfigAberta] = useState(false);
   const [mostrarTodos, setMostrarTodos] = useState(false);
+  const [verTodosZerados, setVerTodosZerados] = useState(false);
 
   const resumo = useMemo(() => resumirEstoque(produtos, config), [produtos, config]);
   const total = resumo.total;
   const linhas = mostrarTodos ? resumo.prioridade : resumo.prioridade.slice(0, 8);
+
+  // produtos zerados, em ordem alfabética, sempre visíveis logo abaixo do aviso
+  const zerados = useMemo(
+    () =>
+      [...resumo.porNivel.RUPTURA].sort((a, b) =>
+        (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
+      ),
+    [resumo]
+  );
+  const zeradosVisiveis = verTodosZerados ? zerados : zerados.slice(0, 12);
 
   // banner principal
   let banner: { tom: "perigo" | "aviso" | "ok"; titulo: string; texto: string } | null = null;
@@ -170,6 +182,50 @@ export default function AlertaEstoque({ produtos, config, onSalvarConfig, onRest
               className="shrink-0 text-xs font-semibold rounded-lg px-3 py-1.5 bg-white/80 hover:bg-white border border-current/30 transition"
             >
               {filtro === "ALERTA" ? "Mostrar todos" : "Ver produtos em alerta"}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* produtos zerados: nomes à mostra, mesmo com o painel recolhido */}
+      {zerados.length > 0 && (
+        <div className="mx-4 mt-3 rounded-lg border border-danger/40 bg-white px-4 py-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-danger">
+              Produtos zerados ({zerados.length}) · repor primeiro
+            </p>
+            <button
+              type="button"
+              onClick={() => onFiltrar(filtro === "RUPTURA" ? null : "RUPTURA")}
+              className="text-xs font-semibold text-danger hover:underline"
+            >
+              {filtro === "RUPTURA" ? "Mostrar todos os produtos" : "Ver só os zerados na lista"}
+            </button>
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {zeradosVisiveis.map((p) => {
+              const s = situacaoEstoque(p, config);
+              return (
+                <span
+                  key={p.id}
+                  title={p.categoria?.nome ? `Categoria: ${p.categoria.nome}` : undefined}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-danger-light text-danger border border-danger/30"
+                >
+                  {p.nome}
+                  <span className="text-[10px] font-normal opacity-80">
+                    {s.sugestao > 0 ? `· comprar ${s.sugestao} un.` : "· sem mínimo definido"}
+                  </span>
+                </span>
+              );
+            })}
+          </div>
+          {zerados.length > 12 && (
+            <button
+              type="button"
+              onClick={() => setVerTodosZerados((v) => !v)}
+              className="mt-2 text-xs font-semibold text-danger hover:underline"
+            >
+              {verTodosZerados ? "Mostrar menos" : `Mostrar os outros ${zerados.length - 12} zerados`}
             </button>
           )}
         </div>
