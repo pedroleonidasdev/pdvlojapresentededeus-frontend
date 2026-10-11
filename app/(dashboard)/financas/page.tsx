@@ -13,6 +13,7 @@ import {
   CATEGORIAS_DESPESA_SUGERIDAS,
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
+import ContasAPagar from "@/components/ContasAPagar";
 import {
   Plus,
   Trash2,
@@ -209,6 +210,13 @@ export default function FinancasPage() {
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("TODOS");
   const [erro, setErro] = useState<string | null>(null);
 
+  // TODOS os lançamentos, de qualquer mês — alimenta o painel "Contas a pagar",
+  // que não depende do filtro de período (assim as parcelas futuras e atrasadas
+  // aparecem sem precisar ficar voltando os meses).
+  const [todasDespesas, setTodasDespesas] = useState<Despesa[]>([]);
+  const [carregandoContas, setCarregandoContas] = useState(true);
+  const [erroContas, setErroContas] = useState<string | null>(null);
+
   // esconde os valores da tela (útil com a loja cheia de gente por perto).
   // sempre começa oculto ao abrir essa tela — a pessoa decide se quer
   // revelar os valores naquela visita, mas ao sair e voltar começa oculto de novo.
@@ -242,15 +250,39 @@ export default function FinancasPage() {
     }
   }
 
-  // Sem carregamento automático ao abrir a tela: o usuário escolhe o período
-  // (ou mantém o padrão já preenchido) e clica em "Filtrar" para buscar.
+  async function recarregarContas() {
+    setCarregandoContas(true);
+    setErroContas(null);
+    try {
+      // sem parâmetros, o backend devolve todos os lançamentos, de qualquer data
+      const { data } = await api.get<Despesa[]>("/despesas");
+      setTodasDespesas(data);
+    } catch {
+      setErroContas("Não foi possível carregar as contas a pagar.");
+    } finally {
+      setCarregandoContas(false);
+    }
+  }
+
+  // depois de pagar/excluir: atualiza o painel de contas e, se o usuário já
+  // tiver filtrado um período, a lista e os cartões desse período também
+  async function atualizarTudo() {
+    await Promise.all([buscou ? carregar() : Promise.resolve(), recarregarContas()]);
+  }
+
+  // A listagem por período continua sem carregar sozinha: o usuário escolhe o
+  // período e clica em "Filtrar". Já as contas a pagar carregam ao abrir a tela.
+  useEffect(() => {
+    recarregarContas();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   async function excluir(id: number) {
     if (!confirm("Excluir este lançamento?")) return;
     setExcluindoId(id);
     try {
       await api.delete(`/despesas/${id}`);
-      await carregar();
+      await atualizarTudo();
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -266,7 +298,7 @@ export default function FinancasPage() {
     setMarcandoPagoId(chave);
     try {
       await api.patch(`/despesas/${d.id}/pago`, null, { params: { pago: !d.pago } });
-      await carregar();
+      await atualizarTudo();
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -284,7 +316,7 @@ export default function FinancasPage() {
       await api.patch(`/despesas/${d.id}/parcelas/${numeroParcela}/pago`, null, {
         params: { pago: !pagoAtual },
       });
-      await carregar();
+      await atualizarTudo();
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -412,6 +444,18 @@ export default function FinancasPage() {
       />
 
       <div className="p-4 md:p-8 space-y-6">
+        <ContasAPagar
+          despesas={todasDespesas}
+          carregando={carregandoContas}
+          erro={erroContas}
+          oculto={valoresOcultos}
+          marcandoId={marcandoPagoId}
+          onPagarAvista={alternarPago}
+          onPagarParcela={alternarParcelaPaga}
+          onEditar={(d) => setDespesaEmEdicao(d)}
+          onAtualizar={recarregarContas}
+        />
+
         {/* filtro de período */}
         <div className="flex flex-wrap items-end gap-3 bg-surface border border-border rounded-xl p-4">
           <div>
@@ -873,6 +917,7 @@ export default function FinancasPage() {
             setModalAberto(false);
             setDespesaEmEdicao(null);
             carregar();
+            recarregarContas();
           }}
         />
       )}
