@@ -6,9 +6,11 @@ import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag } from "lucide-react";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
+import AlertaEstoque from "@/components/AlertaEstoque";
+import { FiltroEstoque, META_NIVEL, combinaFiltro, descricaoNivel, situacaoEstoque, useConfigAlertaEstoque } from "@/lib/estoque-alerta";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -24,7 +26,10 @@ export default function EstoquePage() {
   const [busca, setBusca] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
   const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "padrao">("nome-asc");
-  const [filtroEspecial, setFiltroEspecial] = useState<"todos" | "estoque-baixo" | "duplicados">("todos");
+  const [filtroEspecial, setFiltroEspecial] = useState<"todos" | "duplicados">("todos");
+  // filtro do painel de alertas (ruptura, crítico, abaixo do mínimo...) e seus parâmetros
+  const [filtroNivel, setFiltroNivel] = useState<FiltroEstoque | null>(null);
+  const [configAlerta, salvarConfigAlerta, restaurarConfigAlerta] = useConfigAlertaEstoque();
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
   const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
@@ -151,11 +156,6 @@ export default function EstoquePage() {
     return motivos;
   }, [produtos]);
 
-  const estoqueBaixoCount = useMemo(
-    () => produtos.filter((p) => p.estoqueMinimo != null && p.quantidadeEstoque <= p.estoqueMinimo).length,
-    [produtos]
-  );
-
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
     let lista = !termo
@@ -173,11 +173,11 @@ export default function EstoquePage() {
       lista = lista.filter((produto) => String(produto.categoria?.id) === categoriaFiltro);
     }
 
-    if (filtroEspecial === "estoque-baixo") {
-      lista = lista.filter(
-        (produto) => produto.estoqueMinimo != null && produto.quantidadeEstoque <= produto.estoqueMinimo
-      );
-    } else if (filtroEspecial === "duplicados") {
+    if (filtroNivel) {
+      lista = lista.filter((produto) => combinaFiltro(situacaoEstoque(produto, configAlerta).nivel, filtroNivel));
+    }
+
+    if (filtroEspecial === "duplicados") {
       lista = lista.filter((produto) => duplicados.has(produto.id));
     }
 
@@ -187,7 +187,7 @@ export default function EstoquePage() {
       (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
     );
     return ordenacao === "nome-desc" ? ordenada.reverse() : ordenada;
-  }, [produtos, busca, categoriaFiltro, ordenacao, filtroEspecial, duplicados]);
+  }, [produtos, busca, categoriaFiltro, ordenacao, filtroEspecial, filtroNivel, configAlerta, duplicados]);
 
   // produtos marcados que não aparecem na lista com o filtro atual (a seleção é mantida ao trocar de filtro)
   const selecionadosForaDoFiltro = useMemo(() => {
@@ -225,6 +225,20 @@ export default function EstoquePage() {
       />
 
       <div className="p-4 md:p-8">
+        {!carregando && (
+          <AlertaEstoque
+            produtos={produtos}
+            config={configAlerta}
+            onSalvarConfig={salvarConfigAlerta}
+            onRestaurarConfig={restaurarConfigAlerta}
+            filtro={filtroNivel}
+            onFiltrar={(f) => {
+              setFiltroNivel(f);
+              setFiltroEspecial("todos");
+            }}
+          />
+        )}
+
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="relative w-full max-w-sm">
             <input
@@ -286,19 +300,14 @@ export default function EstoquePage() {
         )}
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
-          {estoqueBaixoCount > 0 && (
+          {filtroNivel && (
             <button
-              onClick={() =>
-                setFiltroEspecial((atual) => (atual === "estoque-baixo" ? "todos" : "estoque-baixo"))
-              }
-              className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border transition ${
-                filtroEspecial === "estoque-baixo"
-                  ? "bg-danger text-white border-danger"
-                  : "bg-danger-light text-danger border-danger/30 hover:bg-danger/10"
-              }`}
+              onClick={() => setFiltroNivel(null)}
+              title="Voltar a mostrar todos os produtos"
+              className="flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border bg-primary text-white border-primary transition hover:bg-primary-dark"
             >
-              <AlertTriangle className="w-4 h-4" />
-              Estoque baixo ({estoqueBaixoCount})
+              Filtro: {filtroNivel === "ALERTA" ? "em alerta" : META_NIVEL[filtroNivel].rotulo}
+              <X className="w-4 h-4" />
             </button>
           )}
           {duplicados.size > 0 && (
@@ -398,7 +407,7 @@ export default function EstoquePage() {
           </div>
         ) : (
           <div className="bg-surface border border-border rounded-xl overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
+            <table className="w-full text-sm min-w-[780px]">
               <thead className="bg-background border-b border-border">
                 <tr className="text-left text-muted">
                   <th className="px-5 py-3 font-medium w-8">
@@ -426,15 +435,21 @@ export default function EstoquePage() {
                   <th className="px-5 py-3 font-medium">Categoria</th>
                   <th className="px-5 py-3 font-medium">Preço</th>
                   <th className="px-5 py-3 font-medium">Estoque</th>
+                  <th className="px-5 py-3 font-medium">Mínimo</th>
+                  <th className="px-5 py-3 font-medium">Situação</th>
                   {isAdmin && <th className="px-5 py-3 font-medium text-right">Ações</th>}
                 </tr>
               </thead>
               <tbody>
                 {produtosFiltrados.map((produto) => {
-                  const estoqueBaixo =
-                    produto.estoqueMinimo != null && produto.quantidadeEstoque <= produto.estoqueMinimo;
+                  const situacao = situacaoEstoque(produto, configAlerta);
+                  const meta = META_NIVEL[situacao.nivel];
+                  const critico = situacao.nivel === "RUPTURA" || situacao.nivel === "CRITICO";
                   return (
-                    <tr key={produto.id} className="border-b border-border last:border-0">
+                    <tr
+                      key={produto.id}
+                      className={`border-b border-border last:border-0 ${critico ? "bg-danger-light/30" : ""}`}
+                    >
                       <td className="px-5 py-3">
                         <input
                           type="checkbox"
@@ -464,13 +479,25 @@ export default function EstoquePage() {
                       <td className="px-5 py-3 font-mono">{formatarMoeda(produto.precoVenda)}</td>
                       <td className="px-5 py-3">
                         <span
-                          title={estoqueBaixo ? `Abaixo do mínimo (${produto.estoqueMinimo})` : undefined}
-                          className={`inline-flex items-center gap-1 font-mono ${estoqueBaixo ? "text-danger" : "text-foreground"
-                            }`}
+                          className={`font-mono font-semibold ${
+                            situacao.nivel === "OK" || situacao.nivel === "SEM_MINIMO" ? "text-foreground" : meta.texto
+                          }`}
                         >
-                          {estoqueBaixo && <AlertTriangle className="w-3.5 h-3.5" />}
                           {produto.quantidadeEstoque}
                         </span>
+                      </td>
+                      <td className="px-5 py-3 font-mono text-muted">{produto.estoqueMinimo ?? "—"}</td>
+                      <td className="px-5 py-3">
+                        <span
+                          title={descricaoNivel(situacao.nivel, configAlerta)}
+                          className={`inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full border ${meta.selo}`}
+                        >
+                          {meta.rotulo}
+                          {situacao.pct != null && situacao.nivel !== "OK" && ` · ${Math.round(situacao.pct)}%`}
+                        </span>
+                        {situacao.sugestao > 0 && (
+                          <p className="text-[10px] text-muted mt-0.5">Repor ~{situacao.sugestao} un.</p>
+                        )}
                       </td>
                       {isAdmin && (
                         <td className="px-5 py-3">
@@ -500,7 +527,11 @@ export default function EstoquePage() {
             </table>
             {produtosFiltrados.length === 0 && (
               <p className="text-center text-sm text-muted py-10">
-                {busca ? "Nenhum produto encontrado para essa busca." : "Nenhum produto cadastrado."}
+                {busca
+                  ? "Nenhum produto encontrado para essa busca."
+                  : filtroNivel
+                    ? "Nenhum produto neste nível de estoque."
+                    : "Nenhum produto cadastrado."}
               </p>
             )}
           </div>
@@ -724,7 +755,7 @@ function ModalProduto({
                 className="input"
               />
             </Campo>
-            <Campo label="Estoque mínimo (opcional)">
+            <Campo label="Estoque mínimo (ponto de alerta)">
               <input
                 type="number"
                 value={estoqueMinimo}
@@ -733,6 +764,11 @@ function ModalProduto({
               />
             </Campo>
           </div>
+
+          <p className="text-[11px] text-muted -mt-1 leading-snug">
+            O sistema avisa para repor quando a quantidade chegar ao estoque mínimo. Sem esse valor, o produto só gera
+            alerta se zerar.
+          </p>
 
           {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
         </div>
