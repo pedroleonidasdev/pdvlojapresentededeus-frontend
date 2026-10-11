@@ -12,6 +12,7 @@ import {
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import VisualizarConsignacao from "@/components/VisualizarConsignacao";
+import ReciboConsignacao from "@/components/ReciboConsignacao";
 import {
   Search,
   Trash2,
@@ -26,6 +27,7 @@ import {
   Lock,
   Pencil,
   Package,
+  Receipt,
 } from "lucide-react";
 
 function mensagemErro(e: unknown, padrao: string): string {
@@ -285,6 +287,7 @@ function ModalConsignacaoForm({
   );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [reciboAberto, setReciboAberto] = useState(false);
   const enviandoRef = useRef(false);
   const buscaRef = useRef<HTMLInputElement>(null);
 
@@ -769,6 +772,16 @@ function ModalConsignacaoForm({
               </span>
             )}
             <button
+              type="button"
+              onClick={() => setReciboAberto(true)}
+              disabled={consignatario.trim() === ""}
+              title={consignatario.trim() === "" ? "Informe o consignatário para gerar o recibo" : "Gerar recibo em nome do consignatário"}
+              className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2.5 rounded-lg transition disabled:opacity-50"
+            >
+              <Receipt className="w-4 h-4" />
+              Gerar recibo
+            </button>
+            <button
               onClick={onClose}
               className="border border-border hover:bg-background text-sm font-medium px-4 py-2.5 rounded-lg transition"
             >
@@ -785,6 +798,10 @@ function ModalConsignacaoForm({
           </div>
         </div>
       </div>
+
+      {reciboAberto && (
+        <ReciboConsignacao consignatario={consignatario.trim()} onFechar={() => setReciboAberto(false)} />
+      )}
     </div>
   );
 }
@@ -812,6 +829,7 @@ function ModalDetalhe({
   const [vendidas, setVendidas] = useState<Record<number, number>>({});
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [reciboAberto, setReciboAberto] = useState(false);
   const enviandoRef = useRef(false);
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
@@ -976,6 +994,13 @@ function ModalDetalhe({
               <Printer className="w-4 h-4" />
               Visualizar / imprimir / salvar
             </button>
+            <button
+              onClick={() => setReciboAberto(true)}
+              className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              <Receipt className="w-4 h-4" />
+              Gerar recibo
+            </button>
             {aberta && (
               <button
                 onClick={() => onEditar(consignacao)}
@@ -1007,6 +1032,14 @@ function ModalDetalhe({
           )}
         </div>
       </div>
+
+      {reciboAberto && (
+        <ReciboConsignacao
+          consignatario={consignacao.consignatario}
+          valorLiquidoLoja={aberta ? null : consignacao.totalLiquidoLoja}
+          onFechar={() => setReciboAberto(false)}
+        />
+      )}
     </div>
   );
 }
