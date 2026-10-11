@@ -3,9 +3,9 @@
 import { useEffect, useRef, useState } from "react";
 import { Consignacao } from "@/lib/types";
 import { baixarArquivo, montarModeloConsignacao } from "@/lib/consignacao-modelo";
-import { FileSpreadsheet, FileText, FileType2, Loader2, Printer, X, ExternalLink } from "lucide-react";
+import { FileSpreadsheet, FileText, FileType2, Loader2, Printer, Receipt, X, ExternalLink } from "lucide-react";
 
-type Formato = "pdf" | "excel" | "word";
+type Formato = "pdf" | "excel" | "word" | "recibo";
 
 /**
  * Visualização do Termo + Relatório da consignação ANTES de imprimir.
@@ -62,12 +62,15 @@ export default function VisualizarConsignacao({
       } else if (formato === "excel") {
         const { gerarExcelConsignacao } = await import("@/lib/consignacao-excel");
         baixarArquivo(await gerarExcelConsignacao(modelo), `${nomeBase}.xlsx`);
+      } else if (formato === "recibo") {
+        const { gerarReciboConsignacao } = await import("@/lib/consignacao-recibo");
+        baixarArquivo(await gerarReciboConsignacao(modelo), `recibo-${nomeBase.replace(/^consignacao-/, "")}.docx`);
       } else {
         const { gerarWordConsignacao } = await import("@/lib/consignacao-word");
         baixarArquivo(await gerarWordConsignacao(modelo), `${nomeBase}.docx`);
       }
     } catch {
-      setErro(`Não foi possível gerar o arquivo ${formato === "excel" ? "Excel" : formato === "word" ? "Word" : "PDF"}.`);
+      setErro(`Não foi possível gerar o arquivo ${formato === "excel" ? "Excel" : formato === "word" ? "Word" : formato === "recibo" ? "do recibo" : "PDF"}.`);
     } finally {
       setGerando(null);
     }
@@ -125,6 +128,10 @@ export default function VisualizarConsignacao({
           <button onClick={() => baixar("word")} disabled={gerando !== null} className={botao}>
             {gerando === "word" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileType2 className="w-4 h-4 text-blue-600" />}
             Word
+          </button>
+          <button onClick={() => baixar("recibo")} disabled={gerando !== null} className={botao}>
+            {gerando === "recibo" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4 text-orange-600" />}
+            Gerar recibo
           </button>
           {urlPdf && (
             <a href={urlPdf} target="_blank" rel="noreferrer" className={`${botao} ml-auto`}>
