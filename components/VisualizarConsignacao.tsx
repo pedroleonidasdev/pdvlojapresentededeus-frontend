@@ -3,9 +3,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Consignacao } from "@/lib/types";
 import { baixarArquivo, montarModeloConsignacao } from "@/lib/consignacao-modelo";
+import VisualizarRecibo from "@/components/VisualizarRecibo";
 import { FileSpreadsheet, FileText, FileType2, Loader2, Printer, Receipt, X, ExternalLink } from "lucide-react";
 
-type Formato = "pdf" | "excel" | "word" | "recibo";
+type Formato = "pdf" | "excel" | "word";
 
 /**
  * Visualização do Termo + Relatório da consignação ANTES de imprimir.
@@ -22,6 +23,7 @@ export default function VisualizarConsignacao({
   const [urlPdf, setUrlPdf] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [gerando, setGerando] = useState<Formato | null>(null);
+  const [reciboAberto, setReciboAberto] = useState(false);
   const blobPdfRef = useRef<Blob | null>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
 
@@ -62,15 +64,12 @@ export default function VisualizarConsignacao({
       } else if (formato === "excel") {
         const { gerarExcelConsignacao } = await import("@/lib/consignacao-excel");
         baixarArquivo(await gerarExcelConsignacao(modelo), `${nomeBase}.xlsx`);
-      } else if (formato === "recibo") {
-        const { gerarReciboConsignacao } = await import("@/lib/consignacao-recibo");
-        baixarArquivo(await gerarReciboConsignacao(modelo), `recibo-${nomeBase.replace(/^consignacao-/, "")}.docx`);
       } else {
         const { gerarWordConsignacao } = await import("@/lib/consignacao-word");
         baixarArquivo(await gerarWordConsignacao(modelo), `${nomeBase}.docx`);
       }
     } catch {
-      setErro(`Não foi possível gerar o arquivo ${formato === "excel" ? "Excel" : formato === "word" ? "Word" : formato === "recibo" ? "do recibo" : "PDF"}.`);
+      setErro(`Não foi possível gerar o arquivo ${formato === "excel" ? "Excel" : formato === "word" ? "Word" : "PDF"}.`);
     } finally {
       setGerando(null);
     }
@@ -93,6 +92,7 @@ export default function VisualizarConsignacao({
     "flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-3 py-2 rounded-lg transition disabled:opacity-50";
 
   return (
+    <>
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-3 sm:p-6 z-[60] no-print">
       <div className="bg-surface rounded-2xl w-full max-w-5xl h-[94vh] flex flex-col overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 py-3 border-b border-border shrink-0">
@@ -129,8 +129,8 @@ export default function VisualizarConsignacao({
             {gerando === "word" ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileType2 className="w-4 h-4 text-blue-600" />}
             Word
           </button>
-          <button onClick={() => baixar("recibo")} disabled={gerando !== null} className={botao}>
-            {gerando === "recibo" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Receipt className="w-4 h-4 text-orange-600" />}
+          <button onClick={() => setReciboAberto(true)} className={botao}>
+            <Receipt className="w-4 h-4 text-orange-600" />
             Gerar recibo
           </button>
           {urlPdf && (
@@ -159,5 +159,7 @@ export default function VisualizarConsignacao({
         </div>
       </div>
     </div>
+    {reciboAberto && <VisualizarRecibo consignacao={consignacao} onFechar={() => setReciboAberto(false)} />}
+    </>
   );
 }
