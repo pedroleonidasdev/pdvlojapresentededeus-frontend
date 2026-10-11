@@ -18,6 +18,12 @@ import {
 
 const ORDEM_CARTOES: NivelEstoque[] = ["RUPTURA", "CRITICO", "BAIXO", "ATENCAO", "OK", "SEM_MINIMO"];
 
+/** Primeira letra do nome, sem acento e em maiúscula ("#" quando não for letra). */
+function primeiraLetra(nome: string | null | undefined): string {
+  const letra = (nome ?? "").trim().normalize("NFD").replace(/[\u0300-\u036f]/g, "").charAt(0).toUpperCase();
+  return /[A-Z]/.test(letra) ? letra : "#";
+}
+
 interface Props {
   produtos: Produto[];
   config: ConfigAlertaEstoque;
@@ -39,7 +45,6 @@ export default function AlertaEstoque({ produtos, config, onSalvarConfig, onRest
   const [aberto, setAberto] = useState(true);
   const [configAberta, setConfigAberta] = useState(false);
   const [mostrarTodos, setMostrarTodos] = useState(false);
-  const [verTodosZerados, setVerTodosZerados] = useState(false);
 
   const resumo = useMemo(() => resumirEstoque(produtos, config), [produtos, config]);
   const total = resumo.total;
@@ -53,7 +58,7 @@ export default function AlertaEstoque({ produtos, config, onSalvarConfig, onRest
       ),
     [resumo]
   );
-  const zeradosVisiveis = verTodosZerados ? zerados : zerados.slice(0, 12);
+  const semMinimoZerados = zerados.filter((p) => situacaoEstoque(p, config).sugestao === 0).length;
 
   // banner principal
   let banner: { tom: "perigo" | "aviso" | "ok"; titulo: string; texto: string } | null = null;
@@ -187,47 +192,71 @@ export default function AlertaEstoque({ produtos, config, onSalvarConfig, onRest
         </div>
       )}
 
-      {/* produtos zerados: nomes à mostra, mesmo com o painel recolhido */}
+      {/* produtos zerados: lista organizada A–Z, sempre visível (mesmo com o painel recolhido) */}
       {zerados.length > 0 && (
-        <div className="mx-4 mt-3 rounded-lg border border-danger/40 bg-white px-4 py-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-            <p className="text-xs font-semibold uppercase tracking-wide text-danger">
-              Produtos zerados ({zerados.length}) · repor primeiro
-            </p>
+        <div className="mx-4 mt-3 rounded-lg border border-danger/40 bg-white overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 bg-danger-light border-b border-danger/30">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wide text-danger">
+                Produtos zerados ({zerados.length}) · repor primeiro
+              </p>
+              {semMinimoZerados > 0 && (
+                <p className="text-[11px] text-danger/80">
+                  {semMinimoZerados === zerados.length
+                    ? "Nenhum tem estoque mínimo cadastrado, então o sistema não consegue sugerir a quantidade."
+                    : `${semMinimoZerados} sem estoque mínimo cadastrado (sem sugestão de quantidade).`}
+                </p>
+              )}
+            </div>
             <button
               type="button"
               onClick={() => onFiltrar(filtro === "RUPTURA" ? null : "RUPTURA")}
-              className="text-xs font-semibold text-danger hover:underline"
+              className="text-xs font-semibold text-danger bg-white/80 hover:bg-white border border-danger/30 rounded-lg px-3 py-1.5 transition"
             >
               {filtro === "RUPTURA" ? "Mostrar todos os produtos" : "Ver só os zerados na lista"}
             </button>
           </div>
-          <div className="flex flex-wrap gap-1.5">
-            {zeradosVisiveis.map((p) => {
-              const s = situacaoEstoque(p, config);
-              return (
-                <span
-                  key={p.id}
-                  title={p.categoria?.nome ? `Categoria: ${p.categoria.nome}` : undefined}
-                  className="inline-flex items-center gap-1.5 text-xs font-medium px-2.5 py-1 rounded-full bg-danger-light text-danger border border-danger/30"
-                >
-                  {p.nome}
-                  <span className="text-[10px] font-normal opacity-80">
-                    {s.sugestao > 0 ? `· comprar ${s.sugestao} un.` : "· sem mínimo definido"}
-                  </span>
-                </span>
-              );
-            })}
+
+          <div className="max-h-[22rem] overflow-auto">
+            <table className="w-full text-sm min-w-[520px]">
+              <thead className="sticky top-0 z-10 bg-white shadow-[0_1px_0_0_var(--border)]">
+                <tr className="text-left text-[11px] uppercase tracking-wide text-muted">
+                  <th className="pl-4 pr-1 py-2 font-semibold w-8">A–Z</th>
+                  <th className="px-3 py-2 font-semibold">Produto</th>
+                  <th className="px-3 py-2 font-semibold">Categoria</th>
+                  <th className="px-3 py-2 font-semibold text-right">Mínimo</th>
+                  <th className="pl-3 pr-4 py-2 font-semibold text-right">Comprar</th>
+                </tr>
+              </thead>
+              <tbody>
+                {zerados.map((p, i) => {
+                  const s = situacaoEstoque(p, config);
+                  const letra = primeiraLetra(p.nome);
+                  const novaLetra = i === 0 || letra !== primeiraLetra(zerados[i - 1].nome);
+                  return (
+                    <tr
+                      key={p.id}
+                      className={`border-b border-border last:border-0 hover:bg-danger-light/30 ${
+                        novaLetra && i > 0 ? "border-t-2 border-t-danger/20" : ""
+                      }`}
+                    >
+                      <td className="pl-4 pr-1 py-1.5 text-sm font-bold text-danger">{novaLetra ? letra : ""}</td>
+                      <td className="px-3 py-1.5 font-medium text-foreground">{p.nome}</td>
+                      <td className="px-3 py-1.5 text-muted">{p.categoria?.nome ?? "—"}</td>
+                      <td className="px-3 py-1.5 text-right font-mono text-muted">{p.estoqueMinimo ?? "—"}</td>
+                      <td className="pl-3 pr-4 py-1.5 text-right">
+                        {s.sugestao > 0 ? (
+                          <span className="font-mono font-semibold text-foreground">{s.sugestao} un.</span>
+                        ) : (
+                          <span className="text-[11px] text-muted">defina o mínimo</span>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
           </div>
-          {zerados.length > 12 && (
-            <button
-              type="button"
-              onClick={() => setVerTodosZerados((v) => !v)}
-              className="mt-2 text-xs font-semibold text-danger hover:underline"
-            >
-              {verTodosZerados ? "Mostrar menos" : `Mostrar os outros ${zerados.length - 12} zerados`}
-            </button>
-          )}
         </div>
       )}
 
