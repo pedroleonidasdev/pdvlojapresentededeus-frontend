@@ -15,7 +15,7 @@ import {
   Wallet,
 } from "lucide-react";
 import { Despesa } from "@/lib/types";
-import { formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { formatarDataCurta, formatarMoeda, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 
 type Modo = "PENDENTES" | "PAGAS" | "TODAS";
 type Faixa = "TODAS" | "VENCIDAS" | "7DIAS" | "MES";
@@ -124,6 +124,15 @@ function descricaoPrazo(dias: number): { texto: string; classe: string } {
   return { texto: `Em ${dias} dias`, classe: "bg-[#E3EEF8] text-info-dark" };
 }
 
+/** Colunas da lista (no celular cada conta vira um cartão com os rótulos em cada campo). */
+const COLUNAS =
+  "md:grid-cols-[88px_minmax(0,1.7fr)_minmax(0,1fr)_minmax(0,0.9fr)_minmax(0,1.5fr)_112px_128px_156px]";
+
+/** Rótulo de cada campo, só aparece no celular (no computador quem rotula é o cabeçalho). */
+function Rotulo({ children }: { children: React.ReactNode }) {
+  return <p className="md:hidden text-[10px] font-semibold uppercase tracking-wide text-muted mb-0.5">{children}</p>;
+}
+
 interface Props {
   despesas: Despesa[];
   carregando: boolean;
@@ -158,6 +167,8 @@ export default function ContasAPagar({
   const [recolhidos, setRecolhidos] = useState<Set<string>>(new Set());
   // última conta paga por aqui: alimenta o aviso "Desfazer" (some sozinho)
   const [ultimaPaga, setUltimaPaga] = useState<{ chave: string; titulo: string } | null>(null);
+  // contas parceladas com a lista completa de parcelas aberta
+  const [expandidos, setExpandidos] = useState<Set<number>>(new Set());
 
   const hoje = hojeISO();
   const moeda = (v: number) => (oculto ? "R$ ••••••" : formatarMoeda(v));
@@ -270,16 +281,33 @@ export default function ContasAPagar({
     });
   }
 
-  function textoConta(item: ItemConta): string {
-    const nome = item.despesa.fornecedor?.trim() || item.despesa.descricao;
-    return item.numeroParcela !== null ? `${nome} (parcela ${item.numeroParcela}/${item.totalParcelas})` : nome;
+  function textoConta(d: Despesa, numero: number | null, total: number): string {
+    const nome = d.fornecedor?.trim() || d.descricao;
+    return numero !== null ? `${nome} (parcela ${numero}/${total})` : nome;
+  }
+
+  function alternarExpandido(id: number) {
+    setExpandidos((atual) => {
+      const novo = new Set(atual);
+      if (novo.has(id)) novo.delete(id);
+      else novo.add(id);
+      return novo;
+    });
+  }
+
+  function alternarParcela(d: Despesa, numero: number, pagoAtual: boolean) {
+    onPagarParcela(d, numero, pagoAtual);
+    // só oferece "Desfazer" quando a parcela estava em aberto e acabou de ser paga
+    setUltimaPaga(pagoAtual ? null : { chave: `${d.id}-${numero}`, titulo: textoConta(d, numero, d.parcelas.length) });
   }
 
   function alternarPagamento(item: ItemConta) {
-    if (item.numeroParcela === null) onPagarAvista(item.despesa);
-    else onPagarParcela(item.despesa, item.numeroParcela, item.pago);
-    // só oferece "Desfazer" quando a conta estava em aberto e acabou de ser paga
-    setUltimaPaga(item.pago ? null : { chave: item.chave, titulo: textoConta(item) });
+    if (item.numeroParcela === null) {
+      onPagarAvista(item.despesa);
+      setUltimaPaga(item.pago ? null : { chave: item.chave, titulo: textoConta(item.despesa, null, 1) });
+    } else {
+      alternarParcela(item.despesa, item.numeroParcela, item.pago);
+    }
   }
 
   // o aviso só aparece depois que a conta realmente consta como paga na lista
@@ -300,7 +328,7 @@ export default function ContasAPagar({
   ];
 
   return (
-    <section className="bg-[#EAF3FB] border border-[#9CC3E4] rounded-xl overflow-hidden shadow-sm">
+    <section className="bg-[#EAF3FB] border border-[#9CC3E4] rounded-xl overflow-clip shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-3 px-4 py-3 bg-[#D6E8F7] border-b border-[#9CC3E4]">
         <div>
           <h2 className="text-base font-semibold text-info-dark">Contas a pagar</h2>
@@ -386,7 +414,21 @@ export default function ContasAPagar({
         </div>
       </div>
 
-      <div className="border-t border-[#9CC3E4]">
+      {/* cabeçalho das colunas (só no computador) */}
+      <div
+        className={`hidden md:grid ${COLUNAS} items-center gap-3 sticky top-0 z-10 bg-info text-white px-4 py-2 text-[11px] font-semibold uppercase tracking-wide shadow-sm`}
+      >
+        <span>Vencimento</span>
+        <span>Fornecedor / Descrição</span>
+        <span>Categoria</span>
+        <span>Forma de pgto.</span>
+        <span>Parcela</span>
+        <span className="text-right">Valor</span>
+        <span>Situação</span>
+        <span className="text-right">Ação</span>
+      </div>
+
+      <div>
         {carregando && despesas.length === 0 ? (
           <div className="flex items-center justify-center gap-2 py-10 text-sm text-muted">
             <Loader2 className="w-4 h-4 animate-spin" /> Carregando contas...
@@ -435,7 +477,11 @@ export default function ContasAPagar({
                         hoje={hoje}
                         moeda={moeda}
                         processando={marcandoId === item.chave}
+                        marcandoId={marcandoId}
+                        expandido={expandidos.has(item.despesa.id)}
+                        onExpandir={() => alternarExpandido(item.despesa.id)}
                         onPagar={() => alternarPagamento(item)}
+                        onPagarParcela={(numero, pagoAtual) => alternarParcela(item.despesa, numero, pagoAtual)}
                         onEditar={() => onEditar(item.despesa)}
                       />
                     ))}
@@ -484,23 +530,37 @@ function LinhaConta({
   hoje,
   moeda,
   processando,
+  marcandoId,
+  expandido,
+  onExpandir,
   onPagar,
+  onPagarParcela,
   onEditar,
 }: {
   item: ItemConta;
   hoje: string;
   moeda: (v: number) => string;
   processando: boolean;
+  marcandoId: string | null;
+  expandido: boolean;
+  onExpandir: () => void;
   onPagar: () => void;
+  onPagarParcela: (numero: number, pagoAtual: boolean) => void;
   onEditar: () => void;
 }) {
   const { despesa } = item;
+  const parcelado = item.numeroParcela !== null;
   const dias = item.vencimento ? diasAte(item.vencimento, hoje) : null;
   const urgente = !item.pago && dias !== null && dias <= 0;
   const prazo = !item.pago && item.vencimento && dias !== null ? descricaoPrazo(dias) : null;
   const titulo = despesa.fornecedor?.trim() || despesa.descricao;
   const subtitulo = despesa.fornecedor?.trim() ? despesa.descricao : null;
-  const parcelasPagas = despesa.parcelas.filter((p) => p.pago).length;
+
+  // números do parcelamento (todos calculados a partir das parcelas reais)
+  const pagas = despesa.parcelas.filter((p) => p.pago);
+  const abertas = despesa.parcelas.filter((p) => !p.pago);
+  const totalCompra = despesa.parcelas.reduce((acc, p) => acc + p.valor, 0);
+  const restante = abertas.reduce((acc, p) => acc + p.valor, 0);
 
   // faixa colorida à esquerda: bate o olho e já sabe a situação da conta
   const faixaCor = item.pago
@@ -515,109 +575,267 @@ function LinhaConta({
   const fundo = item.pago ? "bg-white/60" : urgente ? "bg-[#FDF0ED] hover:bg-[#FBE7E2]" : "bg-white hover:bg-[#F4F9FE]";
 
   return (
-    <li
-      className={`flex items-center gap-3 pl-3 pr-3 sm:pr-4 py-3 border-b border-[#CFE2F3] border-l-4 transition ${faixaCor} ${fundo}`}
-    >
-      <div className="w-[52px] shrink-0 text-center leading-tight">
-        {item.vencimento ? (
-          <>
-            <p className="text-[10px] font-semibold text-muted">{diaDaSemana(item.vencimento)}</p>
-            <p className="text-base font-semibold font-mono">
-              {item.vencimento.slice(8, 10)}/{item.vencimento.slice(5, 7)}
-            </p>
-            <p className="text-[10px] text-muted">{item.vencimento.slice(0, 4)}</p>
-          </>
-        ) : (
-          <p className="text-xs text-muted">sem data</p>
-        )}
-      </div>
+    <li className={`border-b border-[#CFE2F3] border-l-4 transition ${faixaCor} ${fundo}`}>
+      <div className={`grid grid-cols-2 ${COLUNAS} items-center gap-x-3 gap-y-2.5 pl-3 pr-4 py-3`}>
+        {/* Vencimento */}
+        <div className="md:text-center leading-tight">
+          <Rotulo>Vencimento</Rotulo>
+          {item.vencimento ? (
+            <div className="inline-flex md:flex md:flex-col items-baseline md:items-center gap-1.5 md:gap-0">
+              <p className="text-[10px] font-semibold text-muted">{diaDaSemana(item.vencimento)}</p>
+              <p className="text-base font-semibold font-mono">
+                {item.vencimento.slice(8, 10)}/{item.vencimento.slice(5, 7)}
+              </p>
+              <p className="text-[10px] text-muted">{item.vencimento.slice(0, 4)}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted">sem data</p>
+          )}
+        </div>
 
-      <div className="min-w-0 flex-1">
-        <p className={`truncate text-sm font-semibold ${item.pago ? "text-muted line-through" : "text-foreground"}`}>
-          {titulo}
-        </p>
-        {subtitulo && <p className="truncate text-xs text-muted">{subtitulo}</p>}
-        <div className="mt-1 flex flex-wrap items-center gap-1.5">
-          {item.numeroParcela !== null && (
-            <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-primary-light text-primary-dark">
-              Parcela {item.numeroParcela}/{item.totalParcelas}
+        {/* Situação (no celular fica ao lado do vencimento) */}
+        <div className="md:order-7 text-right md:text-left">
+          <Rotulo>Situação</Rotulo>
+          {prazo && (
+            <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${prazo.classe}`}>
+              {prazo.texto}
             </span>
           )}
-          {item.numeroParcela !== null && item.totalParcelas <= 12 && (
-            <span className="flex items-center gap-0.5" title={`${parcelasPagas} de ${item.totalParcelas} pagas`}>
-              {despesa.parcelas.map((p) => (
-                <span
-                  key={p.numero}
-                  className={`w-2 h-2 rounded-full ${p.pago ? "bg-success" : "bg-[#C5D9EA]"} ${
-                    p.numero === item.numeroParcela ? "ring-2 ring-info/50" : ""
-                  }`}
-                />
-              ))}
-            </span>
-          )}
-          {item.numeroParcela !== null && (
-            <span className="text-[10px] text-muted">
-              {parcelasPagas} de {item.totalParcelas} pagas
-            </span>
-          )}
-          {despesa.categoria && (
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#E3EEF8] text-info-dark border border-[#B9D5EC]">
+          {item.pago && <span className="inline-block text-[11px] text-success font-semibold">✓ Paga</span>}
+          {!prazo && !item.pago && <span className="text-xs text-muted">—</span>}
+        </div>
+
+        {/* Fornecedor / Descrição */}
+        <div className="col-span-2 md:col-span-1 md:order-2 min-w-0">
+          <Rotulo>Fornecedor / Descrição</Rotulo>
+          <p className={`truncate text-sm font-semibold ${item.pago ? "text-muted line-through" : "text-foreground"}`}>
+            {titulo}
+          </p>
+          {subtitulo && <p className="truncate text-xs text-muted">{subtitulo}</p>}
+        </div>
+
+        {/* Categoria */}
+        <div className="md:order-3 min-w-0">
+          <Rotulo>Categoria</Rotulo>
+          {despesa.categoria ? (
+            <span className="inline-block max-w-full truncate text-[11px] px-2 py-0.5 rounded bg-[#E3EEF8] text-info-dark border border-[#B9D5EC]">
               {despesa.categoria}
             </span>
+          ) : (
+            <span className="text-xs text-muted">Sem categoria</span>
           )}
-          <span className="text-[10px] text-muted">
+        </div>
+
+        {/* Forma de pagamento */}
+        <div className="md:order-4 min-w-0">
+          <Rotulo>Forma de pgto.</Rotulo>
+          <p className="text-xs text-foreground/80">
             {LABEL_FORMA_PAGAMENTO[despesa.formaPagamento] ?? despesa.formaPagamento}
-          </span>
+          </p>
+        </div>
+
+        {/* Parcela: tudo sobre o parcelamento */}
+        <div className="col-span-2 md:col-span-1 md:order-5 min-w-0">
+          <Rotulo>Parcela</Rotulo>
+          {parcelado ? (
+            <div className="space-y-1">
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[11px] font-semibold px-2 py-0.5 rounded bg-primary-light text-primary-dark">
+                  Parcela {item.numeroParcela} de {item.totalParcelas}
+                </span>
+                {item.totalParcelas <= 12 && (
+                  <span className="flex items-center gap-0.5" title={`${pagas.length} de ${item.totalParcelas} pagas`}>
+                    {despesa.parcelas.map((p) => (
+                      <span
+                        key={p.numero}
+                        className={`w-2 h-2 rounded-full ${p.pago ? "bg-success" : "bg-[#C5D9EA]"} ${
+                          p.numero === item.numeroParcela ? "ring-2 ring-info/50" : ""
+                        }`}
+                      />
+                    ))}
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-muted leading-snug">
+                {pagas.length === 0
+                  ? "Nenhuma paga"
+                  : `${pagas.length} ${pagas.length === 1 ? "paga" : "pagas"}`}
+                {abertas.length > 0 && (
+                  <>
+                    {" · "}
+                    <span className="text-foreground/80">
+                      {abertas.length === 1 ? "falta 1" : `faltam ${abertas.length}`} ({moeda(restante)})
+                    </span>
+                  </>
+                )}
+                {abertas.length === 0 && " · quitada"}
+              </p>
+              <button
+                type="button"
+                onClick={onExpandir}
+                className="flex items-center gap-1 text-[11px] font-medium text-info hover:text-info-dark"
+              >
+                <ChevronDown className={`w-3.5 h-3.5 transition-transform ${expandido ? "rotate-180" : ""}`} />
+                {expandido ? "Esconder parcelas" : "Ver todas as parcelas"}
+              </button>
+            </div>
+          ) : (
+            <span className="text-[11px] font-medium px-2 py-0.5 rounded bg-[#E3EEF8] text-info-dark">
+              À vista · pagamento único
+            </span>
+          )}
+        </div>
+
+        {/* Valor */}
+        <div className="md:order-6 md:text-right">
+          <Rotulo>{parcelado ? "Valor da parcela" : "Valor"}</Rotulo>
+          <p className={`font-mono text-sm font-semibold ${item.pago ? "text-muted" : "text-foreground"}`}>
+            {moeda(item.valor)}
+          </p>
+          {parcelado && <p className="text-[10px] text-muted">Total da compra {moeda(totalCompra)}</p>}
+        </div>
+
+        {/* Ação */}
+        <div className="md:order-8 flex items-center justify-end gap-1.5">
+          <button
+            type="button"
+            onClick={onPagar}
+            disabled={processando}
+            title={item.pago ? "Marcar como pendente" : "Marcar como paga"}
+            aria-label={item.pago ? "Marcar como pendente" : "Marcar como paga"}
+            className={`flex items-center justify-center gap-1 min-w-[84px] rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-60 ${
+              item.pago
+                ? "border border-[#9CC3E4] bg-white text-muted hover:text-foreground"
+                : "bg-primary text-white hover:bg-primary-dark shadow-sm"
+            }`}
+          >
+            {processando ? (
+              <Loader2 className="w-4 h-4 animate-spin" />
+            ) : item.pago ? (
+              <>
+                <Undo2 className="w-3.5 h-3.5" /> Desfazer
+              </>
+            ) : (
+              <>
+                <Check className="w-3.5 h-3.5" /> Pagar
+              </>
+            )}
+          </button>
+          <button
+            type="button"
+            onClick={onEditar}
+            title="Editar lançamento"
+            aria-label="Editar lançamento"
+            className="p-1.5 rounded-lg text-muted hover:text-info-dark hover:bg-[#E3EEF8] transition"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
         </div>
       </div>
 
-      <div className="shrink-0 text-right">
-        <p className={`font-mono text-sm font-semibold ${item.pago ? "text-muted" : "text-foreground"}`}>
-          {moeda(item.valor)}
-        </p>
-        {prazo && (
-          <span className={`inline-block mt-0.5 text-[10px] font-medium px-1.5 py-0.5 rounded-full ${prazo.classe}`}>
-            {prazo.texto}
-          </span>
-        )}
-        {item.pago && <span className="inline-block mt-0.5 text-[10px] text-success font-semibold">✓ Paga</span>}
-      </div>
-
-      <div className="shrink-0 flex items-center gap-1.5">
-        <button
-          type="button"
-          onClick={onPagar}
-          disabled={processando}
-          title={item.pago ? "Marcar como pendente" : "Marcar como paga"}
-          aria-label={item.pago ? "Marcar como pendente" : "Marcar como paga"}
-          className={`flex items-center justify-center gap-1 min-w-[78px] rounded-lg px-2.5 py-1.5 text-xs font-semibold transition disabled:opacity-60 ${
-            item.pago
-              ? "border border-[#9CC3E4] bg-white text-muted hover:text-foreground"
-              : "bg-primary text-white hover:bg-primary-dark shadow-sm"
-          }`}
-        >
-          {processando ? (
-            <Loader2 className="w-4 h-4 animate-spin" />
-          ) : item.pago ? (
-            <>
-              <Undo2 className="w-3.5 h-3.5" /> Desfazer
-            </>
-          ) : (
-            <>
-              <Check className="w-3.5 h-3.5" /> Pagar
-            </>
-          )}
-        </button>
-        <button
-          type="button"
-          onClick={onEditar}
-          title="Editar lançamento"
-          aria-label="Editar lançamento"
-          className="p-1.5 rounded-lg text-muted hover:text-info-dark hover:bg-[#E3EEF8] transition"
-        >
-          <Pencil className="w-4 h-4" />
-        </button>
-      </div>
+      {/* todas as parcelas desta compra, com pagamento individual */}
+      {parcelado && expandido && (
+        <div className="mx-3 sm:mx-4 mb-3 rounded-lg border border-[#B9D5EC] bg-[#F4F9FE] overflow-hidden">
+          <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-1 px-3 py-2 bg-[#E3EEF8] text-[11px] text-info-dark">
+            <span className="font-semibold uppercase tracking-wide">
+              Parcelas de {titulo}
+              {despesa.descricao && subtitulo ? ` · ${subtitulo}` : ""}
+            </span>
+            <span>
+              Total <b className="font-mono">{moeda(totalCompra)}</b>
+              {" · "}Pago <b className="font-mono text-success">{moeda(totalCompra - restante)}</b>
+              {" · "}Falta <b className="font-mono text-danger">{moeda(restante)}</b>
+            </span>
+          </div>
+          <div className="hidden sm:grid grid-cols-[70px_1fr_110px_150px_110px] gap-3 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-wide text-muted border-b border-[#CFE2F3]">
+            <span>Parcela</span>
+            <span>Vencimento</span>
+            <span className="text-right">Valor</span>
+            <span>Situação</span>
+            <span className="text-right">Ação</span>
+          </div>
+          <ul>
+            {[...despesa.parcelas]
+              .sort((a, b) => a.numero - b.numero)
+              .map((p) => {
+                const d = p.dataVencimento ? diasAte(p.dataVencimento, hoje) : null;
+                const situacao = p.pago ? null : d !== null ? descricaoPrazo(d) : null;
+                const atual = p.numero === item.numeroParcela;
+                const ocupada = marcandoId === `${despesa.id}-${p.numero}`;
+                return (
+                  <li
+                    key={p.numero}
+                    className={`grid grid-cols-[auto_1fr_auto] sm:grid-cols-[70px_1fr_110px_150px_110px] items-center gap-x-3 gap-y-1 px-3 py-2 border-b border-[#CFE2F3] last:border-0 ${
+                      atual ? "bg-white" : ""
+                    }`}
+                  >
+                    <span className="text-xs font-semibold font-mono">
+                      {p.numero}/{despesa.parcelas.length}
+                      {atual && <span className="ml-1 text-[9px] font-sans font-semibold text-info">◄ esta</span>}
+                    </span>
+                    <span className="text-xs">
+                      {p.dataVencimento ? (
+                        <>
+                          {formatarDataCurta(p.dataVencimento)}{" "}
+                          <span className="text-muted">{diaDaSemana(p.dataVencimento).toLowerCase()}</span>
+                        </>
+                      ) : (
+                        <span className="text-muted">sem data</span>
+                      )}
+                    </span>
+                    <span className={`text-xs font-mono font-semibold text-right ${p.pago ? "text-muted" : ""}`}>
+                      {moeda(p.valor)}
+                    </span>
+                    <span className="hidden sm:block">
+                      {p.pago ? (
+                        <span className="text-[11px] text-success font-semibold">✓ Paga</span>
+                      ) : situacao ? (
+                        <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${situacao.classe}`}>
+                          {situacao.texto}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-muted">—</span>
+                      )}
+                    </span>
+                    <span className="col-span-3 sm:col-span-1 flex items-center justify-between sm:justify-end gap-2">
+                      <span className="sm:hidden">
+                        {p.pago ? (
+                          <span className="text-[11px] text-success font-semibold">✓ Paga</span>
+                        ) : situacao ? (
+                          <span className={`inline-block text-[11px] font-medium px-2 py-0.5 rounded-full ${situacao.classe}`}>
+                            {situacao.texto}
+                          </span>
+                        ) : null}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => onPagarParcela(p.numero, p.pago)}
+                        disabled={ocupada}
+                        className={`flex items-center justify-center gap-1 min-w-[84px] rounded-md px-2 py-1 text-[11px] font-semibold transition disabled:opacity-60 ${
+                          p.pago
+                            ? "border border-[#9CC3E4] bg-white text-muted hover:text-foreground"
+                            : "bg-primary text-white hover:bg-primary-dark"
+                        }`}
+                      >
+                        {ocupada ? (
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        ) : p.pago ? (
+                          <>
+                            <Undo2 className="w-3 h-3" /> Desfazer
+                          </>
+                        ) : (
+                          <>
+                            <Check className="w-3 h-3" /> Pagar
+                          </>
+                        )}
+                      </button>
+                    </span>
+                  </li>
+                );
+              })}
+          </ul>
+        </div>
+      )}
     </li>
   );
 }
