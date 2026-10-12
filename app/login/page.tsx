@@ -172,7 +172,7 @@ export default function LoginPage() {
                   value={loginValue}
                   onChange={(e) => setLoginValue(e.target.value)}
                   className={CLASSE_INPUT}
-                  placeholder="seu.login"
+                  placeholder="login"
                 />
               </div>
             </div>
