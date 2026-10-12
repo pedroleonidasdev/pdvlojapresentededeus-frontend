@@ -269,6 +269,9 @@ export default function FinancasPage() {
   const [busca, setBusca] = useState("");
   // agrupa a lista por urgência (vencidos, hoje, próximos 7 dias...)
   const [agrupar, setAgrupar] = useState(true);
+  // ABERTO = todas as contas a pagar, de qualquer data (padrão);
+  // PERIODO = só os lançamentos registrados no período escolhido
+  const [visao, setVisao] = useState<"ABERTO" | "PERIODO">("ABERTO");
   const [filtroCategoria, setFiltroCategoria] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -302,10 +305,11 @@ export default function FinancasPage() {
         inicio: limiteDiaBrasiliaParaUtc(de, false),
         fim: limiteDiaBrasiliaParaUtc(ate, true),
       };
-      // janela larga (2 anos até hoje) só pra achar o que ainda está em aberto
+      // janela bem larga (10 anos atrás até 1 ano à frente) só pra achar TUDO
+      // que ainda está em aberto, não importa a data em que foi lançado
       const paramsAbertos = {
-        inicio: limiteDiaBrasiliaParaUtc(somarDias(hojeISO(), -730), false),
-        fim: limiteDiaBrasiliaParaUtc(hojeISO(), true),
+        inicio: limiteDiaBrasiliaParaUtc(somarDias(hojeISO(), -3650), false),
+        fim: limiteDiaBrasiliaParaUtc(somarDias(hojeISO(), 365), true),
       };
       const [resDespesas, resVendas, resAbertos] = await Promise.all([
         api.get<Despesa[]>("/despesas", { params }),
@@ -404,7 +408,6 @@ export default function FinancasPage() {
   // período escolhido + pendências de períodos anteriores: base de tudo que é
   // "o que falta pagar". Os totais de despesa/faturamento seguem só o período.
   const todasAbertas = useMemo(() => [...despesas, ...pendentesAnteriores], [despesas, pendentesAnteriores]);
-  const idsAnteriores = useMemo(() => new Set(pendentesAnteriores.map((d) => d.id)), [pendentesAnteriores]);
 
   // compras parceladas ainda não quitadas — ficam sempre visíveis, sem filtro
   const parceladosEmAndamento = useMemo(
@@ -502,8 +505,20 @@ export default function FinancasPage() {
     }
   }
 
+  // tudo que ainda tem algo a pagar (à vista pendente ou parcela em aberto), de qualquer data
+  const contasEmAberto = useMemo(
+    () =>
+      todasAbertas.filter((d) => {
+        if (d.tipo !== "DESPESA") return false;
+        const { pagas, total } = resumoPagamento(d);
+        return pagas < total;
+      }),
+    [todasAbertas]
+  );
+
   const despesasFiltradas = useMemo(() => {
-    let lista = filtroTipo === "TODOS" ? todasAbertas : todasAbertas.filter((d) => d.tipo === filtroTipo);
+    const base = visao === "ABERTO" ? contasEmAberto : despesas;
+    let lista = filtroTipo === "TODOS" ? base : base.filter((d) => d.tipo === filtroTipo);
     if (filtroCategoria) {
       lista = lista.filter(
         (d) => d.tipo === "DESPESA" && (d.categoria?.trim() || "Sem categoria") === filtroCategoria
@@ -547,7 +562,7 @@ export default function FinancasPage() {
     return agrupar
       ? ordenada.sort((a, b) => ORDEM_GRUPOS.indexOf(grupoDe(a)) - ORDEM_GRUPOS.indexOf(grupoDe(b)))
       : ordenada;
-  }, [todasAbertas, filtroTipo, filtroStatus, filtroCategoria, busca, ordenarPor, ordemAscendente, agrupar]);
+  }, [contasEmAberto, despesas, visao, filtroTipo, filtroStatus, filtroCategoria, busca, ordenarPor, ordemAscendente, agrupar]);
 
   // quantidade e valor em aberto de cada faixa (cabeçalhos dos grupos)
   const resumoGrupos = useMemo(() => {
@@ -809,6 +824,32 @@ export default function FinancasPage() {
 
         {/* lista de lançamentos */}
         <div className="bg-surface border border-border rounded-xl overflow-hidden">
+          <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
+            <div className="inline-flex rounded-lg border border-border p-0.5 bg-background">
+              {(
+                [
+                  ["ABERTO", `Contas a pagar (${contasEmAberto.length})`],
+                  ["PERIODO", "Lançamentos do período"],
+                ] as const
+              ).map(([v, label]) => (
+                <button
+                  key={v}
+                  onClick={() => setVisao(v)}
+                  aria-pressed={visao === v}
+                  className={`text-xs px-3 py-1.5 rounded-md transition ${
+                    visao === v ? "bg-primary text-white font-medium" : "text-muted hover:text-foreground"
+                  }`}
+                >
+                  {label}
+                </button>
+              ))}
+            </div>
+            <span className="text-xs text-muted">
+              {visao === "ABERTO"
+                ? "Tudo que está em aberto, de qualquer data — o período escolhido não filtra aqui."
+                : "Só o que foi registrado no período escolhido acima."}
+            </span>
+          </div>
           <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border">
             <Filter className="w-3.5 h-3.5 text-muted" />
             <div className="flex gap-1.5 flex-wrap">
@@ -889,8 +930,10 @@ export default function FinancasPage() {
             </div>
           ) : despesasFiltradas.length === 0 ? (
             <p className="text-center text-sm text-muted py-10">
-              {todasAbertas.length > 0
+              {(visao === "ABERTO" ? contasEmAberto.length : despesas.length) > 0
                 ? "Nenhum lançamento com esses filtros."
+                : visao === "ABERTO"
+                ? "Nenhuma conta em aberto. Tudo pago!"
                 : "Nenhum lançamento no período."}
             </p>
           ) : (
@@ -985,11 +1028,6 @@ export default function FinancasPage() {
                       </td>
                       <td className="px-4 py-2.5 text-muted whitespace-nowrap text-xs">
                         {formatarDataCurta(dataBrasiliaISO(d.dataHora))}
-                        {idsAnteriores.has(d.id) && (
-                          <div className="text-[10px] text-secondary-dark uppercase tracking-wide mt-0.5">
-                            em aberto de antes
-                          </div>
-                        )}
                       </td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         {(() => {
