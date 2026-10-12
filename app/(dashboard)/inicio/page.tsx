@@ -42,6 +42,21 @@ const CORES: Record<string, { bg: string; ring: string }> = {
   "/usuarios": { bg: "bg-primary-dark", ring: "hover:ring-primary/30" },
 };
 
+// Seção de cada atalho (as mesmas do menu lateral). Fica aqui na própria página,
+// sem depender de campo extra no NAV_ITEMS.
+const GRUPO_POR_ROTA: Record<string, string> = {
+  "/trocas": "Operação",
+  "/consignados": "Operação",
+  "/vendas": "Caixa",
+  "/fechar-caixa": "Caixa",
+  "/reabrir-caixa": "Caixa",
+  "/estoque": "Gestão",
+  "/categorias": "Gestão",
+  "/relatorios": "Gestão",
+  "/financas": "Gestão",
+  "/usuarios": "Gestão",
+};
+
 const LIMITE_HORAS_CAIXA_ESQUECIDO = 12;
 
 interface Resumo {
@@ -165,7 +180,7 @@ export default function InicioPage() {
   // agrupa os atalhos pelas mesmas seções do menu lateral (Operação / Caixa / Gestão)
   const grupos: { titulo: string; itens: typeof outros }[] = [];
   for (const item of outros) {
-    const titulo = item.grupo ?? "Outros";
+    const titulo = GRUPO_POR_ROTA[item.href] ?? "Outros";
     const existente = grupos.find((g) => g.titulo === titulo);
     if (existente) existente.itens.push(item);
     else grupos.push({ titulo, itens: [item] });
