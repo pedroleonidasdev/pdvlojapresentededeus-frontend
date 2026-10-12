@@ -313,6 +313,17 @@ function ModalConsignacaoForm({
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
   const buscaRef = useRef<HTMLInputElement>(null);
+  // lista da direita: ao entrar um produto NOVO ela rola sozinha até ele e o destaca por uns instantes
+  const listaItensRef = useRef<HTMLUListElement>(null);
+  const [destaque, setDestaque] = useState<{ id: number; n: number } | null>(null);
+
+  useEffect(() => {
+    if (!destaque) return;
+    const linha = listaItensRef.current?.querySelector<HTMLElement>(`[data-item-id="${destaque.id}"]`);
+    linha?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    const t = setTimeout(() => setDestaque(null), 2200);
+    return () => clearTimeout(t);
+  }, [destaque]);
 
   // catálogo carregado uma vez ao abrir: a busca e o filtro por categoria passam a ser
   // instantâneos (sem esperar o servidor a cada letra digitada)
@@ -399,6 +410,10 @@ function ModalConsignacaoForm({
       quantidade = produto.quantidadeEstoque;
     } else {
       setErro(null);
+    }
+    // produto que ainda não estava na consignação: a lista da direita rola até ele
+    if (quantidade > 0 && !itens.some((i) => i.produtoId === produto.id)) {
+      setDestaque((d) => ({ id: produto.id, n: (d?.n ?? 0) + 1 }));
     }
     setItens((prev) => {
       if (quantidade <= 0) return prev.filter((i) => i.produtoId !== produto.id);
@@ -712,9 +727,15 @@ function ModalConsignacaoForm({
                 <p className="shrink-0 px-4 sm:px-5 py-1.5 text-[11px] text-muted bg-accent-light/50 border-b border-accent/25">
                   Para mudar a quantidade, clique no item ou use a lista de produtos.
                 </p>
-                <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-accent/25">
+                <ul ref={listaItensRef} className="flex-1 min-h-0 overflow-y-auto divide-y divide-accent/25">
                   {itens.map((i) => (
-                    <li key={i.produtoId} className="flex items-center gap-1 pl-3 pr-1.5 py-1.5 hover:bg-accent-light/60 transition-colors">
+                    <li
+                      key={i.produtoId}
+                      data-item-id={i.produtoId}
+                      className={`flex items-center gap-1 pl-3 pr-1.5 py-1.5 transition-colors duration-700 ${
+                        destaque?.id === i.produtoId ? "bg-accent/35" : "hover:bg-accent-light/60"
+                      }`}
+                    >
                       <button
                         type="button"
                         onClick={() => localizar(i)}
