@@ -26,6 +26,7 @@ import {
   Lock,
   Pencil,
   Package,
+  ClipboardCheck,
 } from "lucide-react";
 
 function mensagemErro(e: unknown, padrao: string): string {
@@ -838,6 +839,7 @@ function ModalDetalhe({
 }) {
   const aberta = consignacao.status === "ABERTA";
   const [vendidas, setVendidas] = useState<Record<number, number>>({});
+  const [conferindo, setConferindo] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
@@ -884,6 +886,24 @@ function ModalDetalhe({
     }
   }
 
+  const temConferenciaPendente = conferindo && (Object.values(vendidas) as number[]).some((q) => q > 0);
+
+  function cancelarConferencia() {
+    setVendidas({});
+    setConferindo(false);
+    setErro(null);
+  }
+
+  // o X fecha a janela sem alterar nada (nenhuma baixa é feita no estoque)
+  function fecharSemAlterar() {
+    if (
+      temConferenciaPendente &&
+      !confirm("Fechar sem alterações? As quantidades vendidas informadas na conferência serão descartadas e nenhuma baixa será feita no estoque.")
+    )
+      return;
+    onClose();
+  }
+
   async function excluir() {
     const aviso = aberta
       ? "Excluir esta consignação? O estoque não foi alterado, então nada volta."
@@ -913,13 +933,18 @@ function ModalDetalhe({
             </p>
             {consignacao.observacao && <p className="text-xs text-muted mt-0.5">Obs: {consignacao.observacao}</p>}
           </div>
-          <button onClick={onClose} className="p-1 rounded-md hover:bg-background text-muted shrink-0">
+          <button
+            onClick={fecharSemAlterar}
+            title="Fechar sem alterações"
+            aria-label="Fechar sem alterações"
+            className="p-1 rounded-md hover:bg-background text-muted shrink-0"
+          >
             <X className="w-4 h-4" />
           </button>
         </div>
 
         <div className="flex-1 overflow-auto p-5">
-          {aberta && (
+          {aberta && conferindo && (
             <p className="text-xs text-muted bg-background rounded-lg px-3 py-2 mb-3">
               Quando o consignatário prestar contas, informe quantas unidades de cada item foram <strong>vendidas</strong> e
               feche a consignação. Só a quantidade vendida dá baixa no estoque; o restante volta para a loja.
@@ -950,7 +975,7 @@ function ModalDetalhe({
                     <td className="py-2 px-2 text-right font-mono">{formatarMoeda(i.precoUnitario)}</td>
                     <td className="py-2 px-2 text-right font-mono">{i.percentualComissao}%</td>
                     <td className="py-2 px-2 text-right">
-                      {aberta ? (
+                      {aberta && conferindo ? (
                         <input
                           type="number"
                           min={0}
@@ -962,7 +987,7 @@ function ModalDetalhe({
                           className="input w-16 text-right py-1"
                         />
                       ) : (
-                        <span className="font-mono">{i.quantidadeVendida}</span>
+                        <span className="font-mono">{aberta ? q : i.quantidadeVendida}</span>
                       )}
                     </td>
                     <td className="py-2 px-2 text-right font-mono">{i.quantidadeEnviada - q}</td>
@@ -1023,15 +1048,33 @@ function ModalDetalhe({
               </button>
             )}
           </div>
-          {aberta && (
+          {aberta && !conferindo && (
             <button
-              onClick={fechar}
-              disabled={salvando}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
+              onClick={() => setConferindo(true)}
+              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition"
             >
-              {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-              Fechar e dar baixa no estoque
+              <ClipboardCheck className="w-4 h-4" />
+              Fazer conferência
             </button>
+          )}
+          {aberta && conferindo && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={cancelarConferencia}
+                disabled={salvando}
+                className="text-sm font-medium text-muted hover:text-foreground px-3 py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                Cancelar conferência
+              </button>
+              <button
+                onClick={fechar}
+                disabled={salvando}
+                className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Fechar e dar baixa no estoque
+              </button>
+            </div>
           )}
         </div>
       </div>
