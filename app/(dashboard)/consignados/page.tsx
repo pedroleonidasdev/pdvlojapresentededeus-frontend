@@ -204,32 +204,47 @@ interface ItemForm {
 }
 
 /**
- * Quantidade editável: dá para digitar o número (ex: 25) ou usar − e +. Enquanto o campo
- * está em foco ele mostra o que a pessoa digita (inclusive vazio); ao sair, volta a mostrar
- * o valor real da linha. Valores inválidos (0, vazio) são ignorados.
+ * Controle de quantidade da lista "Adicionar produtos": dá para digitar o número que quiser
+ * (ex: 25) ou usar − e +. 0 = o produto não está na consignação. Enquanto o campo está em
+ * foco ele mostra o que a pessoa digita (inclusive vazio); ao sair, volta a mostrar o valor
+ * real da linha. `max` (estoque) limita o digitado e o botão +.
  */
-function QuantidadeInput({
+function QuantidadeStepper({
   valor,
+  max,
+  desabilitado = false,
+  rotulo,
   onChange,
-  onMais,
-  onMenos,
 }: {
   valor: number;
+  max?: number;
+  desabilitado?: boolean;
+  rotulo: string;
   onChange: (n: number) => void;
-  onMais: () => void;
-  onMenos: () => void;
 }) {
   const [digitando, setDigitando] = useState<string | null>(null);
+  const naLista = valor > 0;
   return (
-    <div className="flex items-center gap-1">
-      <button type="button" onClick={onMenos} className="p-1 rounded hover:bg-background" aria-label="Diminuir">
+    <div
+      className={`flex items-center h-9 rounded-lg border-2 overflow-hidden transition ${
+        naLista ? "border-primary bg-surface shadow-sm" : "border-border bg-surface"
+      } ${desabilitado ? "opacity-40 pointer-events-none" : ""}`}
+    >
+      <button
+        type="button"
+        onClick={() => onChange(valor - 1)}
+        disabled={valor <= 0}
+        className="w-8 h-full flex items-center justify-center text-primary hover:bg-primary-light disabled:opacity-30 disabled:hover:bg-transparent"
+        aria-label={`Diminuir ${rotulo}`}
+      >
         <Minus className="w-3.5 h-3.5" />
       </button>
       <input
         inputMode="numeric"
-        aria-label="Quantidade"
-        className="input text-center font-mono py-1"
-        style={{ width: "4.5rem" }}
+        aria-label={`Quantidade de ${rotulo}`}
+        className={`w-11 h-full text-center text-sm font-mono font-semibold bg-transparent outline-none focus:bg-primary-soft ${
+          naLista ? "text-primary" : "text-muted"
+        }`}
         value={digitando ?? String(valor)}
         onFocus={(e) => {
           setDigitando(String(valor));
@@ -237,13 +252,24 @@ function QuantidadeInput({
         }}
         onChange={(e) => {
           const v = e.target.value.replace(/\D/g, "").slice(0, 5);
-          setDigitando(v);
-          if (v !== "" && Number(v) >= 1) onChange(Number(v));
+          if (v === "") {
+            setDigitando("");
+            return;
+          }
+          const n = Number(v);
+          setDigitando(String(max !== undefined ? Math.min(n, max) : n));
+          onChange(n);
         }}
         onBlur={() => setDigitando(null)}
         onKeyDown={(e) => e.key === "Enter" && (e.target as HTMLInputElement).blur()}
       />
-      <button type="button" onClick={onMais} className="p-1 rounded hover:bg-background" aria-label="Aumentar">
+      <button
+        type="button"
+        onClick={() => onChange(valor + 1)}
+        disabled={max !== undefined && valor >= max}
+        className="w-8 h-full flex items-center justify-center text-primary hover:bg-primary-light disabled:opacity-30 disabled:hover:bg-transparent"
+        aria-label={`Aumentar ${rotulo}`}
+      >
         <Plus className="w-3.5 h-3.5" />
       </button>
     </div>
@@ -349,47 +375,43 @@ function ModalConsignacaoForm({
 
   const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
 
-  // limite = estoque atual do produto (o que já está na consignação ainda não saiu do estoque).
-  // Se o produto não estiver no catálogo (ex: foi inativado), não limita aqui — o servidor valida.
-  const estoqueDe = (produtoId: number) => catalogo.find((p) => p.id === produtoId)?.quantidadeEstoque ?? Infinity;
-
-  function adicionar(produto: Produto) {
-    setErro(null);
-    if (qtdNaLista(produto.id) + 1 > produto.quantidadeEstoque) {
-      setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
-      return;
-    }
-    setItens((prev) => {
-      if (prev.some((i) => i.produtoId === produto.id)) {
-        return prev.map((i) => (i.produtoId === produto.id ? { ...i, quantidade: i.quantidade + 1 } : i));
-      }
-      return [
-        ...prev,
-        {
-          produtoId: produto.id,
-          nome: produto.nome,
-          categoriaNome: produto.categoria?.nome ?? null,
-          preco: produto.precoVenda,
-          percentual: percentualComissaoConsignacao(produto.categoria?.nome),
-          quantidade: 1,
-        },
-      ];
-    });
+  /** Linha nova do formulário (preço e comissão da categoria no momento em que entra). */
+  function novoItem(produto: Produto, quantidade: number): ItemForm {
+    return {
+      produtoId: produto.id,
+      nome: produto.nome,
+      categoriaNome: produto.categoria?.nome ?? null,
+      preco: produto.precoVenda,
+      percentual: percentualComissaoConsignacao(produto.categoria?.nome),
+      quantidade,
+    };
   }
 
-  /** Define a quantidade exata de uma linha (digitada ou via +/−), respeitando o estoque. */
-  function definirQuantidade(produtoId: number, quantidade: number) {
-    if (quantidade < 1) return;
-    const item = itens.find((i) => i.produtoId === produtoId);
-    if (!item) return;
-    const limite = estoqueDe(produtoId);
-    if (quantidade > limite) {
-      setErro(`Estoque insuficiente para ${item.nome} (disponível: ${limite})`);
-      quantidade = limite;
+  /**
+   * Define a quantidade EXATA de um produto na consignação (digitada ou via +/−):
+   * 0 tira o produto da lista, e acima do estoque trava no estoque (o que já está na
+   * consignação ainda não saiu do estoque, então o limite é o estoque atual).
+   */
+  function definirQtd(produto: Produto, desejada: number) {
+    let quantidade = Math.max(0, Math.floor(desejada) || 0);
+    if (quantidade > produto.quantidadeEstoque) {
+      setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
+      quantidade = produto.quantidadeEstoque;
     } else {
       setErro(null);
     }
-    setItens((prev) => prev.map((i) => (i.produtoId === produtoId ? { ...i, quantidade } : i)));
+    setItens((prev) => {
+      if (quantidade <= 0) return prev.filter((i) => i.produtoId !== produto.id);
+      if (prev.some((i) => i.produtoId === produto.id)) {
+        return prev.map((i) => (i.produtoId === produto.id ? { ...i, quantidade } : i));
+      }
+      return [...prev, novoItem(produto, quantidade)];
+    });
+  }
+
+  /** +1 (usado pelo Enter / leitor de código de barras). */
+  function adicionar(produto: Produto) {
+    definirQtd(produto, qtdNaLista(produto.id) + 1);
   }
 
   // Enter: leitor de código de barras digita o código e dá Enter — adiciona direto o produto
@@ -436,11 +458,13 @@ function ModalConsignacaoForm({
     }
   }
 
-  /** Tira 1 unidade; se era a última, remove o item da consignação. */
-  function diminuir(produtoId: number) {
-    const atual = qtdNaLista(produtoId);
-    if (atual <= 1) setItens((prev) => prev.filter((x) => x.produtoId !== produtoId));
-    else definirQuantidade(produtoId, atual - 1);
+  /** Clique num item da consignação: busca o produto na lista ao lado, onde se muda a quantidade. */
+  function localizar(item: ItemForm) {
+    const produto = catalogo.find((p) => p.id === item.produtoId);
+    alterarCategoria(null);
+    alterarBusca(produto?.codigoBarras ?? semAcento(item.nome).replace(/[^a-z0-9]+/g, " ").trim());
+    setAba("produtos");
+    setTimeout(() => buscaRef.current?.focus(), 50);
   }
 
   function limparTudo() {
@@ -456,24 +480,24 @@ function ModalConsignacaoForm({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 sm:p-4 z-50 no-print">
-      <div className="bg-surface rounded-2xl w-full max-w-6xl h-[94dvh] max-h-[900px] flex flex-col overflow-hidden shadow-xl">
+      <div className="bg-background rounded-2xl w-full max-w-6xl h-[94dvh] max-h-[900px] flex flex-col overflow-hidden shadow-xl">
         {/* ------------------------------ Cabeçalho ------------------------------ */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-border shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-primary to-primary-dark text-white">
           <div>
             <h2 className="font-semibold text-base">{editando ? `Editar consignação #${consignacao.id}` : "Nova consignação"}</h2>
-            <p className="text-xs text-muted mt-0.5">
+            <p className="text-xs text-white/70 mt-0.5">
               {editando
                 ? "Acrescente produtos, mude quantidades ou remova itens. Itens que já estavam mantêm o preço original."
                 : "O estoque só dá baixa quando a consignação for fechada."}
             </p>
           </div>
-          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-background text-muted" aria-label="Fechar">
+          <button onClick={onClose} className="p-1.5 rounded-md hover:bg-white/15 text-white/80 hover:text-white" aria-label="Fechar">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* abas (só no celular) */}
-        <div className="lg:hidden flex border-b border-border shrink-0">
+        <div className="lg:hidden flex border-b border-border shrink-0 bg-surface">
           <button type="button" className={botaoAba("dados")} onClick={() => setAba("dados")}>
             1 · Dados{consignatario.trim() === "" && <span className="ml-1 text-danger">•</span>}
           </button>
@@ -487,10 +511,10 @@ function ModalConsignacaoForm({
 
         {/* ------------------------------ Dados da consignação ------------------------------ */}
         <div
-          className={`${aba === "dados" ? "block flex-1" : "hidden"} lg:block lg:flex-none px-5 py-4 border-b border-border bg-background/40 shrink-0 overflow-y-auto`}
+          className={`${aba === "dados" ? "block flex-1" : "hidden"} lg:block lg:flex-none px-5 py-4 border-b border-border bg-primary-light shrink-0 overflow-y-auto`}
         >
           <div className="grid gap-3 lg:grid-cols-[2fr_1fr_2fr]">
-            <label className="text-xs font-medium text-muted block">
+            <label className="text-xs font-semibold text-primary block">
               Consignatário * <span className="font-normal">(quem recebe a mercadoria)</span>
               <input
                 className="input mt-1 text-foreground"
@@ -501,11 +525,11 @@ function ModalConsignacaoForm({
                 autoFocus={!editando}
               />
             </label>
-            <label className="text-xs font-medium text-muted block">
+            <label className="text-xs font-semibold text-primary block">
               Devolver o que não vender até
               <input type="date" className="input mt-1 text-foreground" value={prazo} onChange={(e) => setPrazo(e.target.value)} />
             </label>
-            <label className="text-xs font-medium text-muted block">
+            <label className="text-xs font-semibold text-primary block">
               Observação <span className="font-normal">(opcional)</span>
               <input
                 className="input mt-1 text-foreground"
@@ -528,7 +552,10 @@ function ModalConsignacaoForm({
         <div className={`${aba === "dados" ? "hidden" : "grid"} lg:grid flex-1 min-h-0 grid-rows-[minmax(0,1fr)] lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]`}>
           {/* ---------- esquerda: buscar e adicionar produtos ---------- */}
           <section className={`${aba === "produtos" ? "flex" : "hidden"} lg:flex flex-col min-h-0 gap-3 p-4 sm:p-5 lg:border-r border-border`}>
-            <h3 className="hidden lg:block text-sm font-semibold">Adicionar produtos</h3>
+            <h3 className="hidden lg:flex items-center gap-2 text-sm font-semibold text-primary">
+              <span className="w-1.5 h-4 rounded-full bg-accent" />
+              Adicionar produtos
+            </h3>
 
             <div className="flex flex-col sm:flex-row gap-2 shrink-0">
               <div className="relative flex-1 min-w-0">
@@ -579,7 +606,7 @@ function ModalConsignacaoForm({
             </div>
 
             {/* resultados: a única rolagem desta coluna */}
-            <div className="flex-1 min-h-0 flex flex-col border border-border rounded-xl overflow-hidden bg-surface">
+            <div className="flex-1 min-h-0 flex flex-col border border-border rounded-xl overflow-hidden bg-surface shadow-sm">
               {carregandoCatalogo ? (
                 <div className="flex-1 flex items-center justify-center gap-2 text-sm text-muted">
                   <Loader2 className="w-4 h-4 animate-spin" /> Carregando produtos...
@@ -600,9 +627,13 @@ function ModalConsignacaoForm({
                     {filtrados.slice(0, limite).map((p) => {
                       const naLista = qtdNaLista(p.id);
                       const semEstoque = p.quantidadeEstoque <= 0;
-                      const esgotou = naLista >= p.quantidadeEstoque;
                       return (
-                        <li key={p.id} className={`flex items-center gap-3 px-3 py-2.5 ${naLista > 0 ? "bg-primary-soft" : ""}`}>
+                        <li
+                          key={p.id}
+                          className={`flex items-center gap-3 px-3 py-2.5 border-l-4 transition-colors ${
+                            naLista > 0 ? "bg-success-light border-l-primary" : "border-l-transparent hover:bg-primary-soft"
+                          }`}
+                        >
                           <div className="min-w-0 flex-1">
                             <p className="text-sm font-medium leading-snug line-clamp-2">{p.nome}</p>
                             <p className="text-xs text-muted truncate">
@@ -616,45 +647,20 @@ function ModalConsignacaoForm({
                               {semEstoque ? "Sem estoque" : `${p.quantidadeEstoque} em estoque`}
                             </p>
                           </div>
-                          <div className="shrink-0 w-[6.75rem] flex justify-end">
-                            {naLista === 0 ? (
-                              <button
-                                type="button"
-                                onClick={() => adicionar(p)}
-                                disabled={semEstoque}
-                                className="flex items-center gap-1 h-9 px-3 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-medium transition disabled:opacity-40"
-                                aria-label={`Adicionar ${p.nome}`}
-                              >
-                                <Plus className="w-4 h-4" /> Add
-                              </button>
-                            ) : (
-                              <div className="flex items-center rounded-lg border border-primary bg-surface overflow-hidden h-9">
-                                <button
-                                  type="button"
-                                  onClick={() => diminuir(p.id)}
-                                  className="w-8 h-full flex items-center justify-center hover:bg-primary-light"
-                                  aria-label="Diminuir"
-                                >
-                                  <Minus className="w-3.5 h-3.5" />
-                                </button>
-                                <span className="w-8 text-center text-sm font-mono font-semibold">{naLista}</span>
-                                <button
-                                  type="button"
-                                  onClick={() => adicionar(p)}
-                                  disabled={esgotou}
-                                  className="w-8 h-full flex items-center justify-center hover:bg-primary-light disabled:opacity-30 disabled:hover:bg-transparent"
-                                  aria-label="Aumentar"
-                                >
-                                  <Plus className="w-3.5 h-3.5" />
-                                </button>
-                              </div>
-                            )}
+                          <div className="shrink-0">
+                            <QuantidadeStepper
+                              valor={naLista}
+                              max={p.quantidadeEstoque}
+                              desabilitado={semEstoque && naLista === 0}
+                              rotulo={p.nome}
+                              onChange={(n) => definirQtd(p, n)}
+                            />
                           </div>
                         </li>
                       );
                     })}
                   </ul>
-                  <div className="shrink-0 flex items-center justify-between gap-3 text-xs text-muted bg-background px-3 py-2 border-t border-border">
+                  <div className="shrink-0 flex items-center justify-between gap-3 text-xs text-primary bg-primary-light px-3 py-2 border-t border-border">
                     <span>
                       {filtrados.length > limite
                         ? `Mostrando ${limite} de ${filtrados.length} produtos`
@@ -676,8 +682,8 @@ function ModalConsignacaoForm({
           </section>
 
           {/* ---------- direita: itens da consignação ---------- */}
-          <section className={`${aba === "itens" ? "flex" : "hidden"} lg:flex flex-col min-h-0 bg-background/30`}>
-            <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-border shrink-0">
+          <section className={`${aba === "itens" ? "flex" : "hidden"} lg:flex flex-col min-h-0 bg-surface-alt`}>
+            <div className="flex items-center justify-between gap-3 px-4 sm:px-5 py-3 border-b border-accent/40 bg-accent-light shrink-0">
               <div>
                 <h3 className="text-sm font-semibold">Itens da consignação</h3>
                 <p className="text-xs text-muted">
@@ -702,41 +708,42 @@ function ModalConsignacaoForm({
                 </button>
               </div>
             ) : (
-              <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-border">
-                {itens.map((i) => (
-                  <li key={i.produtoId} className="px-4 sm:px-5 py-3 space-y-2">
-                    <div className="flex items-start gap-2">
-                      <div className="min-w-0 flex-1">
-                        <p className="text-sm font-medium leading-snug">{i.nome}</p>
-                        <p className="text-xs text-muted mt-0.5">
-                          {i.categoriaNome ?? "Sem categoria"} · comissão {i.percentual}%
-                        </p>
-                      </div>
+              <>
+                <p className="shrink-0 px-4 sm:px-5 py-1.5 text-[11px] text-muted bg-accent-light/50 border-b border-accent/25">
+                  Para mudar a quantidade, clique no item ou use a lista de produtos.
+                </p>
+                <ul className="flex-1 min-h-0 overflow-y-auto divide-y divide-accent/25">
+                  {itens.map((i) => (
+                    <li key={i.produtoId} className="flex items-center gap-1 pl-3 pr-1.5 py-1.5 hover:bg-accent-light/60 transition-colors">
                       <button
+                        type="button"
+                        onClick={() => localizar(i)}
+                        title="Localizar na lista de produtos para mudar a quantidade"
+                        className="flex-1 min-w-0 flex items-center gap-2 text-left"
+                      >
+                        <span className="shrink-0 min-w-[2.75rem] text-center rounded-md bg-primary text-white text-xs font-mono font-semibold px-1.5 py-1">
+                          {i.quantidade}×
+                        </span>
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] leading-tight font-medium truncate">{i.nome}</span>
+                          <span className="block text-[11px] leading-tight text-muted truncate">
+                            {formatarMoeda(i.preco)} · {i.categoriaNome ?? "Sem categoria"} · {i.percentual}%
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-[13px] font-mono font-semibold">{formatarMoeda(i.preco * i.quantidade)}</span>
+                      </button>
+                      <button
+                        type="button"
                         onClick={() => setItens((prev) => prev.filter((x) => x.produtoId !== i.produtoId))}
                         className="p-1.5 rounded-md hover:bg-danger-light text-danger shrink-0"
                         aria-label={`Remover ${i.nome}`}
                       >
-                        <Trash2 className="w-4 h-4" />
+                        <Trash2 className="w-3.5 h-3.5" />
                       </button>
-                    </div>
-                    <div className="flex items-center justify-between gap-3">
-                      <QuantidadeInput
-                        valor={i.quantidade}
-                        onChange={(n) => definirQuantidade(i.produtoId, n)}
-                        onMais={() => definirQuantidade(i.produtoId, i.quantidade + 1)}
-                        onMenos={() => {
-                          if (i.quantidade > 1) definirQuantidade(i.produtoId, i.quantidade - 1);
-                        }}
-                      />
-                      <div className="text-right">
-                        <p className="text-xs text-muted">{formatarMoeda(i.preco)} cada</p>
-                        <p className="text-sm font-mono font-semibold">{formatarMoeda(i.preco * i.quantidade)}</p>
-                      </div>
-                    </div>
-                  </li>
-                ))}
-              </ul>
+                    </li>
+                  ))}
+                </ul>
+              </>
             )}
           </section>
         </div>
@@ -753,31 +760,31 @@ function ModalConsignacaoForm({
           </div>
         )}
 
-        <div className="px-5 py-3 border-t border-border shrink-0 flex flex-wrap items-center justify-between gap-3 bg-surface">
+        <div className="px-5 py-3 shrink-0 flex flex-wrap items-center justify-between gap-3 bg-gradient-to-r from-primary to-primary-dark text-white">
           <div>
-            <p className="text-xs text-muted">
+            <p className="text-xs text-white/70">
               {itens.length} {plural(itens.length, "produto", "produtos")} · {totalUnidades} {plural(totalUnidades, "unidade", "unidades")}
             </p>
-            <p className="text-lg font-semibold font-mono leading-tight">
-              {formatarMoeda(total)} <span className="text-xs font-sans font-normal text-muted">total enviado</span>
+            <p className="text-lg font-semibold font-mono leading-tight text-accent-light">
+              {formatarMoeda(total)} <span className="text-xs font-sans font-normal text-white/70">total enviado</span>
             </p>
           </div>
           <div className="flex items-center gap-2">
             {!podeSalvar && (
-              <span className="hidden md:inline text-xs text-muted mr-1">
+              <span className="hidden md:inline text-xs text-white/70 mr-1">
                 {consignatario.trim() === "" ? "Informe o consignatário" : "Adicione ao menos um produto"}
               </span>
             )}
             <button
               onClick={onClose}
-              className="border border-border hover:bg-background text-sm font-medium px-4 py-2.5 rounded-lg transition"
+              className="border border-white/30 text-white hover:bg-white/10 text-sm font-medium px-4 py-2.5 rounded-lg transition"
             >
               Cancelar
             </button>
             <button
               onClick={salvar}
               disabled={!podeSalvar || salvando}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
+              className="flex items-center gap-2 bg-accent hover:bg-accent-dark text-primary-dark font-semibold text-sm px-5 py-2.5 rounded-lg shadow-sm transition disabled:opacity-50"
             >
               {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
               {editando ? "Salvar alterações" : "Registrar consignação"}
