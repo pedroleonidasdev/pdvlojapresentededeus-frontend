@@ -2,12 +2,23 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { Loader2, Lock, User } from "lucide-react";
+import { AlertTriangle, Eye, EyeOff, Handshake, Loader2, Lock, Package, ShieldCheck, ShoppingBag, User } from "lucide-react";
+
+const CLASSE_INPUT =
+  "w-full pl-10 pr-3 py-3 rounded-xl border border-border bg-surface text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition";
+
+const DESTAQUES = [
+  { icone: ShoppingBag, texto: "Vendas e caixa" },
+  { icone: Package, texto: "Estoque" },
+  { icone: Handshake, texto: "Consignados" },
+];
 
 export default function LoginPage() {
   const { login } = useAuth();
   const [loginValue, setLoginValue] = useState("");
   const [senha, setSenha] = useState("");
+  const [mostrarSenha, setMostrarSenha] = useState(false);
+  const [capsLigado, setCapsLigado] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [progresso, setProgresso] = useState(0);
@@ -63,8 +74,27 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex">
-      {/* Painel de marca */}
+    <div className="min-h-screen flex flex-col lg:flex-row">
+      {/* Faixa de marca no celular/tablet (no desktop vira o painel lateral) */}
+      <div className="lg:hidden relative h-44 sm:h-56 shrink-0 overflow-hidden bg-primary-dark">
+        <img
+          src="/images/sao-miguel-arcanjo.jpg"
+          alt=""
+          className="absolute inset-0 w-full h-full object-cover object-top opacity-80"
+        />
+        <div className="absolute inset-0 bg-gradient-to-t from-primary-dark via-primary-dark/50 to-primary-dark/10" />
+        <div className="relative z-10 h-full flex items-end gap-3 px-6 pb-5">
+          <div className="w-11 h-11 rounded-full overflow-hidden ring-2 ring-accent shrink-0">
+            <img src="/images/logo-loja.jpg" alt="Presente de Deus" className="w-full h-full object-cover" />
+          </div>
+          <div className="text-white">
+            <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Loja</p>
+            <p className="font-semibold text-lg leading-tight">Presente de Deus</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Painel de marca (desktop) */}
       <div className="hidden lg:flex lg:w-1/2 bg-primary text-white flex-col justify-between p-12 relative overflow-hidden">
         <img
           src="/images/sao-miguel-arcanjo.jpg"
@@ -74,62 +104,74 @@ export default function LoginPage() {
         <div className="absolute inset-0 bg-gradient-to-t from-primary-dark via-primary-dark/80 to-primary-dark/20" />
         <div className="absolute inset-0 bg-gradient-to-r from-primary-dark/60 via-transparent to-transparent" />
 
-        <div className="relative z-10">
-          <div className="w-10 h-10 rounded-full overflow-hidden ring-2 ring-accent">
+        <div className="relative z-10 flex items-center gap-3">
+          <div className="w-12 h-12 rounded-full overflow-hidden ring-2 ring-accent shadow-lg">
             <img src="/images/logo-loja.jpg" alt="" className="w-full h-full object-cover" />
           </div>
+          <span className="font-semibold text-lg tracking-tight">Presente de Deus</span>
         </div>
 
         <div className="relative z-10 max-w-md">
-          <p className="font-mono text-xs uppercase tracking-[0.2em] text-white/60 mb-4">
-            LOJA PRESENTE DE DEUS
-          </p>
-          <h1 className="text-4xl font-semibold leading-tight tracking-tight">
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-accent mb-4">LOJA PRESENTE DE DEUS</p>
+          <h1 className="text-4xl xl:text-5xl font-semibold leading-tight tracking-tight">
             Fé, tradição e cuidado em cada detalhe.
           </h1>
-          <p className="mt-4 text-white/70 leading-relaxed">
-            Gerencie vendas, estoque de imagens sacras, terços, livros e
-            paramentos com controle total em tempo real.
+          <p className="mt-4 text-white/75 leading-relaxed">
+            Gerencie vendas, estoque de imagens sacras, terços, livros e paramentos com controle total em tempo real.
           </p>
+          <ul className="mt-8 flex flex-wrap gap-2">
+            {DESTAQUES.map(({ icone: Icone, texto }) => (
+              <li
+                key={texto}
+                className="inline-flex items-center gap-2 rounded-full bg-white/10 backdrop-blur-sm ring-1 ring-white/15 px-3.5 py-1.5 text-xs font-medium text-white/90"
+              >
+                <Icone className="w-3.5 h-3.5 text-accent" />
+                {texto}
+              </li>
+            ))}
+          </ul>
         </div>
 
-        <div className="relative z-10 font-mono text-xs text-white/40">
+        <div className="relative z-10 flex items-center gap-2 font-mono text-xs text-white/50">
+          <ShieldCheck className="w-3.5 h-3.5" />
           Acesso restrito &middot; uso interno
         </div>
       </div>
 
       {/* Painel de login */}
-      <div className="flex-1 flex items-center justify-center bg-background px-6 py-12">
-        <div className="w-full max-w-sm">
-          <div className="mb-8 lg:hidden flex items-center gap-2">
-            <div className="w-8 h-8 rounded-full overflow-hidden ring-1 ring-border">
-              <img src="/images/logo-loja.jpg" alt="Presente de Deus" className="w-full h-full object-cover" />
+      <div className="flex-1 relative overflow-hidden flex items-center justify-center bg-background px-5 sm:px-6 py-8 lg:py-12">
+        {/* detalhes de fundo, só decorativos */}
+        <div className="pointer-events-none absolute -top-24 -right-24 w-80 h-80 rounded-full bg-primary/10 blur-3xl" />
+        <div className="pointer-events-none absolute -bottom-28 -left-20 w-80 h-80 rounded-full bg-accent/15 blur-3xl" />
+
+        <div className="relative w-full max-w-md rounded-2xl bg-surface/95 border border-border/70 shadow-xl shadow-primary/10 p-7 sm:p-9">
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-xl bg-primary text-white flex items-center justify-center shadow-sm shrink-0">
+              <Lock className="w-5 h-5" />
             </div>
-            <span className="font-semibold text-lg">Presente de Deus</span>
+            <div>
+              <h2 className="text-2xl font-semibold tracking-tight text-foreground leading-tight">Entrar no sistema</h2>
+              <p className="text-sm text-muted">Acesse o caixa da loja</p>
+            </div>
           </div>
 
-          <h2 className="text-2xl font-semibold tracking-tight text-foreground">
-            Entrar no sistema
-          </h2>
-          <p className="mt-1 text-sm text-muted">
-            Use seu login e senha para acessar o caixa da loja.
-          </p>
-
-          <form onSubmit={handleSubmit} className="mt-8 space-y-4">
+          <form onSubmit={handleSubmit} className="mt-7 space-y-4">
             <div>
               <label htmlFor="login" className="block text-sm font-medium text-foreground mb-1.5">
                 Login
               </label>
               <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                 <input
                   id="login"
                   type="text"
                   required
                   autoFocus
+                  autoComplete="username"
+                  autoCapitalize="none"
                   value={loginValue}
                   onChange={(e) => setLoginValue(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-border bg-surface text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition"
+                  className={CLASSE_INPUT}
                   placeholder="seu.login"
                 />
               </div>
@@ -140,21 +182,40 @@ export default function LoginPage() {
                 Senha
               </label>
               <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+                <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
                 <input
                   id="senha"
-                  type="password"
+                  type={mostrarSenha ? "text" : "password"}
                   required
+                  autoComplete="current-password"
                   value={senha}
                   onChange={(e) => setSenha(e.target.value)}
-                  className="w-full pl-10 pr-3 py-2.5 rounded-lg border border-border bg-surface text-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition"
+                  onKeyDown={(e) => setCapsLigado(e.getModifierState("CapsLock"))}
+                  onKeyUp={(e) => setCapsLigado(e.getModifierState("CapsLock"))}
+                  onBlur={() => setCapsLigado(false)}
+                  className={`${CLASSE_INPUT} pr-11`}
                   placeholder="••••••••"
                 />
+                <button
+                  type="button"
+                  onClick={() => setMostrarSenha((v) => !v)}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-lg text-muted hover:text-foreground hover:bg-background transition"
+                  aria-label={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                  title={mostrarSenha ? "Ocultar senha" : "Mostrar senha"}
+                >
+                  {mostrarSenha ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                </button>
               </div>
+              {capsLigado && (
+                <p className="mt-1.5 flex items-center gap-1.5 text-xs font-medium text-accent-dark">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  Caps Lock está ligado
+                </p>
+              )}
             </div>
 
             {erro && (
-              <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">
+              <div role="alert" className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2.5">
                 {erro}
               </div>
             )}
@@ -162,15 +223,15 @@ export default function LoginPage() {
             <button
               type="submit"
               disabled={carregando}
-              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-dark hover:brightness-110 text-white font-medium py-2.5 rounded-lg shadow-sm transition disabled:opacity-60"
+              className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-dark hover:brightness-110 text-white font-semibold py-3 rounded-xl shadow-md shadow-primary/25 transition disabled:opacity-60"
             >
               {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
-              Entrar
+              {carregando ? "Entrando..." : "Entrar"}
             </button>
 
             {carregando && (
               <div className="space-y-1.5">
-                <div className="h-1.5 w-full rounded-full bg-border overflow-hidden">
+                <div className="h-1.5 w-full rounded-full bg-border/60 overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-200 ease-out"
                     style={{ width: `${progresso}%` }}
@@ -180,6 +241,11 @@ export default function LoginPage() {
               </div>
             )}
           </form>
+
+          <p className="mt-6 pt-5 border-t border-border/50 text-center font-mono text-[11px] text-muted flex items-center justify-center gap-1.5">
+            <ShieldCheck className="w-3.5 h-3.5" />
+            Acesso restrito &middot; uso interno
+          </p>
         </div>
       </div>
     </div>

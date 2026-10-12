@@ -114,7 +114,7 @@ function CartaoResumo({
           ? "border-l-accent"
           : "border-l-primary";
   return (
-    <div className={`rounded-xl bg-surface border border-border border-l-4 ${faixa} p-4 flex flex-col gap-1.5 min-w-0`}>
+    <div className={`rounded-xl bg-surface border border-border border-l-4 ${faixa} p-3.5 flex flex-col gap-1 min-w-0 shadow-sm`}>
       <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
         {icone}
         {titulo}
@@ -233,7 +233,7 @@ export default function InicioPage() {
   return (
     <div className="min-h-full flex flex-col">
       {/* Faixa de boas-vindas, no mesmo espírito visual do painel de login */}
-      <div className="shrink-0 relative overflow-hidden bg-primary text-white px-4 py-5 sm:px-8 sm:py-6">
+      <div className="shrink-0 relative overflow-hidden bg-primary text-white px-4 py-3 sm:px-8 sm:py-4">
         <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-primary-dark" />
         <div className="absolute -right-14 -top-14 w-56 h-56 rounded-full bg-white/5" />
         <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
@@ -241,13 +241,13 @@ export default function InicioPage() {
             <p className="font-mono text-xs uppercase tracking-[0.2em] text-white/60">
               {saudacao()}, {primeiroNome}
             </p>
-            <h1 className="mt-0.5 text-xl sm:text-2xl font-semibold tracking-tight">O que você precisa fazer agora?</h1>
+            <h1 className="mt-0.5 text-lg sm:text-xl font-semibold tracking-tight">O que você precisa fazer agora?</h1>
           </div>
           <p className="text-xs sm:text-sm text-white/70">{dataPorExtenso()}</p>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col gap-4 px-4 py-4 sm:px-8 sm:py-5 max-w-6xl w-full mx-auto">
+      <div className="flex-1 flex flex-col gap-3 px-4 py-3 sm:px-8 sm:py-4 max-w-7xl w-full mx-auto">
         {/* ---------- Resumo de hoje ---------- */}
         <section aria-label="Resumo de hoje" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <CartaoResumo
@@ -382,20 +382,20 @@ export default function InicioPage() {
           </CartaoResumo>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] gap-3 items-start">
           {/* ---------- Atalhos ---------- */}
-          <div className="lg:col-span-2 flex flex-col gap-4 min-w-0">
+          <div className="flex flex-col gap-3 min-w-0">
             {destaque && (
               <Link
                 href={destaque.href}
-                className="group flex items-center justify-between gap-4 rounded-xl bg-primary text-white p-4 sm:p-5 shadow-sm hover:bg-primary-dark hover:shadow-md transition"
+                className="group flex items-center justify-between gap-4 rounded-xl bg-primary text-white p-3 sm:p-3.5 shadow-sm hover:bg-primary-dark hover:shadow-md transition"
               >
                 <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                  <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
+                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
                     <destaque.icon className="w-5 h-5 sm:w-6 sm:h-6" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-base sm:text-lg">{destaque.label}</p>
+                    <p className="font-semibold text-base sm:text-lg leading-tight">{destaque.label}</p>
                     <p className="text-xs sm:text-sm text-white/70 truncate">{destaque.descricao}</p>
                   </div>
                 </div>
@@ -405,10 +405,10 @@ export default function InicioPage() {
 
             {grupos.map((grupo) => (
               <section key={grupo.titulo} aria-label={grupo.titulo}>
-                <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mb-2 px-0.5">
+                <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mb-1.5 px-0.5">
                   {grupo.titulo}
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                   {grupo.itens.map((item) => {
                     const cor = CORES[item.href] ?? { bg: "bg-primary", ring: "hover:ring-primary/30" };
                     const Icon = item.icon;
@@ -417,24 +417,28 @@ export default function InicioPage() {
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`group relative flex items-center gap-3 sm:gap-4 rounded-xl bg-surface border border-border p-3 sm:p-4 hover:-translate-y-0.5 hover:ring-2 hover:shadow-sm transition ${cor.ring}`}
+                        className={`group flex items-center gap-3 rounded-xl bg-surface border border-border px-3 py-2.5 hover:-translate-y-0.5 hover:ring-2 hover:shadow-sm transition ${cor.ring}`}
                       >
                         <div
-                          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-lg ${cor.bg} flex items-center justify-center text-white shrink-0`}
+                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg ${cor.bg} flex items-center justify-center text-white shrink-0 shadow-sm`}
                         >
                           <Icon className="w-5 h-5" />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm sm:text-base text-foreground truncate">{item.label}</p>
-                          {item.descricao && <p className="text-xs sm:text-sm text-muted truncate">{item.descricao}</p>}
+                          <div className="flex items-center gap-2 min-w-0">
+                            <p className="font-medium text-sm text-foreground truncate">{item.label}</p>
+                            {selo && (
+                              <span
+                                className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${selo.classe}`}
+                              >
+                                {selo.texto}
+                              </span>
+                            )}
+                          </div>
+                          {item.descricao && (
+                            <p className="text-xs text-muted truncate [@media(max-height:760px)]:hidden">{item.descricao}</p>
+                          )}
                         </div>
-                        {selo && (
-                          <span
-                            className={`absolute top-2 right-2 text-[10px] font-semibold px-2 py-0.5 rounded-full ${selo.classe}`}
-                          >
-                            {selo.texto}
-                          </span>
-                        )}
                       </Link>
                     );
                   })}
@@ -444,7 +448,7 @@ export default function InicioPage() {
           </div>
 
           {/* ---------- Últimas vendas de hoje ---------- */}
-          <aside className="rounded-xl bg-surface border border-border overflow-hidden min-w-0">
+          <aside className="rounded-xl bg-surface border border-border overflow-hidden min-w-0 shadow-sm">
             <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
               <h2 className="text-sm font-semibold flex items-center gap-2">
                 <Receipt className="w-4 h-4 text-secondary" />
@@ -472,7 +476,7 @@ export default function InicioPage() {
             ) : (
               <ul className="divide-y divide-border/60">
                 {ultimasVendas.map((v) => (
-                  <li key={v.id} className="flex items-center justify-between gap-3 px-4 py-2.5">
+                  <li key={v.id} className="flex items-center justify-between gap-3 px-4 py-2">
                     <div className="min-w-0">
                       <p className="text-sm font-medium truncate">
                         {horaCurta(v.dataHora)} · {LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento}
