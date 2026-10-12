@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Despesa, TipoDespesa, FormaPagamento, Venda } from "@/lib/types";
 import {
@@ -36,6 +36,8 @@ import {
   ArrowUpDown,
   Search,
   CalendarClock,
+  Layers,
+  ChevronDown,
 } from "lucide-react";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
@@ -211,6 +213,13 @@ export default function FinancasPage() {
   const [inicio, setInicio] = useState(() => limitesDoMes(hojeISO()).inicio);
   const [fim, setFim] = useState(() => hojeISO());
   const [despesas, setDespesas] = useState<Despesa[]>([]);
+  // lançamentos de ANTES do período escolhido que ainda têm algo em aberto
+  // (parcelas/contas pendentes). Sem isso, uma compra parcelada registrada em
+  // setembro sumiria da tela só porque o filtro está em outubro.
+  const [pendentesAnteriores, setPendentesAnteriores] = useState<Despesa[]>([]);
+  const [painelParceladosAberto, setPainelParceladosAberto] = useState(true);
+  // descarta respostas antigas se o usuário disparar outra busca antes da primeira terminar
+  const ultimaBusca = useRef(0);
   const [totalFaturado, setTotalFaturado] = useState(0);
   const [carregando, setCarregando] = useState(false);
   // só passa a "true" depois do primeiro clique em Filtrar — evita buscar
@@ -250,24 +259,51 @@ export default function FinancasPage() {
     }
     if (!silencioso) setCarregando(true);
     setErro(null);
+    const idBusca = ++ultimaBusca.current;
     try {
       const params = {
         inicio: limiteDiaBrasiliaParaUtc(de, false),
         fim: limiteDiaBrasiliaParaUtc(ate, true),
       };
-      const [resDespesas, resVendas] = await Promise.all([
+      // janela larga (2 anos até hoje) só pra achar o que ainda está em aberto
+      const paramsAbertos = {
+        inicio: limiteDiaBrasiliaParaUtc(somarDias(hojeISO(), -730), false),
+        fim: limiteDiaBrasiliaParaUtc(hojeISO(), true),
+      };
+      const [resDespesas, resVendas, resAbertos] = await Promise.all([
         api.get<Despesa[]>("/despesas", { params }),
         api.get<Venda[]>("/vendas", { params }),
+        // se essa busca extra falhar, a tela continua funcionando com o período
+        api.get<Despesa[]>("/despesas", { params: paramsAbertos }).catch(() => null),
       ]);
+      if (idBusca !== ultimaBusca.current) return;
       setDespesas(resDespesas.data);
       setTotalFaturado(resVendas.data.reduce((acc, v) => acc + v.total, 0));
+      const idsDoPeriodo = new Set(resDespesas.data.map((d) => d.id));
+      setPendentesAnteriores(
+        (resAbertos?.data ?? []).filter((d) => {
+          if (d.tipo !== "DESPESA" || idsDoPeriodo.has(d.id)) return false;
+          const { pagas, total } = resumoPagamento(d);
+          return pagas < total;
+        })
+      );
     } catch {
+      if (idBusca !== ultimaBusca.current) return;
       setErro("Não foi possível carregar os dados financeiros do período.");
     } finally {
-      setCarregando(false);
-      setBuscou(true);
+      if (idBusca === ultimaBusca.current) {
+        setCarregando(false);
+        setBuscou(true);
+      }
     }
   }
+
+  // carrega sozinho ao abrir a tela, já com o período padrão (mês atual)
+  useEffect(() => {
+    const t = setTimeout(() => carregar(), 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   function aplicarPeriodo(p: { inicio: string; fim: string }) {
     setInicio(p.inicio);
@@ -288,7 +324,7 @@ export default function FinancasPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         "Não foi possível excluir este lançamento.";
-      alert(msg);
+      setErro(msg);
     } finally {
       setExcluindoId(null);
     }
@@ -304,7 +340,7 @@ export default function FinancasPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         "Não foi possível atualizar o pagamento.";
-      alert(msg);
+      setErro(msg);
     } finally {
       setMarcandoPagoId(null);
     }
@@ -322,11 +358,33 @@ export default function FinancasPage() {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
         "Não foi possível atualizar o pagamento da parcela.";
-      alert(msg);
+      setErro(msg);
     } finally {
       setMarcandoPagoId(null);
     }
   }
+
+  // período escolhido + pendências de períodos anteriores: base de tudo que é
+  // "o que falta pagar". Os totais de despesa/faturamento seguem só o período.
+  const todasAbertas = useMemo(() => [...despesas, ...pendentesAnteriores], [despesas, pendentesAnteriores]);
+  const idsAnteriores = useMemo(() => new Set(pendentesAnteriores.map((d) => d.id)), [pendentesAnteriores]);
+
+  // compras parceladas ainda não quitadas — ficam sempre visíveis, sem filtro
+  const parceladosEmAndamento = useMemo(
+    () =>
+      todasAbertas
+        .filter((d) => d.tipo === "DESPESA" && d.parcelas.length > 0)
+        .filter((d) => resumoPagamento(d).pagas < d.parcelas.length)
+        .sort((a, b) => {
+          const da = vencimentoRelevante(a).data;
+          const db = vencimentoRelevante(b).data;
+          if (!da && !db) return 0;
+          if (!da) return 1;
+          if (!db) return -1;
+          return da < db ? -1 : da > db ? 1 : 0;
+        }),
+    [todasAbertas]
+  );
 
   const resumo = useMemo(() => {
     const totalDespesas = despesas
@@ -355,11 +413,11 @@ export default function FinancasPage() {
       categoriasOrdenadas,
       // quanto ainda falta pagar, somando lançamentos à vista em aberto e
       // parcelas não pagas — só DESPESA (sangria/suprimento já aconteceram).
-      totalAPagar: despesas
+      totalAPagar: todasAbertas
         .filter((d) => d.tipo === "DESPESA")
         .reduce((acc, d) => acc + resumoPagamento(d).restante, 0),
       // vencendo hoje e nos próximos 7 dias (só o que ainda não foi pago)
-      totalVenceLogo: despesas
+      totalVenceLogo: todasAbertas
         .filter((d) => d.tipo === "DESPESA")
         .reduce((acc, d) => {
           const itens =
@@ -376,7 +434,7 @@ export default function FinancasPage() {
               .reduce((s, i) => s + i.valor, 0)
           );
         }, 0),
-      totalVencido: despesas
+      totalVencido: todasAbertas
         .filter((d) => d.tipo === "DESPESA")
         .reduce((acc, d) => {
           if (d.parcelas.length === 0) {
@@ -390,7 +448,7 @@ export default function FinancasPage() {
           );
         }, 0),
     };
-  }, [despesas, totalFaturado]);
+  }, [despesas, todasAbertas, totalFaturado]);
 
   // ordenação da lista: por padrão, vencimento do mais antigo pro mais novo —
   // é o que faz mais sentido pra acompanhar o que vence primeiro. O usuário
@@ -408,7 +466,7 @@ export default function FinancasPage() {
   }
 
   const despesasFiltradas = useMemo(() => {
-    let lista = filtroTipo === "TODOS" ? despesas : despesas.filter((d) => d.tipo === filtroTipo);
+    let lista = filtroTipo === "TODOS" ? todasAbertas : todasAbertas.filter((d) => d.tipo === filtroTipo);
     if (filtroCategoria) {
       lista = lista.filter(
         (d) => d.tipo === "DESPESA" && (d.categoria?.trim() || "Sem categoria") === filtroCategoria
@@ -448,7 +506,7 @@ export default function FinancasPage() {
       if (!dataB) return -1;
       return (dataA < dataB ? -1 : dataA > dataB ? 1 : 0) * sinal;
     });
-  }, [despesas, filtroTipo, filtroStatus, filtroCategoria, busca, ordenarPor, ordemAscendente]);
+  }, [todasAbertas, filtroTipo, filtroStatus, filtroCategoria, busca, ordenarPor, ordemAscendente]);
 
   // total do que está listado agora (respeita todos os filtros)
   const totalListado = useMemo(
@@ -605,6 +663,82 @@ export default function FinancasPage() {
               entram nessa conta: são só dinheiro mudando de lugar, não um custo novo.
             </p>
 
+            {/* compras parceladas em andamento — sempre visíveis, independente do filtro */}
+            {parceladosEmAndamento.length > 0 && (
+              <div className="bg-surface border border-border rounded-xl overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setPainelParceladosAberto((v) => !v)}
+                  className="w-full flex items-center gap-2 px-4 py-3 text-left hover:bg-background/60 transition"
+                  aria-expanded={painelParceladosAberto}
+                >
+                  <Layers className="w-4 h-4 text-primary" />
+                  <span className="text-xs font-medium text-muted uppercase tracking-wide">
+                    Parcelados em andamento ({parceladosEmAndamento.length})
+                  </span>
+                  <span className="ml-auto text-xs text-muted font-mono">
+                    restam{" "}
+                    {moeda(parceladosEmAndamento.reduce((acc, d) => acc + resumoPagamento(d).restante, 0))}
+                  </span>
+                  <ChevronDown
+                    className={`w-4 h-4 text-muted transition ${painelParceladosAberto ? "rotate-180" : ""}`}
+                  />
+                </button>
+                {painelParceladosAberto && (
+                  <div className="border-t border-border divide-y divide-border">
+                    {parceladosEmAndamento.map((d) => {
+                      const { pagas, restante } = resumoPagamento(d);
+                      const total = d.parcelas.length;
+                      const venc = vencimentoRelevante(d);
+                      const status = statusVencimento(venc.data, venc.pago);
+                      const proxima = d.parcelas
+                        .filter((p) => !p.pago)
+                        .sort((a, b) => ((a.dataVencimento ?? "9") < (b.dataVencimento ?? "9") ? -1 : 1))[0];
+                      return (
+                        <div key={d.id} className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2.5 text-sm">
+                          <div className="min-w-[180px] flex-1">
+                            <div className="font-medium text-foreground leading-tight">
+                              {d.fornecedor || d.descricao}
+                            </div>
+                            {d.fornecedor && (
+                              <div className="text-xs text-muted leading-tight">{d.descricao}</div>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2 w-44">
+                            <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                              <div
+                                className="h-full bg-primary rounded-full"
+                                style={{ width: `${(pagas / total) * 100}%` }}
+                              />
+                            </div>
+                            <span className="text-xs text-muted whitespace-nowrap">
+                              {pagas}/{total}
+                            </span>
+                          </div>
+                          <div className="w-40 text-xs leading-tight">
+                            {proxima ? (
+                              <>
+                                <div className="text-muted">
+                                  próxima: <span className="font-mono">{moeda(proxima.valor)}</span>
+                                </div>
+                                <div className={status ? COR_VENCIMENTO[status] : "text-muted"}>
+                                  {proxima.dataVencimento ? formatarDataCurta(proxima.dataVencimento) : "sem data"}
+                                  {status && LABEL_VENCIMENTO[status] ? ` · ${LABEL_VENCIMENTO[status]}` : ""}
+                                </div>
+                              </>
+                            ) : null}
+                          </div>
+                          <div className="w-28 text-right text-xs font-mono text-muted">
+                            restam {moeda(restante)}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+
             {/* despesas por categoria — clique numa linha pra filtrar a lista */}
             {resumo.categoriasOrdenadas.length > 0 && (
               <div className="bg-surface border border-border rounded-xl p-4">
@@ -727,7 +861,7 @@ export default function FinancasPage() {
             </div>
           ) : despesasFiltradas.length === 0 ? (
             <p className="text-center text-sm text-muted py-10">
-              {despesas.length > 0
+              {todasAbertas.length > 0
                 ? "Nenhum lançamento com esses filtros."
                 : "Nenhum lançamento no período."}
             </p>
@@ -804,6 +938,11 @@ export default function FinancasPage() {
                       </td>
                       <td className="px-4 py-2.5 text-muted whitespace-nowrap text-xs">
                         {formatarDataCurta(dataBrasiliaISO(d.dataHora))}
+                        {idsAnteriores.has(d.id) && (
+                          <div className="text-[10px] text-secondary-dark uppercase tracking-wide mt-0.5">
+                            em aberto de antes
+                          </div>
+                        )}
                       </td>
                       <td className="px-4 py-2.5 whitespace-nowrap">
                         {(() => {
