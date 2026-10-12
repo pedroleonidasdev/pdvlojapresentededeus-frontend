@@ -34,6 +34,8 @@ import {
   ArrowUp,
   ArrowDown,
   ArrowUpDown,
+  Search,
+  CalendarClock,
 } from "lucide-react";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
@@ -90,6 +92,21 @@ function diasAte(dataYYYYMMDD: string): number {
   const alvo = Date.UTC(a, m - 1, d);
   const hoje = Date.UTC(ah, mh - 1, dh);
   return Math.round((alvo - hoje) / 86400000);
+}
+
+/** Soma (ou subtrai) dias de uma data "YYYY-MM-DD" sem depender de fuso. */
+function somarDias(dataYYYYMMDD: string, dias: number): string {
+  const [a, m, d] = dataYYYYMMDD.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
+}
+
+/** Primeiro e último dia do mês da data informada. */
+function limitesDoMes(dataYYYYMMDD: string): { inicio: string; fim: string } {
+  const [a, m] = dataYYYYMMDD.split("-").map(Number);
+  return {
+    inicio: new Date(Date.UTC(a, m - 1, 1)).toISOString().slice(0, 10),
+    fim: new Date(Date.UTC(a, m, 0)).toISOString().slice(0, 10),
+  };
 }
 
 type StatusVencimento = "VENCIDO" | "VENCE_HOJE" | "PROXIMO" | "EM_DIA";
@@ -190,11 +207,9 @@ function BotaoOrdenar({
 }
 
 export default function FinancasPage() {
-  const hoje = new Date();
-  const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
-
-  const [inicio, setInicio] = useState(primeiroDiaMes.toISOString().slice(0, 10));
-  const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
+  // datas no fuso de Brasília (toISOString() usaria UTC e viraria o dia depois das 21h)
+  const [inicio, setInicio] = useState(() => limitesDoMes(hojeISO()).inicio);
+  const [fim, setFim] = useState(() => hojeISO());
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [totalFaturado, setTotalFaturado] = useState(0);
   const [carregando, setCarregando] = useState(false);
@@ -207,6 +222,8 @@ export default function FinancasPage() {
   const [marcandoPagoId, setMarcandoPagoId] = useState<string | null>(null);
   const [filtroTipo, setFiltroTipo] = useState<TipoDespesa | "TODOS">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("TODOS");
+  const [busca, setBusca] = useState("");
+  const [filtroCategoria, setFiltroCategoria] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
   // esconde os valores da tela (útil com a loja cheia de gente por perto).
@@ -220,13 +237,23 @@ export default function FinancasPage() {
     return valoresOcultos ? "R$ ••••••" : formatarMoeda(valor);
   }
 
-  async function carregar() {
-    setCarregando(true);
+  /** `periodo` permite carregar um intervalo diferente do que está nos campos
+   *  (atalhos). `silencioso` recarrega sem trocar a tabela pelo spinner — usado
+   *  depois de marcar pago/editar/excluir, pra tela não "piscar" nem perder a
+   *  posição da rolagem. */
+  async function carregar(periodo?: { inicio: string; fim: string }, silencioso = false) {
+    const de = periodo?.inicio ?? inicio;
+    const ate = periodo?.fim ?? fim;
+    if (de > ate) {
+      setErro("A data inicial não pode ser maior que a data final.");
+      return;
+    }
+    if (!silencioso) setCarregando(true);
     setErro(null);
     try {
       const params = {
-        inicio: limiteDiaBrasiliaParaUtc(inicio, false),
-        fim: limiteDiaBrasiliaParaUtc(fim, true),
+        inicio: limiteDiaBrasiliaParaUtc(de, false),
+        fim: limiteDiaBrasiliaParaUtc(ate, true),
       };
       const [resDespesas, resVendas] = await Promise.all([
         api.get<Despesa[]>("/despesas", { params }),
@@ -242,6 +269,12 @@ export default function FinancasPage() {
     }
   }
 
+  function aplicarPeriodo(p: { inicio: string; fim: string }) {
+    setInicio(p.inicio);
+    setFim(p.fim);
+    carregar(p);
+  }
+
   // Sem carregamento automático ao abrir a tela: o usuário escolhe o período
   // (ou mantém o padrão já preenchido) e clica em "Filtrar" para buscar.
 
@@ -250,7 +283,7 @@ export default function FinancasPage() {
     setExcluindoId(id);
     try {
       await api.delete(`/despesas/${id}`);
-      await carregar();
+      await carregar(undefined, true);
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -266,7 +299,7 @@ export default function FinancasPage() {
     setMarcandoPagoId(chave);
     try {
       await api.patch(`/despesas/${d.id}/pago`, null, { params: { pago: !d.pago } });
-      await carregar();
+      await carregar(undefined, true);
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -284,7 +317,7 @@ export default function FinancasPage() {
       await api.patch(`/despesas/${d.id}/parcelas/${numeroParcela}/pago`, null, {
         params: { pago: !pagoAtual },
       });
-      await carregar();
+      await carregar(undefined, true);
     } catch (e: unknown) {
       const msg =
         (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
@@ -325,6 +358,24 @@ export default function FinancasPage() {
       totalAPagar: despesas
         .filter((d) => d.tipo === "DESPESA")
         .reduce((acc, d) => acc + resumoPagamento(d).restante, 0),
+      // vencendo hoje e nos próximos 7 dias (só o que ainda não foi pago)
+      totalVenceLogo: despesas
+        .filter((d) => d.tipo === "DESPESA")
+        .reduce((acc, d) => {
+          const itens =
+            d.parcelas.length === 0
+              ? [{ data: d.dataVencimento, pago: d.pago, valor: d.valor }]
+              : d.parcelas.map((p) => ({ data: p.dataVencimento, pago: p.pago, valor: p.valor }));
+          return (
+            acc +
+            itens
+              .filter((i) => {
+                const st = statusVencimento(i.data, i.pago);
+                return st === "VENCE_HOJE" || st === "PROXIMO";
+              })
+              .reduce((s, i) => s + i.valor, 0)
+          );
+        }, 0),
       totalVencido: despesas
         .filter((d) => d.tipo === "DESPESA")
         .reduce((acc, d) => {
@@ -358,6 +409,19 @@ export default function FinancasPage() {
 
   const despesasFiltradas = useMemo(() => {
     let lista = filtroTipo === "TODOS" ? despesas : despesas.filter((d) => d.tipo === filtroTipo);
+    if (filtroCategoria) {
+      lista = lista.filter(
+        (d) => d.tipo === "DESPESA" && (d.categoria?.trim() || "Sem categoria") === filtroCategoria
+      );
+    }
+    const termo = busca.trim().toLowerCase();
+    if (termo) {
+      lista = lista.filter((d) =>
+        [d.fornecedor, d.descricao, d.categoria, d.usuarioNome]
+          .filter(Boolean)
+          .some((campo) => campo!.toLowerCase().includes(termo))
+      );
+    }
     if (filtroStatus !== "TODOS") {
       lista = lista.filter((d) => {
         // sangria/suprimento não têm status de pagamento — só aparecem em "Todos"
@@ -384,7 +448,13 @@ export default function FinancasPage() {
       if (!dataB) return -1;
       return (dataA < dataB ? -1 : dataA > dataB ? 1 : 0) * sinal;
     });
-  }, [despesas, filtroTipo, filtroStatus, ordenarPor, ordemAscendente]);
+  }, [despesas, filtroTipo, filtroStatus, filtroCategoria, busca, ordenarPor, ordemAscendente]);
+
+  // total do que está listado agora (respeita todos os filtros)
+  const totalListado = useMemo(
+    () => despesasFiltradas.reduce((acc, d) => acc + d.valor, 0),
+    [despesasFiltradas]
+  );
 
   return (
     <div>
@@ -428,22 +498,37 @@ export default function FinancasPage() {
             <input type="date" value={fim} onChange={(e) => setFim(e.target.value)} className="input text-sm" />
           </div>
           <button
-            onClick={carregar}
+            onClick={() => carregar()}
             disabled={carregando}
             className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
           >
             {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
             Filtrar
           </button>
-          <button
-            onClick={() => {
-              setInicio(dataBrasiliaISO(new Date().toISOString()));
-              setFim(dataBrasiliaISO(new Date().toISOString()));
-            }}
-            className="text-sm text-muted hover:text-primary transition px-2"
-          >
-            Hoje
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
+            {[
+              { label: "Hoje", get: () => ({ inicio: hojeISO(), fim: hojeISO() }) },
+              { label: "7 dias", get: () => ({ inicio: somarDias(hojeISO(), -6), fim: hojeISO() }) },
+              { label: "Este mês", get: () => limitesDoMes(hojeISO()) },
+              {
+                label: "Mês passado",
+                get: () => limitesDoMes(somarDias(limitesDoMes(hojeISO()).inicio, -1)),
+              },
+              {
+                label: "Próximo mês",
+                get: () => limitesDoMes(somarDias(limitesDoMes(hojeISO()).fim, 1)),
+              },
+            ].map((atalho) => (
+              <button
+                key={atalho.label}
+                onClick={() => aplicarPeriodo(atalho.get())}
+                disabled={carregando}
+                className="text-xs px-2.5 py-1.5 rounded-full border border-border text-muted hover:text-primary hover:border-primary/40 transition disabled:opacity-50"
+              >
+                {atalho.label}
+              </button>
+            ))}
+          </div>
         </div>
 
         {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
@@ -490,7 +575,7 @@ export default function FinancasPage() {
             </div>
 
             {/* o que ainda falta pagar — o dado mais acionável da tela */}
-            <div className="grid grid-cols-2 gap-3 -mt-1">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 -mt-1">
               <CardResumo
                 icone={<Clock className="w-4 h-4" />}
                 label="A pagar (em aberto)"
@@ -498,6 +583,13 @@ export default function FinancasPage() {
                 oculto={valoresOcultos}
                 cor="text-danger"
                 destaque
+              />
+              <CardResumo
+                icone={<CalendarClock className="w-4 h-4" />}
+                label="Vence hoje e nos próximos 7 dias"
+                valor={resumo.totalVenceLogo}
+                oculto={valoresOcultos}
+                cor={resumo.totalVenceLogo > 0 ? "text-secondary-dark" : "text-muted"}
               />
               <CardResumo
                 icone={<AlertTriangle className="w-4 h-4" />}
@@ -513,17 +605,36 @@ export default function FinancasPage() {
               entram nessa conta: são só dinheiro mudando de lugar, não um custo novo.
             </p>
 
-            {/* despesas por categoria */}
+            {/* despesas por categoria — clique numa linha pra filtrar a lista */}
             {resumo.categoriasOrdenadas.length > 0 && (
               <div className="bg-surface border border-border rounded-xl p-4">
-                <p className="text-xs font-medium text-muted mb-3 uppercase tracking-wide">
-                  Despesas por categoria
-                </p>
-                <div className="space-y-2">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">
+                    Despesas por categoria
+                  </p>
+                  {filtroCategoria && (
+                    <button
+                      onClick={() => setFiltroCategoria(null)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Limpar filtro: {filtroCategoria}
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1">
                   {resumo.categoriasOrdenadas.map(([categoria, valor]) => {
                     const percentual = resumo.totalDespesas > 0 ? (valor / resumo.totalDespesas) * 100 : 0;
+                    const ativa = filtroCategoria === categoria;
                     return (
-                      <div key={categoria} className="flex items-center gap-3 text-sm">
+                      <button
+                        type="button"
+                        key={categoria}
+                        onClick={() => setFiltroCategoria(ativa ? null : categoria)}
+                        title={ativa ? "Remover filtro" : `Filtrar lista por ${categoria}`}
+                        className={`w-full flex items-center gap-3 text-sm rounded-md px-1.5 py-1 text-left transition ${
+                          ativa ? "bg-primary-light" : "hover:bg-background"
+                        } ${filtroCategoria && !ativa ? "opacity-50" : ""}`}
+                      >
                         <span className="w-40 shrink-0 truncate text-foreground">{categoria}</span>
                         <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
                           <div
@@ -531,10 +642,13 @@ export default function FinancasPage() {
                             style={{ width: `${percentual}%` }}
                           />
                         </div>
-                        <span className="w-24 shrink-0 text-right font-mono text-muted">
+                        <span className="w-12 shrink-0 text-right text-xs text-muted">
+                          {percentual.toFixed(0)}%
+                        </span>
+                        <span className="w-28 shrink-0 text-right font-mono text-muted">
                           {moeda(valor)}
                         </span>
-                      </div>
+                      </button>
                     );
                   })}
                 </div>
@@ -545,7 +659,7 @@ export default function FinancasPage() {
 
         {/* lista de lançamentos */}
         <div className="bg-surface border border-border rounded-xl overflow-hidden">
-          <div className="flex items-center gap-2 px-4 py-3 border-b border-border">
+          <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border">
             <Filter className="w-3.5 h-3.5 text-muted" />
             <div className="flex gap-1.5 flex-wrap">
               <button
@@ -567,6 +681,16 @@ export default function FinancasPage() {
                   {LABEL_TIPO_DESPESA[tipo]}
                 </button>
               ))}
+            </div>
+            <div className="relative ml-2 min-w-[160px] flex-1 max-w-xs">
+              <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
+              <input
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar fornecedor, descrição..."
+                aria-label="Buscar lançamentos"
+                className="input text-xs py-1.5 pl-8 w-full"
+              />
             </div>
             <div className="flex gap-1.5 flex-wrap ml-auto items-center">
               <span className="text-[11px] text-muted uppercase tracking-wide mr-0.5">Pagamento</span>
@@ -602,7 +726,11 @@ export default function FinancasPage() {
               </p>
             </div>
           ) : despesasFiltradas.length === 0 ? (
-            <p className="text-center text-sm text-muted py-10">Nenhum lançamento no período.</p>
+            <p className="text-center text-sm text-muted py-10">
+              {despesas.length > 0
+                ? "Nenhum lançamento com esses filtros."
+                : "Nenhum lançamento no período."}
+            </p>
           ) : (
             <div className="overflow-x-auto">
             <table className="w-full text-sm min-w-[960px]">
@@ -856,6 +984,18 @@ export default function FinancasPage() {
                   );
                 })}
               </tbody>
+              <tfoot className="bg-background border-t border-border">
+                <tr>
+                  <td colSpan={7} className="px-4 py-2.5 text-xs text-muted">
+                    {despesasFiltradas.length}{" "}
+                    {despesasFiltradas.length === 1 ? "lançamento" : "lançamentos"} listados
+                  </td>
+                  <td className="px-4 py-2.5 text-right font-mono font-semibold text-foreground">
+                    {moeda(totalListado)}
+                  </td>
+                  <td colSpan={2} />
+                </tr>
+              </tfoot>
             </table>
             </div>
           )}
@@ -872,7 +1012,7 @@ export default function FinancasPage() {
           onSalvo={() => {
             setModalAberto(false);
             setDespesaEmEdicao(null);
-            carregar();
+            carregar(undefined, true);
           }}
         />
       )}
@@ -944,6 +1084,15 @@ function ModalNovoLancamento({
   const [erro, setErro] = useState<string | null>(null);
 
   const ehMovimentoCaixa = tipo !== "DESPESA";
+
+  // Esc fecha o modal
+  useEffect(() => {
+    function aoTeclar(e: KeyboardEvent) {
+      if (e.key === "Escape") onClose();
+    }
+    window.addEventListener("keydown", aoTeclar);
+    return () => window.removeEventListener("keydown", aoTeclar);
+  }, [onClose]);
 
   // sempre que a quantidade de parcelas ou o valor total mudam, recalcula a
   // divisão automaticamente (a última parcela absorve os centavos de resto,
@@ -1019,7 +1168,11 @@ function ModalNovoLancamento({
   const desabilitado = salvando || !descricao.trim() || valor === "" || faltaCategoria;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="bg-surface rounded-2xl w-full max-w-sm max-h-[90vh] overflow-y-auto">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between sticky top-0 bg-surface">
           <h3 className="font-semibold">{editando ? "Editar lançamento" : "Novo lançamento"}</h3>
