@@ -165,6 +165,41 @@ function vencimentoRelevante(d: Despesa): { data: string | null; pago: boolean }
   return { data: emAberto[0].dataVencimento, pago: false };
 }
 
+type GrupoUrgencia = "VENCIDO" | "HOJE" | "SEMANA" | "DEPOIS" | "SEM_DATA" | "PAGO" | "MOVIMENTO";
+
+const ORDEM_GRUPOS: GrupoUrgencia[] = ["VENCIDO", "HOJE", "SEMANA", "DEPOIS", "SEM_DATA", "PAGO", "MOVIMENTO"];
+
+const LABEL_GRUPO: Record<GrupoUrgencia, string> = {
+  VENCIDO: "Vencidos",
+  HOJE: "Vencem hoje",
+  SEMANA: "Próximos 7 dias",
+  DEPOIS: "Mais adiante",
+  SEM_DATA: "Em aberto, sem data de vencimento",
+  PAGO: "Pagos",
+  MOVIMENTO: "Sangrias e suprimentos",
+};
+
+const COR_GRUPO: Record<GrupoUrgencia, string> = {
+  VENCIDO: "text-danger",
+  HOJE: "text-danger",
+  SEMANA: "text-secondary-dark",
+  DEPOIS: "text-foreground",
+  SEM_DATA: "text-muted",
+  PAGO: "text-primary-dark",
+  MOVIMENTO: "text-muted",
+};
+
+/** Em qual faixa de urgência o lançamento se encaixa. */
+function grupoDe(d: Despesa): GrupoUrgencia {
+  if (d.tipo !== "DESPESA") return "MOVIMENTO";
+  const { pagas, total } = resumoPagamento(d);
+  if (pagas === total) return "PAGO";
+  const { data, pago } = vencimentoRelevante(d);
+  const st = statusVencimento(data, pago);
+  if (!st) return "SEM_DATA";
+  return st === "VENCIDO" ? "VENCIDO" : st === "VENCE_HOJE" ? "HOJE" : st === "PROXIMO" ? "SEMANA" : "DEPOIS";
+}
+
 /**
  * Controle Finanças: cadastro de custos/despesas do negócio e de
  * sangria/suprimento de caixa (dinheiro que sai/entra da gaveta fora de uma
@@ -232,6 +267,8 @@ export default function FinancasPage() {
   const [filtroTipo, setFiltroTipo] = useState<TipoDespesa | "TODOS">("TODOS");
   const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("TODOS");
   const [busca, setBusca] = useState("");
+  // agrupa a lista por urgência (vencidos, hoje, próximos 7 dias...)
+  const [agrupar, setAgrupar] = useState(true);
   const [filtroCategoria, setFiltroCategoria] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -490,7 +527,7 @@ export default function FinancasPage() {
     }
     const sinal = ordemAscendente ? 1 : -1;
 
-    return [...lista].sort((a, b) => {
+    const ordenada = [...lista].sort((a, b) => {
       if (ordenarPor === "valor") {
         return (a.valor - b.valor) * sinal;
       }
@@ -506,7 +543,24 @@ export default function FinancasPage() {
       if (!dataB) return -1;
       return (dataA < dataB ? -1 : dataA > dataB ? 1 : 0) * sinal;
     });
-  }, [todasAbertas, filtroTipo, filtroStatus, filtroCategoria, busca, ordenarPor, ordemAscendente]);
+    // agrupado: junta por faixa de urgência (ordenação estável mantém o critério escolhido dentro de cada faixa)
+    return agrupar
+      ? ordenada.sort((a, b) => ORDEM_GRUPOS.indexOf(grupoDe(a)) - ORDEM_GRUPOS.indexOf(grupoDe(b)))
+      : ordenada;
+  }, [todasAbertas, filtroTipo, filtroStatus, filtroCategoria, busca, ordenarPor, ordemAscendente, agrupar]);
+
+  // quantidade e valor em aberto de cada faixa (cabeçalhos dos grupos)
+  const resumoGrupos = useMemo(() => {
+    const m = new Map<GrupoUrgencia, { qtd: number; valor: number }>();
+    for (const d of despesasFiltradas) {
+      const g = grupoDe(d);
+      const atual = m.get(g) ?? { qtd: 0, valor: 0 };
+      atual.qtd += 1;
+      atual.valor += g === "PAGO" || g === "MOVIMENTO" ? d.valor : resumoPagamento(d).restante;
+      m.set(g, atual);
+    }
+    return m;
+  }, [despesasFiltradas]);
 
   // total do que está listado agora (respeita todos os filtros)
   const totalListado = useMemo(
@@ -594,74 +648,85 @@ export default function FinancasPage() {
         {/* cards de resumo — só aparecem depois que o usuário filtrar ao menos uma vez */}
         {buscou && (
           <>
-            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
-              <CardResumo
-                icone={<TrendingUp className="w-4 h-4" />}
-                label="Faturamento bruto"
-                valor={totalFaturado}
-                oculto={valoresOcultos}
-                cor="text-info"
-              />
-              <CardResumo
-                icone={<TrendingDown className="w-4 h-4" />}
-                label="Despesas"
-                valor={resumo.totalDespesas}
-                oculto={valoresOcultos}
-                cor="text-danger"
-              />
-              <CardResumo
-                icone={<ArrowDownCircle className="w-4 h-4" />}
-                label="Sangrias"
-                valor={resumo.totalSangrias}
-                oculto={valoresOcultos}
-                cor="text-danger"
-              />
-              <CardResumo
-                icone={<ArrowUpCircle className="w-4 h-4" />}
-                label="Suprimentos"
-                valor={resumo.totalSuprimentos}
-                oculto={valoresOcultos}
-                cor="text-info"
-              />
-              <CardResumo
-                icone={<Wallet className="w-4 h-4" />}
-                label="Lucro líquido estimado"
-                valor={resumo.lucroLiquido}
-                oculto={valoresOcultos}
-                cor={resumo.lucroLiquido >= 0 ? "text-info" : "text-danger"}
-              />
-            </div>
+            {/* 1) o que exige ação: quanto falta pagar */}
+            <section>
+              <h2 className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">
+                O que falta pagar
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <CardResumo
+                  icone={<Clock className="w-4 h-4" />}
+                  label="A pagar (em aberto)"
+                  valor={resumo.totalAPagar}
+                  oculto={valoresOcultos}
+                  cor="text-danger"
+                  destaque
+                />
+                <CardResumo
+                  icone={<CalendarClock className="w-4 h-4" />}
+                  label="Vence hoje e em 7 dias"
+                  valor={resumo.totalVenceLogo}
+                  oculto={valoresOcultos}
+                  cor={resumo.totalVenceLogo > 0 ? "text-secondary-dark" : "text-muted"}
+                />
+                <CardResumo
+                  icone={<AlertTriangle className="w-4 h-4" />}
+                  label="Vencido"
+                  valor={resumo.totalVencido}
+                  oculto={valoresOcultos}
+                  cor={resumo.totalVencido > 0 ? "text-danger" : "text-muted"}
+                  destaque={resumo.totalVencido > 0}
+                />
+              </div>
+            </section>
 
-            {/* o que ainda falta pagar — o dado mais acionável da tela */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 -mt-1">
-              <CardResumo
-                icone={<Clock className="w-4 h-4" />}
-                label="A pagar (em aberto)"
-                valor={resumo.totalAPagar}
-                oculto={valoresOcultos}
-                cor="text-danger"
-                destaque
-              />
-              <CardResumo
-                icone={<CalendarClock className="w-4 h-4" />}
-                label="Vence hoje e nos próximos 7 dias"
-                valor={resumo.totalVenceLogo}
-                oculto={valoresOcultos}
-                cor={resumo.totalVenceLogo > 0 ? "text-secondary-dark" : "text-muted"}
-              />
-              <CardResumo
-                icone={<AlertTriangle className="w-4 h-4" />}
-                label="Vencido"
-                valor={resumo.totalVencido}
-                oculto={valoresOcultos}
-                cor={resumo.totalVencido > 0 ? "text-danger" : "text-muted"}
-                destaque={resumo.totalVencido > 0}
-              />
-            </div>
-            <p className="text-xs text-muted -mt-3">
-              Lucro líquido estimado = faturamento bruto do período − despesas. Sangria e suprimento não
-              entram nessa conta: são só dinheiro mudando de lugar, não um custo novo.
-            </p>
+            {/* 2) resultado do período escolhido */}
+            <section>
+              <h2 className="text-xs font-semibold text-muted uppercase tracking-wide mb-2">
+                Resultado do período
+              </h2>
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+                <CardResumo
+                  icone={<TrendingUp className="w-4 h-4" />}
+                  label="Faturamento bruto"
+                  valor={totalFaturado}
+                  oculto={valoresOcultos}
+                  cor="text-info"
+                />
+                <CardResumo
+                  icone={<TrendingDown className="w-4 h-4" />}
+                  label="Despesas"
+                  valor={resumo.totalDespesas}
+                  oculto={valoresOcultos}
+                  cor="text-danger"
+                />
+                <CardResumo
+                  icone={<Wallet className="w-4 h-4" />}
+                  label="Lucro líquido estimado"
+                  valor={resumo.lucroLiquido}
+                  oculto={valoresOcultos}
+                  cor={resumo.lucroLiquido >= 0 ? "text-info" : "text-danger"}
+                />
+                <CardResumo
+                  icone={<ArrowDownCircle className="w-4 h-4" />}
+                  label="Sangrias"
+                  valor={resumo.totalSangrias}
+                  oculto={valoresOcultos}
+                  cor="text-danger"
+                />
+                <CardResumo
+                  icone={<ArrowUpCircle className="w-4 h-4" />}
+                  label="Suprimentos"
+                  valor={resumo.totalSuprimentos}
+                  oculto={valoresOcultos}
+                  cor="text-info"
+                />
+              </div>
+              <p className="text-xs text-muted mt-2">
+                Lucro líquido estimado = faturamento bruto do período − despesas. Sangria e suprimento não
+                entram nessa conta: são só dinheiro mudando de lugar, não um custo novo.
+              </p>
+            </section>
 
             {/* compras parceladas em andamento — sempre visíveis, independente do filtro */}
             {parceladosEmAndamento.length > 0 && (
@@ -739,55 +804,6 @@ export default function FinancasPage() {
               </div>
             )}
 
-            {/* despesas por categoria — clique numa linha pra filtrar a lista */}
-            {resumo.categoriasOrdenadas.length > 0 && (
-              <div className="bg-surface border border-border rounded-xl p-4">
-                <div className="flex items-center justify-between mb-3">
-                  <p className="text-xs font-medium text-muted uppercase tracking-wide">
-                    Despesas por categoria
-                  </p>
-                  {filtroCategoria && (
-                    <button
-                      onClick={() => setFiltroCategoria(null)}
-                      className="text-xs text-primary hover:underline"
-                    >
-                      Limpar filtro: {filtroCategoria}
-                    </button>
-                  )}
-                </div>
-                <div className="space-y-1">
-                  {resumo.categoriasOrdenadas.map(([categoria, valor]) => {
-                    const percentual = resumo.totalDespesas > 0 ? (valor / resumo.totalDespesas) * 100 : 0;
-                    const ativa = filtroCategoria === categoria;
-                    return (
-                      <button
-                        type="button"
-                        key={categoria}
-                        onClick={() => setFiltroCategoria(ativa ? null : categoria)}
-                        title={ativa ? "Remover filtro" : `Filtrar lista por ${categoria}`}
-                        className={`w-full flex items-center gap-3 text-sm rounded-md px-1.5 py-1 text-left transition ${
-                          ativa ? "bg-primary-light" : "hover:bg-background"
-                        } ${filtroCategoria && !ativa ? "opacity-50" : ""}`}
-                      >
-                        <span className="w-40 shrink-0 truncate text-foreground">{categoria}</span>
-                        <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
-                          <div
-                            className="h-full bg-danger/70 rounded-full"
-                            style={{ width: `${percentual}%` }}
-                          />
-                        </div>
-                        <span className="w-12 shrink-0 text-right text-xs text-muted">
-                          {percentual.toFixed(0)}%
-                        </span>
-                        <span className="w-28 shrink-0 text-right font-mono text-muted">
-                          {moeda(valor)}
-                        </span>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
           </>
         )}
 
@@ -816,6 +832,18 @@ export default function FinancasPage() {
                 </button>
               ))}
             </div>
+            <button
+              onClick={() => setAgrupar((v) => !v)}
+              aria-pressed={agrupar}
+              className={`text-xs px-2.5 py-1 rounded-full border transition ${
+                agrupar
+                  ? "bg-primary-light border-primary/30 text-primary-dark font-medium"
+                  : "border-border text-muted hover:text-foreground"
+              }`}
+              title="Agrupar por urgência de vencimento"
+            >
+              Agrupar por urgência
+            </button>
             <div className="relative ml-2 min-w-[160px] flex-1 max-w-xs">
               <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
@@ -889,12 +917,31 @@ export default function FinancasPage() {
                 </tr>
               </thead>
               <tbody>
-                {despesasFiltradas.map((d) => {
+                {despesasFiltradas.map((d, idx) => {
                   const vencRelevante = vencimentoRelevante(d);
                   const statusLinha = statusVencimento(vencRelevante.data, vencRelevante.pago);
                   const linhaAtrasada = statusLinha === "VENCIDO";
+                  const grupo = grupoDe(d);
+                  const novoGrupo = agrupar && (idx === 0 || grupoDe(despesasFiltradas[idx - 1]) !== grupo);
+                  const infoGrupo = resumoGrupos.get(grupo);
                   return (
                   <Fragment key={d.id}>
+                    {novoGrupo && infoGrupo && (
+                      <tr className="bg-surface-alt/70 border-y border-border">
+                        <td colSpan={10} className="px-4 py-2">
+                          <div className="flex items-center gap-2">
+                            <span className={`text-xs font-semibold uppercase tracking-wide ${COR_GRUPO[grupo]}`}>
+                              {LABEL_GRUPO[grupo]}
+                            </span>
+                            <span className="text-xs text-muted">({infoGrupo.qtd})</span>
+                            <span className="ml-auto text-xs font-mono text-muted">
+                              {grupo === "PAGO" || grupo === "MOVIMENTO" ? "total" : "em aberto"}{" "}
+                              {moeda(infoGrupo.valor)}
+                            </span>
+                          </div>
+                        </td>
+                      </tr>
+                    )}
                     <tr
                       className={`border-b ${
                         d.parcelas.length > 0 ? "border-transparent" : "border-border"
@@ -1139,6 +1186,61 @@ export default function FinancasPage() {
             </div>
           )}
         </div>
+
+        {/* gráfico por categoria — fica por último */}
+        {buscou && (
+          <>
+            {/* despesas por categoria — clique numa linha pra filtrar a lista */}
+            {resumo.categoriasOrdenadas.length > 0 && (
+              <div className="bg-surface border border-border rounded-xl p-4">
+                <div className="flex items-center justify-between mb-3">
+                  <p className="text-xs font-medium text-muted uppercase tracking-wide">
+                    Despesas por categoria
+                  </p>
+                  {filtroCategoria && (
+                    <button
+                      onClick={() => setFiltroCategoria(null)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Limpar filtro: {filtroCategoria}
+                    </button>
+                  )}
+                </div>
+                <div className="space-y-1">
+                  {resumo.categoriasOrdenadas.map(([categoria, valor]) => {
+                    const percentual = resumo.totalDespesas > 0 ? (valor / resumo.totalDespesas) * 100 : 0;
+                    const ativa = filtroCategoria === categoria;
+                    return (
+                      <button
+                        type="button"
+                        key={categoria}
+                        onClick={() => setFiltroCategoria(ativa ? null : categoria)}
+                        title={ativa ? "Remover filtro" : `Filtrar lista por ${categoria}`}
+                        className={`w-full flex items-center gap-3 text-sm rounded-md px-1.5 py-1 text-left transition ${
+                          ativa ? "bg-primary-light" : "hover:bg-background"
+                        } ${filtroCategoria && !ativa ? "opacity-50" : ""}`}
+                      >
+                        <span className="w-40 shrink-0 truncate text-foreground">{categoria}</span>
+                        <div className="flex-1 h-2 bg-background rounded-full overflow-hidden">
+                          <div
+                            className="h-full bg-danger/70 rounded-full"
+                            style={{ width: `${percentual}%` }}
+                          />
+                        </div>
+                        <span className="w-12 shrink-0 text-right text-xs text-muted">
+                          {percentual.toFixed(0)}%
+                        </span>
+                        <span className="w-28 shrink-0 text-right font-mono text-muted">
+                          {moeda(valor)}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </>
+        )}
       </div>
 
       {(modalAberto || despesaEmEdicao) && (
