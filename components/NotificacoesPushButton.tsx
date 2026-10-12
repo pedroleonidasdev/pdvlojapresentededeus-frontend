@@ -118,10 +118,16 @@ export default function NotificacoesPushButton() {
               ? "Clique para desativar as notificações neste dispositivo"
               : "Receber um aviso no celular a cada venda ou abertura/fechamento de caixa"
         }
-        className="group w-full flex items-center gap-3 px-2.5 py-2 rounded-xl text-sm transition-all duration-200 border-l-2 border-transparent text-white/70 hover:bg-white/10 hover:text-white hover:border-white/30 disabled:opacity-50 disabled:cursor-not-allowed"
+        className="group relative w-full flex items-center gap-3 pl-3 pr-2.5 py-1.5 rounded-xl text-[13.5px] leading-tight text-left transition-all duration-200 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >
-        <span className="flex items-center justify-center w-9 h-9 rounded-lg shrink-0 text-white/70 transition-all duration-300 ease-out group-hover:bg-white/10 group-hover:text-white group-hover:scale-110 group-hover:-rotate-3">
-          <Icone className="w-[19px] h-[19px]" />
+        <span
+          className={`flex items-center justify-center w-8 h-8 rounded-lg shrink-0 transition-all duration-300 ease-out group-hover:scale-110 group-hover:-rotate-3 ${
+            estado === "ativado"
+              ? "bg-success/25 text-success-light"
+              : "bg-white/5 text-white/70 group-hover:bg-white/15 group-hover:text-white"
+          }`}
+        >
+          <Icone className="w-[17px] h-[17px]" />
         </span>
         {processando
           ? "Aguarde..."
@@ -136,14 +142,14 @@ export default function NotificacoesPushButton() {
           type="button"
           onClick={enviarTeste}
           disabled={testando}
-          className="w-full flex items-center gap-2 pl-[52px] pr-2.5 py-1 text-[11px] text-white/50 hover:text-white transition disabled:opacity-50"
+          className="w-full flex items-center gap-2 pl-[56px] pr-2.5 py-1 text-[11px] text-white/50 hover:text-white transition disabled:opacity-50"
         >
           <Send className="w-3 h-3" />
           {testando ? "Enviando teste..." : "Enviar notificação de teste"}
         </button>
       )}
       {resultadoTeste && (
-        <div className="pl-[52px] pr-2.5 mt-1 text-[11px] leading-relaxed text-white/60">
+        <div className="pl-[56px] pr-2.5 mt-1 text-[11px] leading-relaxed text-white/60">
           <p>
             {resultadoTeste.enviadas} enviada(s), {resultadoTeste.removidas} expirada(s),{" "}
             {resultadoTeste.falhas} falha(s).
