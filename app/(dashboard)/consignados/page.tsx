@@ -906,8 +906,8 @@ function ModalDetalhe({
 
   async function excluir() {
     const aviso = aberta
-      ? "Excluir esta consignação? O estoque não foi alterado, então nada volta."
-      : "Excluir esta consignação FECHADA? As unidades vendidas voltam para o estoque.";
+      ? `Tem certeza que deseja EXCLUIR a consignação #${consignacao.id} de ${consignacao.consignatario}? O estoque não foi alterado, então nada volta. Esta ação não pode ser desfeita.`
+      : `Tem certeza que deseja EXCLUIR a consignação FECHADA #${consignacao.id} de ${consignacao.consignatario}? As unidades vendidas voltam para o estoque. Esta ação não pode ser desfeita.`;
     if (!confirm(aviso)) return;
     try {
       await api.delete(`/consignacoes/${consignacao.id}`);
@@ -1018,6 +1018,18 @@ function ModalDetalhe({
           </div>
 
           {erro && <p className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2 mt-4">{erro}</p>}
+
+          {ehAdmin && (
+            <div className="mt-6 pt-4 border-t border-border/60">
+              <button
+                onClick={excluir}
+                className="flex items-center gap-2 text-danger hover:bg-danger/10 text-xs font-medium px-3 py-2 rounded-lg transition"
+              >
+                <Trash2 className="w-4 h-4" />
+                Excluir consignação
+              </button>
+            </div>
+          )}
         </div>
 
         <div className="p-4 border-t border-border shrink-0 flex flex-wrap items-center justify-between gap-2">
@@ -1036,15 +1048,6 @@ function ModalDetalhe({
               >
                 <Pencil className="w-4 h-4" />
                 Editar / acrescentar produtos
-              </button>
-            )}
-            {ehAdmin && (
-              <button
-                onClick={excluir}
-                className="flex items-center gap-2 text-danger hover:bg-danger/10 text-sm font-medium px-3 py-2 rounded-lg transition"
-              >
-                <Trash2 className="w-4 h-4" />
-                Excluir
               </button>
             )}
           </div>
