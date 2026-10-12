@@ -15,6 +15,7 @@ import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import EditarDataHoraModal from "@/components/EditarDataHoraModal";
 import FiltroCheckbox from "@/components/FiltroCheckbox";
 import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText, Eye, EyeOff, Trash2 } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO", "MULTIPLO"];
 
@@ -383,9 +384,7 @@ function VendasPageConteudo() {
         </div>
 
         {carregando ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <CarregandoSecao />
         ) : !buscou ? (
           <div className="text-center py-16 text-muted">
             <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />

@@ -6,6 +6,7 @@ import { Caixa } from "@/lib/types";
 import { formatarMoeda, formatarDataHora } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import { Loader2, RotateCcw, User, Clock, CheckCircle2, AlertTriangle, Lock } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 /**
  * Tela exclusiva de ADMIN para reabrir um caixa fechado por engano.
@@ -73,9 +74,7 @@ export default function ReabrirCaixaPage() {
 
       <div className="p-4 md:p-8 max-w-2xl">
         {carregando ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <CarregandoSecao />
         ) : caixaAberto ? (
           <div className="bg-surface border border-border rounded-xl p-6 text-center space-y-2">
             <Lock className="w-8 h-8 mx-auto text-muted opacity-50" />

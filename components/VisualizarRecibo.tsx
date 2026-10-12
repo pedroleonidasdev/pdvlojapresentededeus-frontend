@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Consignacao } from "@/lib/types";
 import { baixarArquivo, montarModeloConsignacao } from "@/lib/consignacao-modelo";
 import { Download, ExternalLink, FileText, FileType2, Loader2, Minus, Plus, Printer, X } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 const POR_FOLHA = 3;
 const MAX = 99;
@@ -213,9 +214,7 @@ export default function VisualizarRecibo({
           {erro ? (
             <p className="text-sm text-danger p-6">{erro}</p>
           ) : !urlPdf ? (
-            <div className="h-full flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <CarregandoSecao className="h-full" />
           ) : (
             <>
               <iframe

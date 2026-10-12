@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import "./globals.css";
 import { AuthProvider } from "@/lib/auth-context";
 import RegistrarServiceWorker from "@/components/RegistrarServiceWorker";
+import BarraNavegacao from "@/components/BarraNavegacao";
 
 export const metadata: Metadata = {
   title: "PDV | Sistema de Vendas e Estoque",
@@ -34,6 +35,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="pt-BR" className="h-full antialiased">
       <body className="min-h-full flex flex-col">
         <RegistrarServiceWorker />
+        <BarraNavegacao />
         <AuthProvider>{children}</AuthProvider>
       </body>
     </html>

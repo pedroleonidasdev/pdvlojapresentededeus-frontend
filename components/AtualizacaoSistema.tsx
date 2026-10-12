@@ -1,7 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { CheckCircle2, Loader2, RefreshCw } from "lucide-react";
+import { CheckCircle2, RefreshCw } from "lucide-react";
+import { BarraCarregamento, OracaoRotativa } from "@/components/CarregamentoCatolico";
 
 // Versão embutida neste JavaScript (definida em next.config.ts).
 const VERSAO_ATUAL = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
@@ -99,14 +100,14 @@ export default function AtualizacaoSistema() {
               disabled={reiniciando}
               className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-dark disabled:opacity-70"
             >
-              {reiniciando ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" /> Reiniciando...
-                </>
-              ) : (
-                "Reiniciar sistema"
-              )}
+              {reiniciando ? "Reiniciando..." : "Reiniciar sistema"}
             </button>
+            {reiniciando && (
+              <div className="mt-4 space-y-2" role="status" aria-live="polite">
+                <BarraCarregamento />
+                <OracaoRotativa />
+              </div>
+            )}
             <button
               onClick={adiar}
               disabled={reiniciando}

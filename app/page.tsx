@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
+import { TelaCarregamento } from "@/components/CarregamentoCatolico";
 
 export default function Home() {
   const { usuario, carregando } = useAuth();
@@ -13,5 +14,5 @@ export default function Home() {
     router.replace(usuario ? "/inicio" : "/login");
   }, [carregando, usuario, router]);
 
-  return null;
+  return <TelaCarregamento />;
 }

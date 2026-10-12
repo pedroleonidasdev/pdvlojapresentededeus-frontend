@@ -5,6 +5,7 @@ import api from "@/lib/api";
 import { Categoria } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 export default function CategoriasPage() {
   const [categorias, setCategorias] = useState<Categoria[]>([]);
@@ -63,9 +64,7 @@ export default function CategoriasPage() {
 
       <div className="p-4 md:p-8">
         {carregando ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <CarregandoSecao />
         ) : erroLista ? (
           <p className="text-center text-sm text-danger py-10">{erroLista}</p>
         ) : (

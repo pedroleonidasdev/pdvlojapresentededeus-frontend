@@ -39,6 +39,7 @@ import {
   Layers,
   ChevronDown,
 } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
 
@@ -918,9 +919,7 @@ export default function FinancasPage() {
           </div>
 
           {carregando ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <CarregandoSecao />
           ) : !buscou ? (
             <div className="flex flex-col items-center gap-2 py-16 text-center px-4">
               <Filter className="w-5 h-5 text-muted" />

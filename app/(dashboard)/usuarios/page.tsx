@@ -5,6 +5,7 @@ import api from "@/lib/api";
 import { UsuarioAdmin, Perfil } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
@@ -49,9 +50,7 @@ export default function UsuariosPage() {
 
       <div className="p-4 md:p-8">
         {carregando ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <CarregandoSecao />
         ) : (
           <div className="bg-surface border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">

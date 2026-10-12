@@ -6,7 +6,8 @@ import { useAuth } from "@/lib/auth-context";
 import { encontrarNavItemPorPath } from "@/lib/nav-items";
 import Sidebar from "@/components/Sidebar";
 import AtualizacaoSistema from "@/components/AtualizacaoSistema";
-import { Loader2, Menu } from "lucide-react";
+import { Menu } from "lucide-react";
+import { TelaCarregamento } from "@/components/CarregamentoCatolico";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const { usuario, carregando } = useAuth();
@@ -27,11 +28,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }, [carregando, usuario, acessoNegado, router]);
 
   if (carregando || !usuario || acessoNegado) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-      </div>
-    );
+    return <TelaCarregamento mensagem={carregando ? "Abrindo o sistema…" : "Verificando acesso…"} />;
   }
 
   return (

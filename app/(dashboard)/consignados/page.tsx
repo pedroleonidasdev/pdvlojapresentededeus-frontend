@@ -28,6 +28,7 @@ import {
   Package,
   ClipboardCheck,
 } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 function mensagemErro(e: unknown, padrao: string): string {
   return (e as { response?: { data?: { message?: string } } })?.response?.data?.message ?? padrao;
@@ -83,9 +84,7 @@ export default function ConsignadosPage() {
           {erro && <p className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2 mb-4">{erro}</p>}
 
           {carregando ? (
-            <div className="flex justify-center py-16">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <CarregandoSecao />
           ) : lista.length === 0 ? (
             <div className="text-center py-16 text-muted">
               <Handshake className="w-10 h-10 mx-auto mb-3 opacity-40" />
@@ -624,9 +623,7 @@ function ModalConsignacaoForm({
             {/* resultados: a única rolagem desta coluna */}
             <div className="flex-1 min-h-0 flex flex-col border border-border rounded-xl overflow-hidden bg-surface shadow-sm">
               {carregandoCatalogo ? (
-                <div className="flex-1 flex items-center justify-center gap-2 text-sm text-muted">
-                  <Loader2 className="w-4 h-4 animate-spin" /> Carregando produtos...
-                </div>
+                <CarregandoSecao className="flex-1" mensagem="Carregando produtos…" />
               ) : !buscando ? (
                 <div className="flex-1 flex flex-col items-center justify-center text-center px-6 gap-2 text-muted">
                   <Search className="w-8 h-8 opacity-40" />

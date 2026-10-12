@@ -9,6 +9,7 @@ import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag } from "lucide-react";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -393,9 +394,7 @@ export default function EstoquePage() {
         )}
 
         {carregando ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <CarregandoSecao />
         ) : (
           <div className="bg-surface border border-border rounded-xl overflow-x-auto">
             <table className="w-full text-sm min-w-[640px]">

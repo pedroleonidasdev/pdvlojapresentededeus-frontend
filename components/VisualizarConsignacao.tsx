@@ -5,6 +5,7 @@ import { Consignacao } from "@/lib/types";
 import { baixarArquivo, montarModeloConsignacao } from "@/lib/consignacao-modelo";
 import VisualizarRecibo from "@/components/VisualizarRecibo";
 import { FileSpreadsheet, FileText, FileType2, Loader2, Printer, Receipt, X, ExternalLink } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 type Formato = "pdf" | "excel" | "word";
 
@@ -145,9 +146,7 @@ export default function VisualizarConsignacao({
           {erro ? (
             <p className="text-sm text-danger p-6">{erro}</p>
           ) : !urlPdf ? (
-            <div className="h-full flex items-center justify-center">
-              <Loader2 className="w-6 h-6 animate-spin text-primary" />
-            </div>
+            <CarregandoSecao className="h-full" />
           ) : (
             <iframe
               ref={iframeRef}

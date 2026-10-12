@@ -2,7 +2,8 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import { useAuth } from "@/lib/auth-context";
-import { AlertTriangle, Eye, EyeOff, Handshake, Loader2, Lock, Package, ShieldCheck, ShoppingBag, User } from "lucide-react";
+import { BarraCarregamento, CruzIcone } from "@/components/CarregamentoCatolico";
+import { AlertTriangle, Eye, EyeOff, Handshake, Lock, Package, ShieldCheck, ShoppingBag, User } from "lucide-react";
 
 const CLASSE_INPUT =
   "w-full pl-10 pr-3 py-3 rounded-xl border border-border bg-surface text-foreground placeholder:text-muted/60 focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition";
@@ -68,9 +69,10 @@ export default function LoginPage() {
       } else {
         setErro("Login ou senha inválidos.");
       }
-    } finally {
       setCarregando(false);
     }
+    // Em caso de sucesso o carregamento continua visível até a tela trocar
+    // para o painel (o login chama router.push), sem "piscar" o botão.
   }
 
   return (
@@ -225,18 +227,13 @@ export default function LoginPage() {
               disabled={carregando}
               className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-primary to-primary-dark hover:brightness-110 text-white font-semibold py-3 rounded-xl shadow-md shadow-primary/25 transition disabled:opacity-60"
             >
-              {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
+              {carregando && <CruzIcone className="w-4 h-4 animate-pulse" />}
               {carregando ? "Entrando..." : "Entrar"}
             </button>
 
             {carregando && (
               <div className="space-y-1.5">
-                <div className="h-1.5 w-full rounded-full bg-border/60 overflow-hidden">
-                  <div
-                    className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-200 ease-out"
-                    style={{ width: `${progresso}%` }}
-                  />
-                </div>
+                <BarraCarregamento progresso={progresso} />
                 <p className="text-xs text-muted text-center">{mensagemEspera}</p>
               </div>
             )}

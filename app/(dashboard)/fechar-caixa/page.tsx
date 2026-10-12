@@ -8,6 +8,7 @@ import PageHeader from "@/components/PageHeader";
 import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
 import EditarAberturaCaixa from "@/components/EditarAberturaCaixa";
 import { Loader2, Unlock, User, Clock, CheckCircle2, Vault, AlertTriangle } from "lucide-react";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 /**
  * Tela simples de fechamento de caixa para o operador: ele informa quanto tem
@@ -68,9 +69,7 @@ export default function FecharCaixaPage() {
 
       <div className="p-4 md:p-8 max-w-lg">
         {caixa === undefined ? (
-          <div className="flex justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-primary" />
-          </div>
+          <CarregandoSecao />
         ) : fechadoComSucesso ? (
           <div className="bg-surface border border-border rounded-xl p-6 text-center space-y-3">
             <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center mx-auto">

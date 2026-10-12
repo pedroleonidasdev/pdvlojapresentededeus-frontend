@@ -7,6 +7,7 @@ import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X } from "lucide-react";
+import { BarraCarregamento, CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 interface ItemCarrinho {
   produto: Produto;
@@ -360,9 +361,7 @@ export default function PdvPage() {
 
   if (caixa === undefined) {
     return (
-      <div className="flex items-center justify-center h-full">
-        <Loader2 className="w-6 h-6 animate-spin text-primary" />
-      </div>
+      <CarregandoSecao className="h-full" />
     );
   }
 
@@ -747,9 +746,7 @@ export default function PdvPage() {
           <div className="w-full max-w-xs bg-surface border border-border rounded-2xl shadow-lg p-6 text-center">
             {etapaFinalizacao === "sucesso" ? (
               <CheckCircle2 className="w-10 h-10 mx-auto mb-3 text-primary" />
-            ) : (
-              <Loader2 className="w-8 h-8 mx-auto mb-3 animate-spin text-primary" />
-            )}
+            ) : null}
             <p
               className={
                 etapaFinalizacao === "sucesso"
@@ -759,12 +756,7 @@ export default function PdvPage() {
             >
               {ETAPA_FINALIZACAO[etapaFinalizacao].texto}
             </p>
-            <div className="h-1.5 w-full rounded-full bg-border overflow-hidden mt-4">
-              <div
-                className="h-full bg-gradient-to-r from-primary to-accent rounded-full transition-all duration-500 ease-out"
-                style={{ width: `${ETAPA_FINALIZACAO[etapaFinalizacao].progresso}%` }}
-              />
-            </div>
+            <BarraCarregamento className="mt-4" progresso={ETAPA_FINALIZACAO[etapaFinalizacao].progresso} />
           </div>
         </div>
       )}
