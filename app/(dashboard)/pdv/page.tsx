@@ -373,6 +373,8 @@ export default function PdvPage() {
     );
   }
 
+  const unidadesNoCarrinho = carrinho.reduce((acc, i) => acc + i.quantidade, 0);
+
   // caixa fechado: a tela de venda aparece normalmente, só que bloqueada, com a
   // janela "Abrir caixa" flutuando no meio (ver o final do return)
   const caixaFechado = caixa === null;
@@ -477,62 +479,76 @@ export default function PdvPage() {
         <div className="w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px] xl:w-[420px] xl:min-w-[420px] xl:max-w-[420px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border md:shadow-[-6px_0_14px_-8px_rgba(15,51,42,0.25)] flex flex-col min-h-0">
           <div className="px-5 py-3 border-b border-border flex items-center gap-2 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
             <ShoppingCart className="w-6 h-6 text-primary" />
-            <h2 className="font-bold text-lg">Carrinho</h2>
+            <div className="min-w-0">
+              <h2 className="font-bold text-lg leading-tight">Carrinho</h2>
+              {carrinho.length > 0 && (
+                <p className="text-xs text-muted leading-tight">
+                  {carrinho.length} {carrinho.length === 1 ? "produto" : "produtos"} · {unidadesNoCarrinho}{" "}
+                  {unidadesNoCarrinho === 1 ? "unidade" : "unidades"}
+                </p>
+              )}
+            </div>
             <span className="ml-auto rounded-full bg-primary text-white px-3 py-1 text-sm font-semibold shadow-sm">
               {carrinho.length} {carrinho.length === 1 ? "item" : "itens"}
             </span>
           </div>
 
           {/* Lista de produtos: ocupa todo o espaço livre entre o cabeçalho e o bloco de desconto/pagamento. */}
-          <div className="flex flex-col flex-1 min-h-[96px] max-h-[240px] md:max-h-none overflow-y-auto px-5 py-2 receipt-dashed">
+          <div className="flex flex-col flex-1 min-h-[96px] max-h-[240px] md:max-h-none overflow-y-auto px-5 py-2 bg-surface-alt/50 receipt-dashed">
             {carrinho.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-3 text-center">
                 <ShoppingCart className="w-7 h-7 mx-auto mb-1 text-muted/50" />
                 <p className="text-sm text-muted">Nenhum produto adicionado ainda.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-border/60 text-sm">
+              <ul className="divide-y divide-accent/25 text-sm">
                 {carrinho.map((item) => (
-                  <li key={item.produto.id} className="flex items-start justify-between gap-3 py-3 first:pt-1 last:pb-1">
+                  <li key={item.produto.id} className="flex items-center gap-3 py-2.5">
+                    <span className="shrink-0 min-w-[2.75rem] px-2 py-1.5 rounded-lg bg-primary text-white text-center font-mono font-bold text-sm tabular-nums">
+                      {item.quantidade}×
+                    </span>
                     <div className="min-w-0 flex-1">
                       <p
-                        className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2 break-words"
+                        className="text-sm font-bold leading-snug text-foreground line-clamp-2 break-words"
                         title={item.produto.nome}
                       >
                         {item.produto.nome}
                       </p>
-                      <p className="text-xs text-muted font-mono mt-0.5">
-                        {item.quantidade} × {formatarMoeda(item.produto.precoVenda)}
+                      <p className="text-xs text-muted mt-0.5 truncate">
+                        {formatarMoeda(item.produto.precoVenda)} · {item.produto.categoria?.nome ?? "Sem categoria"}
                       </p>
-                      <div className="flex items-center gap-2 mt-2">
-                        <button
-                          onClick={() => alterarQuantidade(item.produto.id, -1)}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-primary-light active:scale-95 transition"
-                          aria-label={`Diminuir quantidade de ${item.produto.nome}`}
-                        >
-                          <Minus className="w-4 h-4" />
-                        </button>
-                        <span className="w-8 text-center text-base font-bold font-mono">{item.quantidade}</span>
-                        <button
-                          onClick={() => alterarQuantidade(item.produto.id, 1)}
-                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-primary-light active:scale-95 transition"
-                          aria-label={`Aumentar quantidade de ${item.produto.nome}`}
-                        >
-                          <Plus className="w-4 h-4" />
-                        </button>
+                    </div>
+                    <div className="shrink-0 flex flex-col items-end gap-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-mono text-base font-bold text-foreground whitespace-nowrap tabular-nums">
+                          {formatarMoeda(item.produto.precoVenda * item.quantidade)}
+                        </span>
                         <button
                           onClick={() => removerItem(item.produto.id)}
-                          className="ml-1 p-1.5 rounded-lg text-danger/70 hover:text-danger hover:bg-danger-light transition"
+                          className="p-1 rounded-md text-danger/60 hover:text-danger hover:bg-danger-light transition"
                           aria-label={`Remover ${item.produto.nome}`}
                           title="Remover"
                         >
                           <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => alterarQuantidade(item.produto.id, -1)}
+                          className="w-6 h-6 flex items-center justify-center rounded-md border border-border bg-surface text-foreground hover:bg-primary-light active:scale-95 transition"
+                          aria-label={`Diminuir quantidade de ${item.produto.nome}`}
+                        >
+                          <Minus className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          onClick={() => alterarQuantidade(item.produto.id, 1)}
+                          className="w-6 h-6 flex items-center justify-center rounded-md border border-border bg-surface text-foreground hover:bg-primary-light active:scale-95 transition"
+                          aria-label={`Aumentar quantidade de ${item.produto.nome}`}
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </div>
-                    <span className="font-mono text-base font-bold text-foreground whitespace-nowrap tabular-nums pt-0.5">
-                      {formatarMoeda(item.produto.precoVenda * item.quantidade)}
-                    </span>
                   </li>
                 ))}
               </ul>
