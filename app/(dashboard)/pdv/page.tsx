@@ -380,7 +380,7 @@ export default function PdvPage() {
   const caixaFechado = caixa === null;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full bg-gradient-to-br from-[#CFE1F4] via-[#D6E6F4] to-[#DAECF0]">
       <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" />
 
       <div className="relative flex-1 min-h-0 flex flex-col">
