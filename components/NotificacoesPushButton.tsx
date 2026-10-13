@@ -116,7 +116,7 @@ export default function NotificacoesPushButton() {
             ? "Notificações bloqueadas nas permissões do navegador"
             : estado === "ativado"
               ? "Clique para desativar as notificações neste dispositivo"
-              : "Receber um aviso no celular a cada venda ou abertura/fechamento de caixa"
+              : "Receber um aviso neste aparelho a cada venda ou abertura/fechamento de caixa"
         }
         className="group relative w-full flex items-center gap-3 pl-3 pr-2.5 py-1.5 rounded-xl text-[13.5px] leading-tight text-left transition-all duration-200 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >

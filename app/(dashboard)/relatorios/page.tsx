@@ -5,6 +5,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
+import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { useAuth } from "@/lib/auth-context";
 import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
 import {
@@ -82,6 +83,7 @@ export default function RelatoriosPage() {
       await api.post("/caixa/fechar", {
         valorFinal: Number(valorFinalCaixa.replace(",", ".")) || 0,
       });
+      avisarCaixaMudou();
       setCaixaAtual(null);
       setValorFinalCaixa("");
       setConfirmandoFechamento(false);

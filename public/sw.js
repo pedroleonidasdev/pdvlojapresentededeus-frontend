@@ -43,11 +43,23 @@ self.addEventListener("push", (event) => {
     // payload não veio em JSON (não deveria acontecer) — usa os valores padrão acima
   }
 
+  // Mesma "tag" que o MonitorCaixa usa na notificação local: se o push do
+  // backend e o aviso do app chegarem juntos, um substitui o outro (sem duplicar).
+  const texto = `${dados.titulo} ${dados.corpo}`.toLowerCase();
+  const tag =
+    dados.tag ||
+    (/caixa/.test(texto) && /abert|abriu/.test(texto)
+      ? "caixa-aberto"
+      : /caixa/.test(texto) && /fech/.test(texto)
+        ? "caixa-fechado"
+        : undefined);
+
   event.waitUntil(
     self.registration.showNotification(dados.titulo, {
       body: dados.corpo,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
+      ...(tag ? { tag, renotify: true } : {}),
       data: { url: dados.url || "/inicio" },
     })
   );

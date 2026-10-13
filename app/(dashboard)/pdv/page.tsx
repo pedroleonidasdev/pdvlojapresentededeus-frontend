@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
+import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
@@ -95,6 +96,7 @@ export default function PdvPage() {
         valorInicial: Number(valorInicialCaixa.replace(",", ".")) || 0,
       });
       setCaixa(data);
+      avisarCaixaMudou();
       setValorInicialCaixa("");
     } catch (e: unknown) {
       const msg =
