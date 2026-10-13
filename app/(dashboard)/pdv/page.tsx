@@ -475,7 +475,7 @@ export default function PdvPage() {
 
         {/* Coluna do carrinho / recibo — painel fixo à direita em telas md+ */}
         <div className="w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px] xl:w-[420px] xl:min-w-[420px] xl:max-w-[420px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border md:shadow-[-6px_0_14px_-8px_rgba(15,51,42,0.25)] flex flex-col min-h-0">
-          <div className="px-5 py-4 border-b border-border flex items-center gap-2 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
+          <div className="px-5 py-3 border-b border-border flex items-center gap-2 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
             <ShoppingCart className="w-6 h-6 text-primary" />
             <h2 className="font-bold text-lg">Carrinho</h2>
             <span className="ml-auto rounded-full bg-primary text-white px-3 py-1 text-sm font-semibold shadow-sm">
@@ -484,10 +484,10 @@ export default function PdvPage() {
           </div>
 
           {/* Lista de produtos: não ocupa a altura inteira quando o carrinho está vazio. */}
-          <div className="shrink-0 max-h-[200px] md:max-h-[28vh] overflow-y-auto px-5 py-3 receipt-dashed">
+          <div className="shrink-0 max-h-[200px] md:max-h-[24vh] overflow-y-auto px-5 py-2 receipt-dashed">
             {carrinho.length === 0 ? (
-              <div className="py-5 text-center">
-                <ShoppingCart className="w-8 h-8 mx-auto mb-2 text-muted/50" />
+              <div className="py-3 text-center">
+                <ShoppingCart className="w-7 h-7 mx-auto mb-1 text-muted/50" />
                 <p className="text-sm text-muted">Nenhum produto adicionado ainda.</p>
               </div>
             ) : (
@@ -541,12 +541,13 @@ export default function PdvPage() {
 
           {/* Fechamento da venda: desconto e pagamento rolam; total e ações ficam sempre visíveis no rodapé. */}
           <div className="flex-1 min-h-0 flex flex-col border-t border-border">
-          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3">
             {/* Desconto */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2 flex items-center gap-1.5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5" />
                 Desconto
+                <span className="normal-case font-normal tracking-normal text-[11px]">· pode usar os dois juntos</span>
               </p>
               <div className="flex gap-2">
                 <div className="relative flex-1">
@@ -556,7 +557,7 @@ export default function PdvPage() {
                     onChange={(e) => handleDescontoChange(e.target.value)}
                     placeholder="0"
                     disabled={carrinho.length === 0}
-                    className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
+                    className="w-full pl-3 pr-8 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
                   />
                   <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
                 </div>
@@ -568,16 +569,15 @@ export default function PdvPage() {
                     onChange={(e) => handleDescontoDinheiroChange(e.target.value)}
                     placeholder="0,00"
                     disabled={carrinho.length === 0}
-                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
                   />
                 </div>
               </div>
-              <p className="text-[11px] text-muted mt-1">Pode usar os dois juntos, se precisar.</p>
             </div>
 
             {/* Forma de pagamento */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center justify-between mb-1.5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">Forma de pagamento</p>
                 {!pagamentoMultiplo ? (
                   <button
@@ -605,7 +605,7 @@ export default function PdvPage() {
                     <button
                       key={forma}
                       onClick={() => setFormaPagamento(forma)}
-                      className={`flex items-center gap-2 text-sm py-3 px-3 rounded-lg border-2 transition ${formaPagamento === forma
+                      className={`flex items-center gap-2 text-sm py-2.5 px-3 rounded-lg border-2 transition ${formaPagamento === forma
                           ? COR_FORMA_PAGAMENTO[forma].ativo
                           : "border-border text-muted hover:border-primary/40 hover:bg-background"
                         }`}
@@ -616,13 +616,13 @@ export default function PdvPage() {
                   ))}
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1.5">
                   {pagamentos.map((pagamento, index) => (
                     <div key={index} className="flex gap-2 items-center">
                       <select
                         value={pagamento.formaPagamento}
                         onChange={(e) => atualizarPagamento(index, "formaPagamento", e.target.value as FormaPdv)}
-                        className="flex-1 min-w-0 px-2 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                       >
                         {FORMAS.map((forma) => (
                           <option key={forma} value={forma}>{LABEL_FORMA_PAGAMENTO[forma]}</option>
@@ -635,7 +635,7 @@ export default function PdvPage() {
                           value={pagamento.valor}
                           onChange={(e) => atualizarPagamento(index, "valor", e.target.value)}
                           placeholder="0,00"
-                          className="w-full pl-8 pr-2 py-2.5 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          className="w-full pl-8 pr-2 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
                         />
                       </div>
                       <button
@@ -653,12 +653,12 @@ export default function PdvPage() {
                     <button
                       type="button"
                       onClick={adicionarFormaPagamento}
-                      className="w-full border border-dashed border-border rounded-lg py-2.5 text-sm text-muted hover:border-primary hover:text-primary"
+                      className="w-full border border-dashed border-border rounded-lg py-2 text-sm text-muted hover:border-primary hover:text-primary"
                     >
                       + Adicionar outra forma
                     </button>
                   )}
-                  <div className="flex items-center justify-between gap-2 rounded-lg bg-background border border-border px-3 py-2.5 text-sm">
+                  <div className="flex items-center justify-between gap-2 rounded-lg bg-background border border-border px-3 py-2 text-sm">
                     <span className="text-muted">Pago</span>
                     <span className="font-mono font-semibold tabular-nums">{formatarMoeda(totalPagamentos)}</span>
                     <span className={`font-semibold ${restantePagamento > 0.005 ? "text-danger" : "text-primary"}`}>
@@ -672,54 +672,68 @@ export default function PdvPage() {
             {/* Dinheiro */}
             {!pagamentoMultiplo && formaPagamento === "DINHEIRO" && (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2 flex items-center gap-1.5">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1.5">
                   <DollarSign className="w-3.5 h-3.5" />
-                  Valor recebido
+                  Valor recebido e troco
                 </p>
-                <input
-                  inputMode="decimal"
-                  value={valorRecebido}
-                  onChange={(e) => handleValorRecebidoChange(e.target.value)}
-                  placeholder="0,00"
-                  disabled={carrinho.length === 0}
-                  className="w-full px-3 py-3 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-xl font-mono font-semibold disabled:opacity-50"
-                />
-                {valorRecebidoValido > 0 && (
+                <div className="grid grid-cols-2 gap-2">
+                  <input
+                    inputMode="decimal"
+                    value={valorRecebido}
+                    onChange={(e) => handleValorRecebidoChange(e.target.value)}
+                    placeholder="0,00"
+                    disabled={carrinho.length === 0}
+                    className="w-full min-w-0 px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-lg font-mono font-semibold disabled:opacity-50"
+                  />
                   <div
-                    className={`flex items-center justify-between gap-2 mt-2 rounded-lg px-3 py-2 ${
-                      pagamentoInsuficiente ? "bg-danger-light" : "bg-success-light"
+                    className={`min-w-0 flex flex-col justify-center rounded-lg px-3 py-1 ${
+                      valorRecebidoValido === 0
+                        ? "bg-background border border-border"
+                        : pagamentoInsuficiente
+                          ? "bg-danger-light"
+                          : "bg-success-light"
                     }`}
                   >
-                    <span className="text-sm font-medium text-muted">Troco</span>
+                    <span className="text-[11px] font-medium text-muted leading-tight">Troco</span>
                     <span
-                      className={`text-xl font-bold font-mono tabular-nums ${
-                        pagamentoInsuficiente ? "text-danger" : "text-primary"
+                      className={`text-lg font-bold font-mono tabular-nums leading-tight truncate ${
+                        valorRecebidoValido === 0
+                          ? "text-muted"
+                          : pagamentoInsuficiente
+                            ? "text-danger"
+                            : "text-primary"
                       }`}
                     >
-                      {pagamentoInsuficiente ? "Valor insuficiente" : formatarMoeda(troco)}
+                      {valorRecebidoValido === 0
+                        ? "—"
+                        : pagamentoInsuficiente
+                          ? "Insuficiente"
+                          : formatarMoeda(troco)}
                     </span>
                   </div>
-                )}
+                </div>
               </div>
             )}
           </div>
 
-          <div className="shrink-0 sticky bottom-0 md:static bg-surface border-t border-border px-5 py-4 space-y-3 shadow-[0_-8px_14px_-10px_rgba(15,51,42,0.3)]">
+          <div className="shrink-0 sticky bottom-0 md:static bg-surface border-t border-border px-5 py-3 space-y-2 shadow-[0_-8px_14px_-10px_rgba(15,51,42,0.3)]">
             {/* Totais */}
-            <div className="rounded-xl bg-primary-soft border border-primary-light px-4 py-3 space-y-1.5 font-mono">
-              <div className="flex items-center justify-between">
-                <span className="text-sm text-muted">Subtotal</span>
-                <span className="text-lg text-foreground tabular-nums">{formatarMoeda(subtotal)}</span>
-              </div>
+            <div className="rounded-xl bg-primary-soft border border-primary-light px-4 py-2 font-mono">
               {valorDesconto > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-sm text-muted">Desconto</span>
-                  <span className="text-lg text-danger tabular-nums">- {formatarMoeda(valorDesconto)}</span>
+                <div className="space-y-0.5 pb-1.5 mb-1.5 border-b border-primary-light/80">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted">Subtotal</span>
+                    <span className="text-base text-foreground tabular-nums">{formatarMoeda(subtotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-muted">Desconto</span>
+                    <span className="text-base text-danger tabular-nums">- {formatarMoeda(valorDesconto)}</span>
+                  </div>
                 </div>
               )}
-              <div className="flex items-end justify-between gap-3 pt-2 border-t border-primary-light/80 mt-1">
+              <div className="flex items-end justify-between gap-3">
                 <span className="text-base font-bold text-foreground uppercase tracking-wide pb-1">Total</span>
-                <span className="text-3xl xl:text-4xl font-extrabold text-primary tabular-nums tracking-tight">
+                <span className="text-3xl xl:text-4xl font-extrabold text-primary tabular-nums tracking-tight leading-tight">
                   {formatarMoeda(total)}
                 </span>
               </div>
@@ -730,11 +744,11 @@ export default function PdvPage() {
             )}
 
             {/* Ações */}
-            <div className="pt-1 space-y-2">
+            <div className="space-y-1.5">
               <button
                 onClick={finalizarVenda}
                 disabled={carrinho.length === 0 || finalizando || pagamentoInsuficiente || !pagamentosCompletos}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-accent-dark hover:brightness-105 active:scale-[0.99] text-white text-base font-bold py-3.5 rounded-xl shadow-md transition disabled:opacity-50 disabled:shadow-none disabled:from-accent disabled:to-accent"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-accent-dark hover:brightness-105 active:scale-[0.99] text-white text-base font-bold py-3 rounded-xl shadow-md transition disabled:opacity-50 disabled:shadow-none disabled:from-accent disabled:to-accent"
               >
                 {finalizando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                 Finalizar venda
@@ -743,7 +757,7 @@ export default function PdvPage() {
               <button
                 onClick={cancelarVenda}
                 disabled={carrinho.length === 0 || finalizando}
-                className="w-full flex items-center justify-center gap-2 bg-danger/10 hover:bg-danger/20 text-danger text-sm font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-danger/10 hover:bg-danger/20 text-danger text-sm font-medium py-2 rounded-lg transition disabled:opacity-50"
               >
                 Cancelar venda
               </button>
