@@ -483,10 +483,10 @@ export default function PdvPage() {
             </span>
           </div>
 
-          {/* Lista de produtos: não ocupa a altura inteira quando o carrinho está vazio. */}
-          <div className="shrink-0 max-h-[200px] md:max-h-[24vh] overflow-y-auto px-5 py-2 receipt-dashed">
+          {/* Lista de produtos: ocupa todo o espaço livre entre o cabeçalho e o bloco de desconto/pagamento. */}
+          <div className="flex flex-col flex-1 min-h-[96px] max-h-[240px] md:max-h-none overflow-y-auto px-5 py-2 receipt-dashed">
             {carrinho.length === 0 ? (
-              <div className="py-3 text-center">
+              <div className="flex-1 flex flex-col items-center justify-center py-3 text-center">
                 <ShoppingCart className="w-7 h-7 mx-auto mb-1 text-muted/50" />
                 <p className="text-sm text-muted">Nenhum produto adicionado ainda.</p>
               </div>
@@ -540,7 +540,7 @@ export default function PdvPage() {
           </div>
 
           {/* Fechamento da venda: desconto e pagamento rolam; total e ações ficam sempre visíveis no rodapé. */}
-          <div className="flex-1 min-h-0 flex flex-col border-t border-border">
+          <div className="min-h-0 flex flex-col border-t border-border">
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3">
             {/* Desconto */}
             <div>
