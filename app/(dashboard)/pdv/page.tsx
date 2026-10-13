@@ -79,6 +79,13 @@ export default function PdvPage() {
     verificarCaixa();
   }, []);
 
+  // quando o caixa passa a estar aberto (acabou de abrir, ou já estava aberto ao
+  // carregar a tela), devolve o foco ao campo de busca — o leitor de código de
+  // barras digita em quem estiver com foco
+  useEffect(() => {
+    if (caixa) buscaInputRef.current?.focus();
+  }, [caixa]);
+
   async function abrirCaixa() {
     setAbrindoCaixa(true);
     setErroCaixa(null);
@@ -365,58 +372,22 @@ export default function PdvPage() {
     );
   }
 
-  if (caixa === null) {
-    return (
-      <div className="min-h-full flex flex-col items-center justify-center bg-background p-6">
-        <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden">
-          <div className="bg-primary text-white px-6 py-5 text-center">
-            <Lock className="w-8 h-8 mx-auto mb-2" />
-            <p className="font-semibold">Abrir caixa</p>
-            <p className="text-xs text-white/70 mt-0.5">
-              Informe o valor inicial para começar as vendas
-            </p>
-          </div>
-
-          <div className="p-6 space-y-4">
-            <label className="block">
-              <span className="block text-xs font-medium text-muted mb-1.5">Valor inicial do caixa</span>
-              <input
-                inputMode="decimal"
-                autoFocus
-                value={valorInicialCaixa}
-                onChange={(e) => {
-                  const v = e.target.value;
-                  if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorInicialCaixa(v);
-                }}
-                placeholder="0,00"
-                onKeyDown={(e) => e.key === "Enter" && abrirCaixa()}
-                className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
-              />
-            </label>
-
-            {erroCaixa && (
-              <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erroCaixa}</div>
-            )}
-
-            <button
-              onClick={abrirCaixa}
-              disabled={abrindoCaixa || valorInicialCaixa === ""}
-              className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
-            >
-              {abrindoCaixa && <Loader2 className="w-4 h-4 animate-spin" />}
-              Abrir caixa e iniciar vendas
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
+  // caixa fechado: a tela de venda aparece normalmente, só que bloqueada, com a
+  // janela "Abrir caixa" flutuando no meio (ver o final do return)
+  const caixaFechado = caixa === null;
 
   return (
     <div className="flex flex-col h-full">
       <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" />
 
-      <div className="flex-1 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden">
+      <div className="relative flex-1 min-h-0 flex flex-col">
+      <div
+        inert={caixaFechado}
+        aria-hidden={caixaFechado}
+        className={`flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden ${
+          caixaFechado ? "select-none" : ""
+        }`}
+      >
         {/* Coluna de busca de produtos */}
         <div className="w-full md:flex-1 flex flex-col p-4 md:p-6 md:overflow-hidden">
           <div className="relative mb-4">
@@ -739,6 +710,57 @@ export default function PdvPage() {
             </div>
           </div>
         </div>
+      </div>
+
+      {caixaFechado && (
+        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-abrir-caixa"
+            className="w-full max-w-sm bg-surface border border-border rounded-2xl shadow-xl overflow-hidden"
+          >
+            <div className="bg-primary text-white px-6 py-5 text-center">
+              <Lock className="w-8 h-8 mx-auto mb-2" />
+              <p id="titulo-abrir-caixa" className="font-semibold">Abrir caixa</p>
+              <p className="text-xs text-white/70 mt-0.5">
+                Informe o valor inicial para liberar as vendas
+              </p>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <label className="block">
+                <span className="block text-xs font-medium text-muted mb-1.5">Valor inicial do caixa</span>
+                <input
+                  inputMode="decimal"
+                  autoFocus
+                  value={valorInicialCaixa}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorInicialCaixa(v);
+                  }}
+                  placeholder="0,00"
+                  onKeyDown={(e) => e.key === "Enter" && valorInicialCaixa !== "" && !abrindoCaixa && abrirCaixa()}
+                  className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
+                />
+              </label>
+
+              {erroCaixa && (
+                <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erroCaixa}</div>
+              )}
+
+              <button
+                onClick={abrirCaixa}
+                disabled={abrindoCaixa || valorInicialCaixa === ""}
+                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                {abrindoCaixa && <Loader2 className="w-4 h-4 animate-spin" />}
+                Abrir caixa e iniciar vendas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
       </div>
 
       {finalizando && etapaFinalizacao && (
