@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Categoria, Consignacao, Produto } from "@/lib/types";
@@ -283,6 +283,8 @@ function semAcento(texto: string): string {
 
 const SEM_CATEGORIA = "sem-categoria";
 const LIMITE_RESULTADOS = 40;
+// preferência de ordenação da lista de itens (lembrada neste navegador)
+const CHAVE_ORDEM_AZ = "pdv_consignacao_ordem_az";
 
 /** Formulário de consignação: cria uma nova ou, quando recebe `consignacao`, edita uma em aberto. */
 function ModalConsignacaoForm({
@@ -311,6 +313,15 @@ function ModalConsignacaoForm({
   );
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  // "Ordem A–Z": só muda como a lista de itens é MOSTRADA (produto novo entra no lugar certo
+  // em vez de ir para o fim); a quantidade, o preço e o que é salvo não mudam.
+  const [ordemAZ, setOrdemAZ] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(CHAVE_ORDEM_AZ) === "1";
+    } catch {
+      return false;
+    }
+  });
   const enviandoRef = useRef(false);
   const buscaRef = useRef<HTMLInputElement>(null);
   // lista da direita: ao entrar um produto NOVO ela rola sozinha até ele e o destaca por uns instantes
@@ -383,6 +394,26 @@ function ModalConsignacaoForm({
           return palavras.every((w) => (w.length >= 3 ? texto.includes(w) : inicios.some((x) => x.startsWith(w))));
         })
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
+
+  const itensExibidos = useMemo(
+    () =>
+      ordemAZ
+        ? [...itens].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base", numeric: true }))
+        : itens,
+    [itens, ordemAZ]
+  );
+
+  function alternarOrdemAZ() {
+    setOrdemAZ((atual) => {
+      const novo = !atual;
+      try {
+        localStorage.setItem(CHAVE_ORDEM_AZ, novo ? "1" : "0");
+      } catch {
+        // sem localStorage: vale só até fechar o formulário
+      }
+      return novo;
+    });
+  }
 
   const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
 
@@ -706,9 +737,24 @@ function ModalConsignacaoForm({
                 </p>
               </div>
               {itens.length > 0 && (
-                <button type="button" onClick={limparTudo} className="text-xs text-danger hover:underline">
-                  Limpar tudo
-                </button>
+                <div className="flex items-center gap-3 shrink-0">
+                  <button
+                    type="button"
+                    onClick={alternarOrdemAZ}
+                    aria-pressed={ordemAZ}
+                    title={ordemAZ ? "Voltar à ordem em que os produtos foram adicionados" : "Mostrar os itens em ordem alfabética"}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-md border transition ${
+                      ordemAZ
+                        ? "bg-primary text-white border-primary"
+                        : "border-primary/40 text-primary hover:bg-primary/10"
+                    }`}
+                  >
+                    Ordem A–Z
+                  </button>
+                  <button type="button" onClick={limparTudo} className="text-xs text-danger hover:underline">
+                    Limpar tudo
+                  </button>
+                </div>
               )}
             </div>
 
@@ -726,7 +772,7 @@ function ModalConsignacaoForm({
                   Para mudar a quantidade, clique no item ou use a lista de produtos.
                 </p>
                 <ul ref={listaItensRef} className="flex-1 min-h-0 overflow-y-auto divide-y divide-accent/25">
-                  {itens.map((i) => (
+                  {itensExibidos.map((i) => (
                     <li
                       key={i.produtoId}
                       data-item-id={i.produtoId}
