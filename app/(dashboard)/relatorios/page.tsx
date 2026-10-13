@@ -7,7 +7,7 @@ import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { useAuth } from "@/lib/auth-context";
-import { CarregandoSecao } from "@/components/CarregamentoCatolico";
+import { BarraCarregamento } from "@/components/CarregamentoCatolico";
 import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
 import {
   formatarMoeda,
@@ -52,6 +52,18 @@ export default function RelatoriosPage() {
   const [trocas, setTrocas] = useState<Troca[]>([]);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [carregando, setCarregando] = useState(false);
+  // consultas ao servidor já respondidas (de 4) enquanto o relatório é gerado, e se o servidor está demorando
+  const [consultasRespondidas, setConsultasRespondidas] = useState(0);
+  const [servidorDemorando, setServidorDemorando] = useState(false);
+
+  useEffect(() => {
+    if (!carregando) {
+      setServidorDemorando(false);
+      return;
+    }
+    const espera = setTimeout(() => setServidorDemorando(true), 8_000);
+    return () => clearTimeout(espera);
+  }, [carregando]);
   const [jaGerou, setJaGerou] = useState(false);
 
   // caixa aberto no momento (independe do período filtrado)
@@ -108,16 +120,21 @@ export default function RelatoriosPage() {
 
   async function gerar() {
     setCarregando(true);
+    setConsultasRespondidas(0);
+    // conta cada consulta respondida pra barra mostrar o avanço real
+    function contar<T>(consulta: Promise<T>): Promise<T> {
+      return consulta.finally(() => setConsultasRespondidas((n) => n + 1));
+    }
     try {
       const params = {
         inicio: limiteDiaBrasiliaParaUtc(inicio, false),
         fim: limiteDiaBrasiliaParaUtc(fim, true),
       };
       const [resVendas, resCaixas, resTrocas, resDespesas] = await Promise.all([
-        api.get<Venda[]>("/vendas", { params }),
-        api.get<Caixa[]>("/caixa", { params }),
-        api.get<Troca[]>("/trocas", { params }),
-        api.get<Despesa[]>("/despesas", { params }),
+        contar(api.get<Venda[]>("/vendas", { params })),
+        contar(api.get<Caixa[]>("/caixa", { params })),
+        contar(api.get<Troca[]>("/trocas", { params })),
+        contar(api.get<Despesa[]>("/despesas", { params })),
       ]);
       setVendas(resVendas.data);
       setHistoricoCaixas(resCaixas.data);
@@ -610,7 +627,17 @@ export default function RelatoriosPage() {
           )}
         </div>
 
-        {carregando && <CarregandoSecao mensagem="Gerando o relatório…" className="py-12" />}
+        {carregando && (
+          <div role="status" aria-live="polite" className="flex flex-col items-center justify-center gap-3 px-6 py-12">
+            <BarraCarregamento progresso={Math.max(5, (consultasRespondidas / 4) * 100)} className="max-w-[16rem]" />
+            <p className="text-sm font-medium text-primary">
+              {consultasRespondidas < 4 ? "Gerando o relatório…" : "Montando o relatório…"}
+            </p>
+            {servidorDemorando && (
+              <p className="text-xs text-muted text-center">O servidor está acordando — pode levar até 1 minuto.</p>
+            )}
+          </div>
+        )}
 
         {jaGerou && !carregando && (
           <>
