@@ -5,8 +5,9 @@ import api from "@/lib/api";
 import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { situacaoEstoque } from "@/lib/estoque";
 import PageHeader from "@/components/PageHeader";
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X, Barcode } from "lucide-react";
 import { BarraCarregamento, CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 interface ItemCarrinho {
@@ -23,10 +24,10 @@ const FORMAS: FormaPdv[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"
 // cada forma de pagamento recebe uma cor própria, pra ficar fácil bater o olho
 // no carrinho e reconhecer de longe qual está selecionada.
 const COR_FORMA_PAGAMENTO: Record<FormaPdv, { ativo: string; ponto: string }> = {
-  PIX: { ativo: "border-info bg-info-light text-info-dark font-medium", ponto: "bg-info" },
-  DINHEIRO: { ativo: "border-success bg-success-light text-success font-medium", ponto: "bg-success" },
-  CARTAO_CREDITO: { ativo: "border-secondary bg-secondary-light text-secondary-dark font-medium", ponto: "bg-secondary" },
-  CARTAO_DEBITO: { ativo: "border-accent bg-accent-light text-accent-dark font-medium", ponto: "bg-accent" },
+  PIX: { ativo: "border-info bg-info-light text-info-dark font-semibold shadow-sm", ponto: "bg-info" },
+  DINHEIRO: { ativo: "border-success bg-success-light text-success font-semibold shadow-sm", ponto: "bg-success" },
+  CARTAO_CREDITO: { ativo: "border-secondary bg-secondary-light text-secondary-dark font-semibold shadow-sm", ponto: "bg-secondary" },
+  CARTAO_DEBITO: { ativo: "border-accent bg-accent-light text-accent-dark font-semibold shadow-sm", ponto: "bg-accent" },
 };
 
 // as 3 etapas fixas do fluxo de finalizar venda — sempre passam por todas,
@@ -391,7 +392,7 @@ export default function PdvPage() {
         {/* Coluna de busca de produtos */}
         <div className="w-full md:flex-1 flex flex-col p-4 md:p-6 md:overflow-hidden">
           <div className="relative mb-4">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted" />
             <input
               autoFocus
               ref={buscaInputRef}
@@ -399,10 +400,10 @@ export default function PdvPage() {
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={handleBuscaKeyDown}
               placeholder="Nome do produto ou código de barras + Enter"
-              className="w-full pl-10 pr-4 py-3 rounded-lg border border-border bg-surface focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
+              className="w-full pl-12 pr-12 py-4 rounded-xl border-2 border-border bg-surface shadow-sm focus:outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition text-base"
             />
             {buscando ? (
-              <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 animate-spin text-muted" />
+              <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-muted" />
             ) : (
               busca.length > 0 && (
                 <button
@@ -412,10 +413,10 @@ export default function PdvPage() {
                     setResultados([]);
                     buscaInputRef.current?.focus();
                   }}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition"
                   title="Limpar busca"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               )
             )}
@@ -423,7 +424,16 @@ export default function PdvPage() {
 
           <div className="md:flex-1 md:overflow-y-auto">
             {resultados.length === 0 && busca.trim().length >= 2 && !buscando && (
-              <p className="text-sm text-muted px-1">Nenhum produto encontrado.</p>
+              <p className="text-base text-muted px-1 py-6 text-center">Nenhum produto encontrado.</p>
+            )}
+            {resultados.length === 0 && busca.trim().length < 2 && (
+              <div className="flex flex-col items-center justify-center text-center py-10 md:py-16 text-muted">
+                <div className="w-16 h-16 rounded-2xl bg-primary-soft border border-primary-light flex items-center justify-center mb-4">
+                  <Barcode className="w-8 h-8 text-primary" />
+                </div>
+                <p className="text-base font-semibold text-foreground">Pronto para vender</p>
+                <p className="text-sm mt-1 max-w-xs">Digite o nome do produto ou passe o leitor no código de barras.</p>
+              </div>
             )}
             <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
               {resultados.map((produto) => (
@@ -434,18 +444,27 @@ export default function PdvPage() {
                     buscaInputRef.current?.focus();
                   }}
                   disabled={produto.quantidadeEstoque < 1}
-                  className="text-left p-4 rounded-xl border border-border bg-surface hover:border-primary hover:shadow-md hover:-translate-y-0.5 transition disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+                  title={produto.nome}
+                  className="text-left p-4 rounded-xl border-2 border-border bg-surface hover:border-primary hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition flex flex-col disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-none disabled:hover:border-border"
                 >
-                  <p className="font-medium text-sm text-foreground leading-tight">{produto.nome}</p>
-                  <p className="inline-block text-[11px] mt-1.5 px-2 py-0.5 rounded-full bg-secondary-light text-secondary-dark">
+                  <p className="font-semibold text-[15px] text-foreground leading-snug line-clamp-2 break-words">{produto.nome}</p>
+                  <p className="self-start text-[11px] mt-2 px-2 py-0.5 rounded-full bg-secondary-light text-secondary-dark">
                     {produto.categoria?.nome ?? "Sem categoria"}
                   </p>
-                  <div className="flex items-center justify-between mt-3">
-                    <span className="font-mono font-semibold text-primary">
+                  <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-1 mt-auto pt-3">
+                    <span className="font-mono text-xl font-bold text-primary tabular-nums">
                       {formatarMoeda(produto.precoVenda)}
                     </span>
-                    <span className="text-[11px] text-muted">
-                      {produto.quantidadeEstoque} em estoque
+                    <span
+                      className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                        produto.quantidadeEstoque < 1
+                          ? "bg-danger-light text-danger"
+                          : situacaoEstoque(produto) === "baixo"
+                            ? "bg-accent-light text-accent-dark"
+                            : "bg-primary-soft text-primary-dark"
+                      }`}
+                    >
+                      {produto.quantidadeEstoque < 1 ? "Sem estoque" : `${produto.quantidadeEstoque} em estoque`}
                     </span>
                   </div>
                 </button>
@@ -455,55 +474,63 @@ export default function PdvPage() {
         </div>
 
         {/* Coluna do carrinho / recibo — painel fixo à direita em telas md+ */}
-        <div className="w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border flex flex-col min-h-0">
+        <div className="w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px] xl:w-[420px] xl:min-w-[420px] xl:max-w-[420px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border md:shadow-[-6px_0_14px_-8px_rgba(15,51,42,0.25)] flex flex-col min-h-0">
           <div className="px-5 py-4 border-b border-border flex items-center gap-2 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
-            <ShoppingCart className="w-5 h-5 text-primary" />
-            <h2 className="font-semibold text-base">Carrinho</h2>
-            <span className="ml-auto rounded-full bg-primary text-white px-3 py-1 text-xs font-medium shadow-sm">
+            <ShoppingCart className="w-6 h-6 text-primary" />
+            <h2 className="font-bold text-lg">Carrinho</h2>
+            <span className="ml-auto rounded-full bg-primary text-white px-3 py-1 text-sm font-semibold shadow-sm">
               {carrinho.length} {carrinho.length === 1 ? "item" : "itens"}
             </span>
           </div>
 
           {/* Lista de produtos: não ocupa a altura inteira quando o carrinho está vazio. */}
-          <div className="shrink-0 max-h-[180px] overflow-y-auto px-5 py-3 receipt-dashed">
+          <div className="shrink-0 max-h-[200px] md:max-h-[28vh] overflow-y-auto px-5 py-3 receipt-dashed">
             {carrinho.length === 0 ? (
               <div className="py-5 text-center">
-                <ShoppingCart className="w-7 h-7 mx-auto mb-2 text-muted/50" />
-                <p className="text-xs text-muted">Nenhum produto adicionado ainda.</p>
+                <ShoppingCart className="w-8 h-8 mx-auto mb-2 text-muted/50" />
+                <p className="text-sm text-muted">Nenhum produto adicionado ainda.</p>
               </div>
             ) : (
-              <ul className="space-y-3 font-mono text-sm">
+              <ul className="divide-y divide-border/60 text-sm">
                 {carrinho.map((item) => (
-                  <li key={item.produto.id} className="flex items-start justify-between gap-3">
+                  <li key={item.produto.id} className="flex items-start justify-between gap-3 py-3 first:pt-1 last:pb-1">
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-foreground" title={item.produto.nome}>{item.produto.nome}</p>
-                      <div className="flex items-center gap-2 mt-1">
+                      <p
+                        className="text-[15px] font-semibold leading-snug text-foreground line-clamp-2 break-words"
+                        title={item.produto.nome}
+                      >
+                        {item.produto.nome}
+                      </p>
+                      <p className="text-xs text-muted font-mono mt-0.5">
+                        {item.quantidade} × {formatarMoeda(item.produto.precoVenda)}
+                      </p>
+                      <div className="flex items-center gap-2 mt-2">
                         <button
                           onClick={() => alterarQuantidade(item.produto.id, -1)}
-                          className="w-6 h-6 flex items-center justify-center rounded border border-border text-muted hover:bg-background"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-primary-light active:scale-95 transition"
                           aria-label={`Diminuir quantidade de ${item.produto.nome}`}
                         >
-                          <Minus className="w-3 h-3" />
+                          <Minus className="w-4 h-4" />
                         </button>
-                        <span className="w-5 text-center text-xs">{item.quantidade}</span>
+                        <span className="w-8 text-center text-base font-bold font-mono">{item.quantidade}</span>
                         <button
                           onClick={() => alterarQuantidade(item.produto.id, 1)}
-                          className="w-6 h-6 flex items-center justify-center rounded border border-border text-muted hover:bg-background"
+                          className="w-8 h-8 flex items-center justify-center rounded-lg border border-border bg-background text-foreground hover:bg-primary-light active:scale-95 transition"
                           aria-label={`Aumentar quantidade de ${item.produto.nome}`}
                         >
-                          <Plus className="w-3 h-3" />
+                          <Plus className="w-4 h-4" />
                         </button>
                         <button
                           onClick={() => removerItem(item.produto.id)}
-                          className="ml-1 p-1 text-danger/70 hover:text-danger"
+                          className="ml-1 p-1.5 rounded-lg text-danger/70 hover:text-danger hover:bg-danger-light transition"
                           aria-label={`Remover ${item.produto.nome}`}
                           title="Remover"
                         >
-                          <Trash2 className="w-3.5 h-3.5" />
+                          <Trash2 className="w-4 h-4" />
                         </button>
                       </div>
                     </div>
-                    <span className="text-foreground whitespace-nowrap pt-0.5">
+                    <span className="font-mono text-base font-bold text-foreground whitespace-nowrap tabular-nums pt-0.5">
                       {formatarMoeda(item.produto.precoVenda * item.quantidade)}
                     </span>
                   </li>
@@ -512,11 +539,12 @@ export default function PdvPage() {
             )}
           </div>
 
-          {/* Fechamento da venda: compacto e com rolagem apenas quando necessário. */}
-          <div className="flex-1 min-h-0 overflow-y-auto border-t border-border px-5 py-4 space-y-4">
+          {/* Fechamento da venda: desconto e pagamento rolam; total e ações ficam sempre visíveis no rodapé. */}
+          <div className="flex-1 min-h-0 flex flex-col border-t border-border">
+          <div className="flex-1 min-h-0 overflow-y-auto px-5 py-4 space-y-4">
             {/* Desconto */}
             <div>
-              <p className="text-xs font-medium text-muted mb-2 flex items-center gap-1">
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2 flex items-center gap-1.5">
                 <Tag className="w-3.5 h-3.5" />
                 Desconto
               </p>
@@ -528,53 +556,35 @@ export default function PdvPage() {
                     onChange={(e) => handleDescontoChange(e.target.value)}
                     placeholder="0"
                     disabled={carrinho.length === 0}
-                    className="w-full pl-3 pr-8 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                    className="w-full pl-3 pr-8 py-2.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
                   />
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">%</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
                 </div>
                 <div className="relative flex-1">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-muted">R$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
                   <input
                     inputMode="decimal"
                     value={descontoDinheiro}
                     onChange={(e) => handleDescontoDinheiroChange(e.target.value)}
                     placeholder="0,00"
                     disabled={carrinho.length === 0}
-                    className="w-full pl-8 pr-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                    className="w-full pl-9 pr-3 py-2.5 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
                   />
                 </div>
               </div>
               <p className="text-[11px] text-muted mt-1">Pode usar os dois juntos, se precisar.</p>
             </div>
 
-            {/* Totais */}
-            <div className="rounded-xl bg-primary-soft border border-primary-light px-4 py-3 space-y-1.5 font-mono">
-              <div className="flex items-center justify-between">
-                <span className="text-xs text-muted">Subtotal</span>
-                <span className="text-sm text-foreground">{formatarMoeda(subtotal)}</span>
-              </div>
-              {valorDesconto > 0 && (
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-muted">Desconto</span>
-                  <span className="text-sm text-danger">- {formatarMoeda(valorDesconto)}</span>
-                </div>
-              )}
-              <div className="flex items-center justify-between pt-1 border-t border-primary-light/80 mt-1">
-                <span className="text-sm font-semibold text-foreground">Total</span>
-                <span className="text-2xl font-bold text-primary">{formatarMoeda(total)}</span>
-              </div>
-            </div>
-
             {/* Forma de pagamento */}
             <div>
               <div className="flex items-center justify-between mb-2">
-                <p className="text-xs font-medium text-muted">Forma de pagamento</p>
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted">Forma de pagamento</p>
                 {!pagamentoMultiplo ? (
                   <button
                     type="button"
                     onClick={ativarPagamentoMultiplo}
                     disabled={carrinho.length === 0}
-                    className="text-[11px] font-medium text-primary hover:text-primary-dark disabled:opacity-50"
+                    className="text-xs font-semibold text-primary hover:text-primary-dark disabled:opacity-50"
                   >
                     + Dividir pagamento
                   </button>
@@ -582,7 +592,7 @@ export default function PdvPage() {
                   <button
                     type="button"
                     onClick={desativarPagamentoMultiplo}
-                    className="text-[11px] font-medium text-danger hover:text-danger/80"
+                    className="text-xs font-semibold text-danger hover:text-danger/80"
                   >
                     Usar pagamento único
                   </button>
@@ -595,12 +605,12 @@ export default function PdvPage() {
                     <button
                       key={forma}
                       onClick={() => setFormaPagamento(forma)}
-                      className={`flex items-center gap-2 text-xs py-2.5 px-3 rounded-lg border transition ${formaPagamento === forma
+                      className={`flex items-center gap-2 text-sm py-3 px-3 rounded-lg border-2 transition ${formaPagamento === forma
                           ? COR_FORMA_PAGAMENTO[forma].ativo
                           : "border-border text-muted hover:border-primary/40 hover:bg-background"
                         }`}
                     >
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${COR_FORMA_PAGAMENTO[forma].ponto}`} />
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${COR_FORMA_PAGAMENTO[forma].ponto}`} />
                       {LABEL_FORMA_PAGAMENTO[forma]}
                     </button>
                   ))}
@@ -612,20 +622,20 @@ export default function PdvPage() {
                       <select
                         value={pagamento.formaPagamento}
                         onChange={(e) => atualizarPagamento(index, "formaPagamento", e.target.value as FormaPdv)}
-                        className="flex-1 min-w-0 px-2 py-2 rounded-lg border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                        className="flex-1 min-w-0 px-2 py-2.5 rounded-lg border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
                       >
                         {FORMAS.map((forma) => (
                           <option key={forma} value={forma}>{LABEL_FORMA_PAGAMENTO[forma]}</option>
                         ))}
                       </select>
-                      <div className="relative w-28">
-                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] text-muted">R$</span>
+                      <div className="relative w-32">
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted">R$</span>
                         <input
                           inputMode="decimal"
                           value={pagamento.valor}
                           onChange={(e) => atualizarPagamento(index, "valor", e.target.value)}
                           placeholder="0,00"
-                          className="w-full pl-7 pr-2 py-2 rounded-lg border border-border bg-background text-xs focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          className="w-full pl-8 pr-2 py-2.5 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
                         />
                       </div>
                       <button
@@ -643,15 +653,15 @@ export default function PdvPage() {
                     <button
                       type="button"
                       onClick={adicionarFormaPagamento}
-                      className="w-full border border-dashed border-border rounded-lg py-2 text-xs text-muted hover:border-primary hover:text-primary"
+                      className="w-full border border-dashed border-border rounded-lg py-2.5 text-sm text-muted hover:border-primary hover:text-primary"
                     >
                       + Adicionar outra forma
                     </button>
                   )}
-                  <div className="flex items-center justify-between rounded-lg bg-background border border-border px-3 py-2 text-xs">
+                  <div className="flex items-center justify-between gap-2 rounded-lg bg-background border border-border px-3 py-2.5 text-sm">
                     <span className="text-muted">Pago</span>
-                    <span className="font-mono font-medium">{formatarMoeda(totalPagamentos)}</span>
-                    <span className={restantePagamento > 0.005 ? "text-danger" : "text-primary"}>
+                    <span className="font-mono font-semibold tabular-nums">{formatarMoeda(totalPagamentos)}</span>
+                    <span className={`font-semibold ${restantePagamento > 0.005 ? "text-danger" : "text-primary"}`}>
                       {restantePagamento > 0.005 ? `Falta ${formatarMoeda(restantePagamento)}` : "Valor completo"}
                     </span>
                   </div>
@@ -662,7 +672,7 @@ export default function PdvPage() {
             {/* Dinheiro */}
             {!pagamentoMultiplo && formaPagamento === "DINHEIRO" && (
               <div>
-                <p className="text-xs font-medium text-muted mb-2 flex items-center gap-1">
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-2 flex items-center gap-1.5">
                   <DollarSign className="w-3.5 h-3.5" />
                   Valor recebido
                 </p>
@@ -672,21 +682,51 @@ export default function PdvPage() {
                   onChange={(e) => handleValorRecebidoChange(e.target.value)}
                   placeholder="0,00"
                   disabled={carrinho.length === 0}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm disabled:opacity-50"
+                  className="w-full px-3 py-3 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-xl font-mono font-semibold disabled:opacity-50"
                 />
                 {valorRecebidoValido > 0 && (
-                  <div className="flex items-center justify-between mt-2 px-1">
-                    <span className="text-xs text-muted">Troco</span>
-                    <span className={`text-sm font-semibold ${pagamentoInsuficiente ? "text-danger" : "text-primary"}`}>
+                  <div
+                    className={`flex items-center justify-between gap-2 mt-2 rounded-lg px-3 py-2 ${
+                      pagamentoInsuficiente ? "bg-danger-light" : "bg-success-light"
+                    }`}
+                  >
+                    <span className="text-sm font-medium text-muted">Troco</span>
+                    <span
+                      className={`text-xl font-bold font-mono tabular-nums ${
+                        pagamentoInsuficiente ? "text-danger" : "text-primary"
+                      }`}
+                    >
                       {pagamentoInsuficiente ? "Valor insuficiente" : formatarMoeda(troco)}
                     </span>
                   </div>
                 )}
               </div>
             )}
+          </div>
+
+          <div className="shrink-0 sticky bottom-0 md:static bg-surface border-t border-border px-5 py-4 space-y-3 shadow-[0_-8px_14px_-10px_rgba(15,51,42,0.3)]">
+            {/* Totais */}
+            <div className="rounded-xl bg-primary-soft border border-primary-light px-4 py-3 space-y-1.5 font-mono">
+              <div className="flex items-center justify-between">
+                <span className="text-sm text-muted">Subtotal</span>
+                <span className="text-lg text-foreground tabular-nums">{formatarMoeda(subtotal)}</span>
+              </div>
+              {valorDesconto > 0 && (
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-muted">Desconto</span>
+                  <span className="text-lg text-danger tabular-nums">- {formatarMoeda(valorDesconto)}</span>
+                </div>
+              )}
+              <div className="flex items-end justify-between gap-3 pt-2 border-t border-primary-light/80 mt-1">
+                <span className="text-base font-bold text-foreground uppercase tracking-wide pb-1">Total</span>
+                <span className="text-3xl xl:text-4xl font-extrabold text-primary tabular-nums tracking-tight">
+                  {formatarMoeda(total)}
+                </span>
+              </div>
+            </div>
 
             {erro && (
-              <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erro}</div>
+              <div className="rounded-lg bg-danger-light text-danger text-sm font-medium px-3 py-2">{erro}</div>
             )}
 
             {/* Ações */}
@@ -694,20 +734,21 @@ export default function PdvPage() {
               <button
                 onClick={finalizarVenda}
                 disabled={carrinho.length === 0 || finalizando || pagamentoInsuficiente || !pagamentosCompletos}
-                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-accent-dark hover:brightness-105 text-white font-medium py-2.5 rounded-lg shadow-sm transition disabled:opacity-50 disabled:from-accent disabled:to-accent"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-accent-dark hover:brightness-105 active:scale-[0.99] text-white text-base font-bold py-3.5 rounded-xl shadow-md transition disabled:opacity-50 disabled:shadow-none disabled:from-accent disabled:to-accent"
               >
-                {finalizando && <Loader2 className="w-4 h-4 animate-spin" />}
+                {finalizando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
                 Finalizar venda
               </button>
 
               <button
                 onClick={cancelarVenda}
                 disabled={carrinho.length === 0 || finalizando}
-                className="w-full flex items-center justify-center gap-2 bg-danger/10 hover:bg-danger/20 text-danger font-medium py-2 rounded-lg transition disabled:opacity-50"
+                className="w-full flex items-center justify-center gap-2 bg-danger/10 hover:bg-danger/20 text-danger text-sm font-medium py-2.5 rounded-lg transition disabled:opacity-50"
               >
                 Cancelar venda
               </button>
             </div>
+          </div>
           </div>
         </div>
       </div>
