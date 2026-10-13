@@ -46,9 +46,13 @@ self.addEventListener("push", (event) => {
   // Mesma "tag" que o MonitorCaixa usa na notificação local: se o push do
   // backend e o aviso do app chegarem juntos, um substitui o outro (sem duplicar).
   const texto = `${dados.titulo} ${dados.corpo}`.toLowerCase();
+  // Notificação de venda nunca ganha a tag do caixa (mesmo que o texto cite "caixa").
+  const ehVenda = /venda/.test(texto);
   const tag =
     dados.tag ||
-    (/caixa/.test(texto) && /abert|abriu/.test(texto)
+    (ehVenda
+      ? undefined
+      : /caixa/.test(texto) && /abert|abriu/.test(texto)
       ? "caixa-aberto"
       : /caixa/.test(texto) && /fech/.test(texto)
         ? "caixa-fechado"
