@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
+import { BarraCarregamento } from "@/components/CarregamentoCatolico";
 import { NAV_ITEMS } from "@/lib/nav-items";
 import { Caixa, Consignacao, Produto, Venda } from "@/lib/types";
 import {
@@ -90,8 +91,14 @@ function horaCurta(iso: string): string {
   return formatarDataHora(iso).slice(-5);
 }
 
-function Esqueleto({ className = "" }: { className?: string }) {
-  return <div className={`animate-pulse rounded-md bg-border/40 ${className}`} />;
+/** Carregamento de um cartão: a mesma barra de terço do resto do sistema, com uma frase curta. */
+function CarregandoCartao({ mensagem }: { mensagem: string }) {
+  return (
+    <div role="status" aria-live="polite" className="flex flex-col gap-2 py-1">
+      <BarraCarregamento />
+      <p className="text-xs text-muted">{mensagem}</p>
+    </div>
+  );
 }
 
 function CartaoResumo({
@@ -256,10 +263,7 @@ export default function InicioPage() {
             icone={caixa ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
           >
             {carregando ? (
-              <>
-                <Esqueleto className="h-6 w-28" />
-                <Esqueleto className="h-3.5 w-36" />
-              </>
+              <CarregandoCartao mensagem="Consultando o caixa…" />
             ) : caixa === undefined ? (
               <p className="text-sm text-muted">Não foi possível consultar o caixa.</p>
             ) : caixa ? (
@@ -297,10 +301,7 @@ export default function InicioPage() {
 
           <CartaoResumo titulo="Vendido hoje" icone={<ShoppingBag className="w-3.5 h-3.5" />}>
             {carregando ? (
-              <>
-                <Esqueleto className="h-6 w-28" />
-                <Esqueleto className="h-3.5 w-20" />
-              </>
+              <CarregandoCartao mensagem="Somando as vendas de hoje…" />
             ) : vendas ? (
               <>
                 <p className="text-xl font-semibold text-foreground">{formatarMoeda(totalHoje)}</p>
@@ -317,10 +318,7 @@ export default function InicioPage() {
 
           <CartaoResumo titulo="Ticket médio" icone={<TrendingUp className="w-3.5 h-3.5" />}>
             {carregando ? (
-              <>
-                <Esqueleto className="h-6 w-24" />
-                <Esqueleto className="h-3.5 w-28" />
-              </>
+              <CarregandoCartao mensagem="Calculando o ticket médio…" />
             ) : vendas ? (
               <>
                 <p className="text-xl font-semibold text-foreground">
@@ -345,10 +343,7 @@ export default function InicioPage() {
             }
           >
             {carregando ? (
-              <>
-                <Esqueleto className="h-4 w-40" />
-                <Esqueleto className="h-4 w-32" />
-              </>
+              <CarregandoCartao mensagem="Verificando pendências…" />
             ) : !temAlerta ? (
               <p className="text-sm text-muted">Tudo em ordem por aqui.</p>
             ) : (
@@ -459,10 +454,8 @@ export default function InicioPage() {
               </Link>
             </div>
             {carregando ? (
-              <div className="p-4 flex flex-col gap-3">
-                <Esqueleto className="h-4 w-full" />
-                <Esqueleto className="h-4 w-5/6" />
-                <Esqueleto className="h-4 w-4/6" />
+              <div className="p-4">
+                <CarregandoCartao mensagem="Buscando as vendas de hoje…" />
               </div>
             ) : !ultimasVendas ? (
               <p className="p-4 text-sm text-muted">Não foi possível consultar as vendas.</p>

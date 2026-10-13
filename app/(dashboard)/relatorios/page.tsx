@@ -7,6 +7,7 @@ import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { useAuth } from "@/lib/auth-context";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
 import {
   formatarMoeda,
@@ -609,7 +610,9 @@ export default function RelatoriosPage() {
           )}
         </div>
 
-        {jaGerou && (
+        {carregando && <CarregandoSecao mensagem="Gerando o relatório…" className="py-12" />}
+
+        {jaGerou && !carregando && (
           <>
             {/* filtros locais sobre o período já carregado */}
             <div className="flex flex-wrap items-center gap-4 bg-surface border border-border rounded-xl p-4">
