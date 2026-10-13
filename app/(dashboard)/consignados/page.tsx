@@ -286,6 +286,49 @@ const LIMITE_RESULTADOS = 40;
 // preferência de ordenação da lista de itens (lembrada neste navegador)
 const CHAVE_ORDEM_AZ = "pdv_consignacao_ordem_az";
 
+/** "Ordem A–Z" da lista de itens: vale para o formulário e para o detalhe da consignação. */
+function useOrdemAZ(): readonly [boolean, () => void] {
+  const [ordemAZ, setOrdemAZ] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(CHAVE_ORDEM_AZ) === "1";
+    } catch {
+      return false;
+    }
+  });
+  const alternar = useCallback(() => {
+    const novo = !ordemAZ;
+    setOrdemAZ(novo);
+    try {
+      localStorage.setItem(CHAVE_ORDEM_AZ, novo ? "1" : "0");
+    } catch {
+      // sem localStorage: vale só até fechar a tela
+    }
+  }, [ordemAZ]);
+  return [ordemAZ, alternar] as const;
+}
+
+/** Cópia da lista em ordem alfabética (sem acento/maiúscula; números pelo valor: "2" antes de "10"). */
+function ordenarPorNome<T>(lista: T[], nome: (item: T) => string): T[] {
+  return [...lista].sort((a, b) => nome(a).localeCompare(nome(b), "pt-BR", { sensitivity: "base", numeric: true }));
+}
+
+/** Botão liga/desliga da ordem alfabética. */
+function BotaoOrdemAZ({ ativo, onClick }: { ativo: boolean; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={ativo}
+      title={ativo ? "Voltar à ordem em que os produtos foram adicionados" : "Mostrar os itens em ordem alfabética"}
+      className={`text-xs font-medium px-2.5 py-1 rounded-md border transition ${
+        ativo ? "bg-primary text-white border-primary" : "border-primary/40 text-primary hover:bg-primary/10"
+      }`}
+    >
+      Ordem A–Z
+    </button>
+  );
+}
+
 /** Formulário de consignação: cria uma nova ou, quando recebe `consignacao`, edita uma em aberto. */
 function ModalConsignacaoForm({
   consignacao,
@@ -315,13 +358,7 @@ function ModalConsignacaoForm({
   const [erro, setErro] = useState<string | null>(null);
   // "Ordem A–Z": só muda como a lista de itens é MOSTRADA (produto novo entra no lugar certo
   // em vez de ir para o fim); a quantidade, o preço e o que é salvo não mudam.
-  const [ordemAZ, setOrdemAZ] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem(CHAVE_ORDEM_AZ) === "1";
-    } catch {
-      return false;
-    }
-  });
+  const [ordemAZ, alternarOrdemAZ] = useOrdemAZ();
   const enviandoRef = useRef(false);
   const buscaRef = useRef<HTMLInputElement>(null);
   // lista da direita: ao entrar um produto NOVO ela rola sozinha até ele e o destaca por uns instantes
@@ -395,25 +432,7 @@ function ModalConsignacaoForm({
         })
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
 
-  const itensExibidos = useMemo(
-    () =>
-      ordemAZ
-        ? [...itens].sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base", numeric: true }))
-        : itens,
-    [itens, ordemAZ]
-  );
-
-  function alternarOrdemAZ() {
-    setOrdemAZ((atual) => {
-      const novo = !atual;
-      try {
-        localStorage.setItem(CHAVE_ORDEM_AZ, novo ? "1" : "0");
-      } catch {
-        // sem localStorage: vale só até fechar o formulário
-      }
-      return novo;
-    });
-  }
+  const itensExibidos = useMemo(() => (ordemAZ ? ordenarPorNome(itens, (i) => i.nome) : itens), [itens, ordemAZ]);
 
   const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
 
@@ -738,19 +757,7 @@ function ModalConsignacaoForm({
               </div>
               {itens.length > 0 && (
                 <div className="flex items-center gap-3 shrink-0">
-                  <button
-                    type="button"
-                    onClick={alternarOrdemAZ}
-                    aria-pressed={ordemAZ}
-                    title={ordemAZ ? "Voltar à ordem em que os produtos foram adicionados" : "Mostrar os itens em ordem alfabética"}
-                    className={`text-xs font-medium px-2.5 py-1 rounded-md border transition ${
-                      ordemAZ
-                        ? "bg-primary text-white border-primary"
-                        : "border-primary/40 text-primary hover:bg-primary/10"
-                    }`}
-                  >
-                    Ordem A–Z
-                  </button>
+                  <BotaoOrdemAZ ativo={ordemAZ} onClick={alternarOrdemAZ} />
                   <button type="button" onClick={limparTudo} className="text-xs text-danger hover:underline">
                     Limpar tudo
                   </button>
@@ -886,6 +893,12 @@ function ModalDetalhe({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
+  // só muda a ordem em que as linhas aparecem: as quantidades vendidas são guardadas por id do item
+  const [ordemAZ, alternarOrdemAZ] = useOrdemAZ();
+  const itensExibidos = useMemo(
+    () => (ordemAZ ? ordenarPorNome(consignacao.itens, (i) => i.produtoNome) : consignacao.itens),
+    [consignacao.itens, ordemAZ]
+  );
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
     aberta ? Math.min(Math.max(vendidas[id] ?? 0, 0), enviada) : atual;
@@ -993,6 +1006,9 @@ function ModalDetalhe({
               feche a consignação. Só a quantidade vendida dá baixa no estoque; o restante volta para a loja.
             </p>
           )}
+          <div className="flex justify-end mb-2">
+            <BotaoOrdemAZ ativo={ordemAZ} onClick={alternarOrdemAZ} />
+          </div>
           <table className="w-full text-xs">
             <thead>
               <tr className="text-left text-muted border-b border-border">
@@ -1006,7 +1022,7 @@ function ModalDetalhe({
               </tr>
             </thead>
             <tbody>
-              {consignacao.itens.map((i) => {
+              {itensExibidos.map((i) => {
                 const q = vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida);
                 return (
                   <tr key={i.id} className="border-b border-border/60">
