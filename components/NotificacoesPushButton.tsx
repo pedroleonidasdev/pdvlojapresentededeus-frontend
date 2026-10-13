@@ -150,13 +150,19 @@ export default function NotificacoesPushButton() {
       )}
       {resultadoTeste && (
         <div className="pl-[56px] pr-2.5 mt-1 text-[11px] leading-relaxed text-white/60">
-          <p>
-            {resultadoTeste.enviadas} enviada(s), {resultadoTeste.removidas} expirada(s),{" "}
-            {resultadoTeste.falhas} falha(s).
-          </p>
+          {resultadoTeste.enviadas > 0 && (
+            <p className="text-white/80">
+              Teste enviado para {resultadoTeste.enviadas} aparelho(s) de ADMIN:
+            </p>
+          )}
           {resultadoTeste.detalhes.map((detalhe, i) => (
-            <p key={i}>{detalhe}</p>
+            <p key={i}>• {detalhe}</p>
           ))}
+          {(resultadoTeste.removidas > 0 || resultadoTeste.falhas > 0) && (
+            <p className="mt-1">
+              {resultadoTeste.removidas} expirada(s), {resultadoTeste.falhas} falha(s).
+            </p>
+          )}
         </div>
       )}
       {erro && <p className="px-2.5 mt-1 text-[11px] text-red-300">{erro}</p>}

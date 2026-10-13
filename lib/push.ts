@@ -102,11 +102,41 @@ async function atualizarConfigServiceWorker(): Promise<void> {
   }
 }
 
+/**
+ * Descrição curta deste aparelho (ex.: "Celular Android (Chrome)", "iPhone (Safari)",
+ * "Computador Windows (Edge)"). O backend guarda junto da inscrição só pra mostrar,
+ * no botão "Enviar notificação de teste", pra qual aparelho cada aviso foi enviado.
+ */
+export function descreverDispositivo(): string {
+  if (typeof navigator === "undefined") return "";
+  const ua = navigator.userAgent;
+
+  let aparelho: string;
+  if (/iphone/i.test(ua)) aparelho = "iPhone";
+  else if (/ipad/i.test(ua) || (/macintosh/i.test(ua) && navigator.maxTouchPoints > 1)) aparelho = "iPad";
+  else if (/android/i.test(ua)) aparelho = /mobile/i.test(ua) ? "Celular Android" : "Tablet Android";
+  else if (/windows/i.test(ua)) aparelho = "Computador Windows";
+  else if (/macintosh/i.test(ua)) aparelho = "Mac";
+  else if (/cros/i.test(ua)) aparelho = "Chromebook";
+  else if (/linux/i.test(ua)) aparelho = "Computador Linux";
+  else aparelho = "Aparelho";
+
+  let navegador = "";
+  if (/edg\//i.test(ua)) navegador = "Edge";
+  else if (/firefox|fxios/i.test(ua)) navegador = "Firefox";
+  else if (/opr\/|opera/i.test(ua)) navegador = "Opera";
+  else if (/chrome|crios/i.test(ua)) navegador = "Chrome";
+  else if (/safari/i.test(ua)) navegador = "Safari";
+
+  return navegador ? `${aparelho} (${navegador})` : aparelho;
+}
+
 async function enviarInscricaoAoBackend(inscricao: PushSubscription): Promise<void> {
   const json = inscricao.toJSON();
   await api.post("/notificacoes/subscribe", {
     endpoint: json.endpoint,
     keys: { p256dh: json.keys?.p256dh, auth: json.keys?.auth },
+    dispositivo: descreverDispositivo(),
   });
 }
 
