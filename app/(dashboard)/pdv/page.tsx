@@ -713,12 +713,12 @@ export default function PdvPage() {
       </div>
 
       {caixaFechado && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-black/40 backdrop-blur-[2px] p-4">
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="titulo-abrir-caixa"
-            className="w-full max-w-sm bg-surface border border-border rounded-2xl shadow-xl overflow-hidden"
+            className="w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden"
           >
             <div className="bg-primary text-white px-6 py-5 text-center">
               <Lock className="w-8 h-8 mx-auto mb-2" />
