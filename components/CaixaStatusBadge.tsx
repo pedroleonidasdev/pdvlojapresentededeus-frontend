@@ -65,7 +65,10 @@ export default function CaixaStatusBadge({
     !!caixa && !!usuario && (caixa.usuarioAberturaLogin
       ? normalizar(usuario.login) === normalizar(caixa.usuarioAberturaLogin)
       : normalizar(usuario.nome) === normalizar(caixa.usuarioAberturaNome));
-  const operandoOutraPessoa = aberto && !!caixa && !!usuario && !mesmaPessoa;
+  // o usuário técnico "admin" não é uma pessoa operando o caixa: nunca entra em "Operando agora"
+  const ehUsuarioAdmin = !!usuario && normalizar(usuario.login) === "admin";
+  const operandoOutraPessoa =
+    aberto && !!caixa && !!usuario && !ehUsuarioAdmin && !mesmaPessoa;
 
   const dot = (
     <span className="relative flex h-2.5 w-2.5 shrink-0">
