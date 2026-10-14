@@ -58,17 +58,19 @@ export default function CaixaStatusBadge({
   const horasAberto = aberto && caixa ? Math.floor(horasDesde(caixa.dataAbertura)) : 0;
   const caixaEsquecido = horasAberto >= LIMITE_HORAS_ESQUECIDO;
 
-  // a pessoa logada agora não é quem abriu o caixa (ex.: troca de turno).
-  // Compara pelo login (único); se o backend não enviar, cai para o nome.
+  // Quem está operando agora = quem está online (vem do backend, então aparece para
+  // qualquer pessoa que olhe a sidebar). O usuário técnico "admin" nunca entra na lista.
+  // O usuário logado neste aparelho é somado, para não depender do próximo ciclo de presença.
   const normalizar = (n: string) => n.trim().toLowerCase();
-  const mesmaPessoa =
-    !!caixa && !!usuario && (caixa.usuarioAberturaLogin
-      ? normalizar(usuario.login) === normalizar(caixa.usuarioAberturaLogin)
-      : normalizar(usuario.nome) === normalizar(caixa.usuarioAberturaNome));
-  // o usuário técnico "admin" não é uma pessoa operando o caixa: nunca entra em "Operando agora"
-  const ehUsuarioAdmin = !!usuario && normalizar(usuario.login) === "admin";
-  const operandoOutraPessoa =
-    aberto && !!caixa && !!usuario && !ehUsuarioAdmin && !mesmaPessoa;
+  const operadores: { nome: string; login: string }[] = [];
+  if (aberto && caixa) {
+    for (const o of [...(caixa.operadoresOnline ?? []), ...(usuario ? [usuario] : [])]) {
+      if (normalizar(o.login) === "admin") continue;
+      if (operadores.some((x) => normalizar(x.login) === normalizar(o.login))) continue;
+      operadores.push({ nome: o.nome, login: o.login });
+    }
+    operadores.sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
+  }
 
   // "14/10/2026 às 08:13" (data completa, sem "hoje", para ficar explícito)
   const dataExplicita = (iso: string) => formatarDataHora(iso).replace(", ", " às ");
@@ -116,16 +118,20 @@ export default function CaixaStatusBadge({
               </div>
             )}
 
-            {/* quem está operando agora, quando é outra pessoa (troca de turno) */}
-            {operandoOutraPessoa && usuario && (
+            {/* quem está operando agora (online) */}
+            {operadores.length > 0 && (
               <div
-                className="flex items-center gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 ring-1 ring-accent/40"
-                title={`${usuario.nome} está logado(a) neste caixa, aberto por ${caixa.usuarioAberturaNome}`}
+                className="flex items-start gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 ring-1 ring-accent/40"
+                title={`Online agora: ${operadores.map((o) => o.nome).join(", ")}`}
               >
-                <UserRound className="h-4 w-4 shrink-0 text-accent-light" />
+                <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />
                 <div className="min-w-0">
                   <p className="text-[11px] font-medium uppercase tracking-wide text-accent-light">Operando agora</p>
-                  <p className="truncate text-sm font-bold text-white">{usuario.nome}</p>
+                  {operadores.map((o) => (
+                    <p key={o.login} className="truncate text-sm font-bold text-white">
+                      {o.nome}
+                    </p>
+                  ))}
                 </div>
               </div>
             )}

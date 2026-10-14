@@ -131,6 +131,8 @@ export interface Caixa {
   valorInicialOriginal: number | null;
   usuarioEdicaoAberturaNome: string | null;
   dataEdicaoAbertura: string | null;
+  /** Quem está online agora (ausente se o backend for antigo). */
+  operadoresOnline?: { nome: string; login: string }[];
 }
 
 export type TipoDespesa = "DESPESA" | "SANGRIA" | "SUPRIMENTO";
