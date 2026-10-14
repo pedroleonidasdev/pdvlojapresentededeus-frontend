@@ -35,10 +35,28 @@ export default function UsuariosPage() {
 
   const totalOnline = usuarios.filter((u) => u.online).length;
 
-  async function excluir(id: number) {
-    if (!confirm("Deseja realmente desativar este usuário?")) return;
-    await api.delete(`/usuarios/${id}`);
-    carregar();
+  async function excluir(u: UsuarioAdmin) {
+    if (
+      !confirm(
+        `Excluir definitivamente o usuário ${u.nome} (${u.login})?\n\nEssa ação não pode ser desfeita. ` +
+          `Usuários que já têm vendas, caixas ou outros registros não podem ser excluídos; nesse caso, desative-os em Editar.`
+      )
+    )
+      return;
+
+    setMensagem(null);
+    try {
+      await api.delete(`/usuarios/${u.id}`);
+      setMensagem({ tipo: "ok", texto: `Usuário ${u.nome} excluído.` });
+      carregar(true);
+    } catch (e) {
+      setMensagem({
+        tipo: "erro",
+        texto:
+          (e as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+          "Não foi possível excluir o usuário.",
+      });
+    }
   }
 
   // Se a conta derrubada for a de quem clicou, o backend devolve um token novo
@@ -158,7 +176,8 @@ export default function UsuariosPage() {
                           <Pencil className="w-4 h-4" />
                         </button>
                         <button
-                          onClick={() => excluir(u.id)}
+                          onClick={() => excluir(u)}
+                          title="Excluir usuário"
                           className="p-1.5 rounded-md text-muted hover:bg-background hover:text-danger transition"
                         >
                           <Trash2 className="w-4 h-4" />
