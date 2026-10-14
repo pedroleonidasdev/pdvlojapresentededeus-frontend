@@ -216,7 +216,7 @@ function StatusConexao({ usuario }: { usuario: UsuarioAdmin }) {
     <span className="inline-flex items-center gap-2 text-xs text-muted">
       <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
       Offline
-      {usuario.ultimoAcessoHaSeg !== null && (
+      {typeof usuario.ultimoAcessoHaSeg === "number" && Number.isFinite(usuario.ultimoAcessoHaSeg) && (
         <span className="text-[11px]">· visto {tempoDesde(usuario.ultimoAcessoHaSeg)}</span>
       )}
     </span>
