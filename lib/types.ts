@@ -110,6 +110,8 @@ export interface UsuarioAdmin {
   nome: string;
   perfil: Perfil;
   ativo: boolean;
+  online: boolean;
+  ultimoAcessoHaSeg: number | null;
 }
 
 export interface Caixa {

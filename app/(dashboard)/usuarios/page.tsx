@@ -14,16 +14,26 @@ export default function UsuariosPage() {
   const [usuarioEmEdicao, setUsuarioEmEdicao] = useState<UsuarioAdmin | null>(null);
   const [mensagem, setMensagem] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
-  async function carregar() {
-    setCarregando(true);
-    const { data } = await api.get<UsuarioAdmin[]>("/usuarios");
-    setUsuarios(data);
-    setCarregando(false);
+  async function carregar(silencioso = false) {
+    if (!silencioso) setCarregando(true);
+    try {
+      const { data } = await api.get<UsuarioAdmin[]>("/usuarios");
+      setUsuarios(data);
+    } catch {
+      // atualização automática: mantém a lista atual se falhar
+    } finally {
+      setCarregando(false);
+    }
   }
 
   useEffect(() => {
     carregar();
+    // atualiza o status online/offline sem piscar a tela
+    const intervalo = setInterval(() => carregar(true), 15_000);
+    return () => clearInterval(intervalo);
   }, []);
+
+  const totalOnline = usuarios.filter((u) => u.online).length;
 
   async function excluir(id: number) {
     if (!confirm("Deseja realmente desativar este usuário?")) return;
@@ -45,6 +55,7 @@ export default function UsuariosPage() {
         u ? `/usuarios/${u.id}/encerrar-sessoes` : "/usuarios/encerrar-sessoes"
       );
       if (data.novoToken) localStorage.setItem("pdv_token", data.novoToken);
+      carregar(true);
       setMensagem({
         tipo: "ok",
         texto: u ? `Sessões de ${u.nome} encerradas.` : "Sessões de todos os usuários encerradas.",
@@ -58,7 +69,7 @@ export default function UsuariosPage() {
     <div>
       <PageHeader
         title="Usuários"
-        subtitle="Gerencie quem tem acesso ao sistema"
+        subtitle={`Gerencie quem tem acesso ao sistema · ${totalOnline} online agora`}
         action={
           <div className="flex items-center gap-2">
             <button
@@ -95,12 +106,13 @@ export default function UsuariosPage() {
         ) : (
           <div className="bg-surface border border-border rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[520px]">
+            <table className="w-full text-sm min-w-[640px]">
               <thead className="bg-background border-b border-border">
                 <tr className="text-left text-muted">
                   <th className="px-5 py-3 font-medium">Nome</th>
                   <th className="px-5 py-3 font-medium">Login</th>
                   <th className="px-5 py-3 font-medium">Perfil</th>
+                  <th className="px-5 py-3 font-medium">Conexão</th>
                   <th className="px-5 py-3 font-medium">Status</th>
                   <th className="px-5 py-3 font-medium text-right">Ações</th>
                 </tr>
@@ -114,6 +126,9 @@ export default function UsuariosPage() {
                       <span className="text-xs font-mono uppercase tracking-wide text-muted">
                         {u.perfil === "ADMIN" ? "Administrador" : "Operador de caixa"}
                       </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      <StatusConexao usuario={u} />
                     </td>
                     <td className="px-5 py-3">
                       <span
@@ -173,6 +188,38 @@ export default function UsuariosPage() {
         />
       )}
     </div>
+  );
+}
+
+function tempoDesde(seg: number) {
+  if (seg < 60) return "agora há pouco";
+  const min = Math.floor(seg / 60);
+  if (min < 60) return `há ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `há ${h} h`;
+  return `há ${Math.floor(h / 24)} d`;
+}
+
+function StatusConexao({ usuario }: { usuario: UsuarioAdmin }) {
+  if (usuario.online) {
+    return (
+      <span className="inline-flex items-center gap-2 text-xs font-medium text-primary-dark">
+        <span className="relative flex w-2.5 h-2.5">
+          <span className="absolute inline-flex w-full h-full rounded-full bg-green-500 opacity-60 animate-ping" />
+          <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-green-500" />
+        </span>
+        Online
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex items-center gap-2 text-xs text-muted">
+      <span className="w-2.5 h-2.5 rounded-full bg-gray-300" />
+      Offline
+      {usuario.ultimoAcessoHaSeg !== null && (
+        <span className="text-[11px]">· visto {tempoDesde(usuario.ultimoAcessoHaSeg)}</span>
+      )}
+    </span>
   );
 }
 

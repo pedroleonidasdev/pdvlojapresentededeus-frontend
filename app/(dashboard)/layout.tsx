@@ -7,6 +7,7 @@ import { encontrarNavItemPorPath } from "@/lib/nav-items";
 import Sidebar from "@/components/Sidebar";
 import AtualizacaoSistema from "@/components/AtualizacaoSistema";
 import MonitorCaixa from "@/components/MonitorCaixa";
+import api from "@/lib/api";
 import { Menu } from "lucide-react";
 import { TelaCarregamento } from "@/components/CarregamentoCatolico";
 
@@ -27,6 +28,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       router.replace("/inicio");
     }
   }, [carregando, usuario, acessoNegado, router]);
+
+  // batimento: mantém o usuário "online" mesmo parado numa tela sem requisições
+  const logado = !!usuario;
+  useEffect(() => {
+    if (!logado) return;
+    const ping = () => api.post("/presenca/ping").catch(() => {});
+    ping();
+    const intervalo = setInterval(ping, 60_000);
+    return () => clearInterval(intervalo);
+  }, [logado]);
 
   if (carregando || !usuario || acessoNegado) {
     return <TelaCarregamento mensagem={carregando ? "Abrindo o sistema…" : "Verificando acesso…"} />;

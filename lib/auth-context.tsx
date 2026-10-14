@@ -53,6 +53,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   function logout() {
+    // avisa o servidor para marcar como offline na hora (best-effort)
+    api.post("/presenca/sair").catch(() => {});
     localStorage.removeItem("pdv_token");
     localStorage.removeItem("pdv_user");
     setUsuario(null);
