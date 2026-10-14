@@ -8,7 +8,7 @@ import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { Venda, FormaPagamento, Categoria, Produto } from "@/lib/types";
-import { formatarMoeda, formatarDataHora, limiteDiaBrasiliaParaUtc, dataBrasiliaISO, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { formatarMoeda, formatarDataHora, limiteDiaBrasiliaParaUtc, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import { imprimirCupom } from "@/lib/impressora";
 import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
@@ -19,11 +19,9 @@ import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO", "MULTIPLO"];
 
-// "hoje" no fuso de Brasília — toISOString() sozinho usa UTC e, depois das 21h
-// em Brasília, já devolveria o dia seguinte
 function dataDeHoje(offsetDias = 0): string {
   const data = new Date(Date.now() + offsetDias * 24 * 60 * 60 * 1000);
-  return dataBrasiliaISO(data.toISOString());
+  return data.toISOString().slice(0, 10);
 }
 
 /**
@@ -62,7 +60,6 @@ function VendasPageConteudo() {
   const [vendaDataHoraEmEdicao, setVendaDataHoraEmEdicao] = useState<Venda | null>(null);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
   const [excluindoTodas, setExcluindoTodas] = useState(false);
-  const [erroLista, setErroLista] = useState<string | null>(null);
 
   // reimpressão do cupom de uma venda já finalizada — guarda qual venda está
   // imprimindo no momento (id) e o erro específico dela, se der problema
@@ -132,37 +129,22 @@ function VendasPageConteudo() {
     });
   }, []);
 
-  async function carregar(inicio: string = dataInicio, fim: string = dataFim) {
-    if (inicio > fim) {
-      setErroLista("A data de início é depois da data de fim. Ajuste o período e busque de novo.");
-      return;
-    }
-    setErroLista(null);
+  async function carregar() {
     setCarregando(true);
     try {
       // o backend espera LocalDateTime "cru" (sem milissegundos nem "Z"), no
       // mesmo formato usado em /relatorios — ver limiteDiaBrasiliaParaUtc
       const { data } = await api.get<Venda[]>("/vendas", {
         params: {
-          inicio: limiteDiaBrasiliaParaUtc(inicio, false),
-          fim: limiteDiaBrasiliaParaUtc(fim, true),
+          inicio: limiteDiaBrasiliaParaUtc(dataInicio, false),
+          fim: limiteDiaBrasiliaParaUtc(dataFim, true),
         },
       });
       setVendas(data);
-    } catch {
-      setVendas([]);
-      setErroLista("Não foi possível carregar as vendas. Verifique a conexão e tente buscar de novo.");
     } finally {
       setCarregando(false);
       setBuscou(true);
     }
-  }
-
-  // atalhos de período: preenche as datas e já busca
-  function aplicarPeriodo(inicio: string, fim: string) {
-    setDataInicio(inicio);
-    setDataFim(fim);
-    carregar(inicio, fim);
   }
 
   // Sem busca automática ao abrir a tela: o usuário escolhe o período (ou
@@ -179,31 +161,25 @@ function VendasPageConteudo() {
   async function excluirVenda(id: number) {
     if (!confirm(`Excluir a venda #${id}? O estoque dos produtos será devolvido.`)) return;
     setExcluindoId(id);
-    setErroLista(null);
     try {
       await api.delete(`/vendas/${id}`);
       await carregar();
-    } catch {
-      setErroLista(`Não foi possível excluir a venda #${id}. Nada foi alterado.`);
     } finally {
       setExcluindoId(null);
     }
   }
 
-  // ATENÇÃO: isto apaga TODAS as vendas do sistema (qualquer período), não só as
-  // que aparecem na tela — por isso exige digitar EXCLUIR para confirmar.
   async function excluirTodasAsVendas() {
-    const resposta = window.prompt(
-      "ATENÇÃO: isto apaga TODAS as vendas do sistema (de qualquer data, não só as que aparecem na tela) e devolve o estoque dos produtos vendidos. Essa ação não pode ser desfeita.\n\nPara confirmar, digite EXCLUIR:"
-    );
-    if (resposta === null || resposta.trim().toUpperCase() !== "EXCLUIR") return;
+    if (
+      !confirm(
+        "Tem certeza que deseja excluir TODAS as vendas do sistema? Essa ação não pode ser desfeita e o estoque de todos os produtos vendidos será devolvido."
+      )
+    )
+      return;
     setExcluindoTodas(true);
-    setErroLista(null);
     try {
       await api.delete("/vendas");
       await carregar();
-    } catch {
-      setErroLista("Não foi possível excluir as vendas. Nada foi alterado.");
     } finally {
       setExcluindoTodas(false);
     }
@@ -219,10 +195,7 @@ function VendasPageConteudo() {
           ? v.pagamentos.map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]}: ${formatarMoeda(p.valor)}`).join(" + ")
           : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
       };
-      if (!ocultarValores) {
-        linha.Desconto = v.valorDesconto ?? 0;
-        linha.Total = v.total;
-      }
+      if (!ocultarValores) linha.Total = v.total;
       linha.Itens = v.itens
         .map((i) => {
           const cat = nomeCategoriaDoProduto(i.produtoId);
@@ -232,29 +205,10 @@ function VendasPageConteudo() {
       return linha;
     });
 
-    if (!ocultarValores && linhas.length > 0) {
-      linhas.push({
-        Venda: "TOTAL",
-        "Data/Hora": "",
-        Vendedor: "",
-        "Forma de pagamento": `${resumo.quantidade} venda(s)`,
-        Desconto: resumo.desconto,
-        Total: resumo.total,
-        Itens: "",
-      });
-    }
-
     const planilha = XLSX.utils.json_to_sheet(linhas);
-    const larguras: Record<string, number> = {
-      Venda: 8,
-      "Data/Hora": 18,
-      Vendedor: 16,
-      "Forma de pagamento": 22,
-      Desconto: 12,
-      Total: 12,
-      Itens: 50,
-    };
-    planilha["!cols"] = Object.keys(linhas[0] ?? {}).map((chave) => ({ wch: larguras[chave] ?? 14 }));
+    planilha["!cols"] = ocultarValores
+      ? [{ wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 50 }]
+      : [{ wch: 8 }, { wch: 18 }, { wch: 16 }, { wch: 22 }, { wch: 12 }, { wch: 50 }];
 
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Vendas");
@@ -271,7 +225,7 @@ function VendasPageConteudo() {
 
     const cabecalho = ocultarValores
       ? ["Venda", "Data/Hora", "Vendedor", "Forma", "Itens"]
-      : ["Venda", "Data/Hora", "Vendedor", "Forma", "Desconto", "Total", "Itens"];
+      : ["Venda", "Data/Hora", "Vendedor", "Forma", "Total", "Itens"];
 
     autoTable(doc, {
       startY: 28,
@@ -286,10 +240,7 @@ function VendasPageConteudo() {
             ? v.pagamentos.map((p) => LABEL_FORMA_PAGAMENTO[p.formaPagamento]).join(" + ")
             : LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento,
         ];
-        if (!ocultarValores) {
-          linha.push(formatarMoeda(v.valorDesconto ?? 0));
-          linha.push(formatarMoeda(v.total));
-        }
+        if (!ocultarValores) linha.push(formatarMoeda(v.total));
         linha.push(
           v.itens
             .map((i) => {
@@ -300,11 +251,6 @@ function VendasPageConteudo() {
         );
         return linha;
       }),
-      foot: ocultarValores
-        ? undefined
-        : [["", "", "", `${resumo.quantidade} venda(s)`, formatarMoeda(resumo.desconto), formatarMoeda(resumo.total), ""]],
-      showFoot: "lastPage",
-      footStyles: { fillColor: [235, 245, 240], textColor: 30, fontStyle: "bold" },
       styles: { fontSize: 8 },
       headStyles: { fillColor: [34, 120, 87] },
       columnStyles: { [cabecalho.length - 1]: { cellWidth: 60 } },
@@ -333,64 +279,12 @@ function VendasPageConteudo() {
     });
   }, [vendas, busca, formasSelecionadas, categoriasSelecionadas, categoriaPorProduto]);
 
-  // totais do que está na tela (respeita busca e filtros). Por forma de
-  // pagamento usa o detalhe dos pagamentos — assim vendas "Múltiplos" entram
-  // em cada forma pelo valor realmente pago nela.
-  const resumo = useMemo(() => {
-    let total = 0;
-    let desconto = 0;
-    const porForma = new Map<string, number>();
-    for (const venda of vendasFiltradas) {
-      total += venda.total;
-      desconto += venda.valorDesconto ?? 0;
-      if (venda.pagamentos?.length) {
-        for (const p of venda.pagamentos) {
-          porForma.set(p.formaPagamento, (porForma.get(p.formaPagamento) ?? 0) + p.valor);
-        }
-      } else {
-        porForma.set(venda.formaPagamento, (porForma.get(venda.formaPagamento) ?? 0) + venda.total);
-      }
-    }
-    const quantidade = vendasFiltradas.length;
-    return {
-      quantidade,
-      total,
-      desconto,
-      ticketMedio: quantidade > 0 ? total / quantidade : 0,
-      porForma: Array.from(porForma.entries()).sort((a, b) => b[1] - a[1]),
-    };
-  }, [vendasFiltradas]);
-
   return (
     <div>
       <PageHeader title="Relatórios de Vendas" subtitle="Consulte, filtre e corrija vendas registradas" />
 
       <div className="p-4 md:p-8 space-y-4">
         <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="text-xs font-medium text-muted">Período rápido:</span>
-            {[
-              { rotulo: "Hoje", inicio: dataDeHoje(), fim: dataDeHoje() },
-              { rotulo: "Ontem", inicio: dataDeHoje(-1), fim: dataDeHoje(-1) },
-              { rotulo: "Últimos 7 dias", inicio: dataDeHoje(-6), fim: dataDeHoje() },
-              { rotulo: "Este mês", inicio: `${dataDeHoje().slice(0, 8)}01`, fim: dataDeHoje() },
-            ].map((atalho) => (
-              <button
-                key={atalho.rotulo}
-                type="button"
-                onClick={() => aplicarPeriodo(atalho.inicio, atalho.fim)}
-                disabled={carregando}
-                className={`text-xs font-medium px-3 py-1.5 rounded-full border transition disabled:opacity-50 ${
-                  dataInicio === atalho.inicio && dataFim === atalho.fim
-                    ? "bg-primary-light border-primary/30 text-primary-dark"
-                    : "bg-surface border-border text-foreground hover:bg-background"
-                }`}
-              >
-                {atalho.rotulo}
-              </button>
-            ))}
-          </div>
-
           <div className="flex flex-wrap items-end gap-3">
             <div>
               <label className="block text-xs font-medium text-muted mb-1.5">Início</label>
@@ -423,7 +317,7 @@ function VendasPageConteudo() {
               onChange={setCategoriasSelecionadas}
             />
             <button
-              onClick={() => carregar()}
+              onClick={carregar}
               disabled={carregando}
               className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2.5 rounded-lg transition disabled:opacity-50"
             >
@@ -470,7 +364,7 @@ function VendasPageConteudo() {
                     ) : (
                       <Trash2 className="w-4 h-4" />
                     )}
-                    Apagar todas do sistema
+                    Excluir todas
                   </button>
                 )}
               </>
@@ -489,37 +383,6 @@ function VendasPageConteudo() {
           </div>
         </div>
 
-        {erroLista && (
-          <div className="rounded-lg bg-danger-light text-danger text-sm px-4 py-3">{erroLista}</div>
-        )}
-
-        {buscou && !carregando && !erroLista && vendasFiltradas.length > 0 && (
-          <div className="space-y-3">
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              <CardResumo rotulo="Vendas" texto={String(resumo.quantidade)} />
-              <CardResumo rotulo="Total vendido" texto={valor(resumo.total)} destaque />
-              <CardResumo rotulo="Ticket médio" texto={valor(resumo.ticketMedio)} />
-              <CardResumo rotulo="Descontos dados" texto={valor(resumo.desconto)} />
-            </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-medium text-muted">Por forma de pagamento:</span>
-              {resumo.porForma.map(([forma, soma]) => (
-                <span
-                  key={forma}
-                  className="px-2.5 py-1 rounded-full bg-primary-light text-primary-dark font-medium"
-                >
-                  {LABEL_FORMA_PAGAMENTO[forma] ?? forma}: {valor(soma)}
-                </span>
-              ))}
-            </div>
-            {categoriasSelecionadas !== null && (
-              <p className="text-[11px] text-muted">
-                Com filtro de categoria, os totais consideram o valor inteiro das vendas que têm algum item dessa categoria.
-              </p>
-            )}
-          </div>
-        )}
-
         {carregando ? (
           <CarregandoSecao />
         ) : !buscou ? (
@@ -527,7 +390,7 @@ function VendasPageConteudo() {
             <Search className="w-8 h-8 mx-auto mb-2 opacity-40" />
             <p className="text-sm">Escolha o período acima e clique em Buscar para ver as vendas.</p>
           </div>
-        ) : erroLista ? null : vendasFiltradas.length === 0 ? (
+        ) : vendasFiltradas.length === 0 ? (
           <div className="text-center py-16 text-muted">
             <Receipt className="w-8 h-8 mx-auto mb-2 opacity-40" />
             <p className="text-sm">Nenhuma venda encontrada para esse filtro.</p>
@@ -556,12 +419,6 @@ function VendasPageConteudo() {
                           {venda.pagamentos
                             .map((p) => `${LABEL_FORMA_PAGAMENTO[p.formaPagamento]} ${valor(p.valor)}`)
                             .join(" + ")}
-                        </span>
-                      )}
-                      {(venda.valorDesconto ?? 0) > 0 && (
-                        <span className="text-[11px] text-accent-dark">
-                          Desconto {valor(venda.valorDesconto ?? 0)}
-                          {venda.percentualDesconto ? ` (${venda.percentualDesconto}%)` : ""}
                         </span>
                       )}
                     </div>
@@ -639,7 +496,7 @@ function VendasPageConteudo() {
         <EditarFormaPagamentoModal
           venda={vendaEmEdicao}
           onFechar={() => setVendaEmEdicao(null)}
-          onSalvo={() => carregar()}
+          onSalvo={carregar}
         />
       )}
 
@@ -647,24 +504,9 @@ function VendasPageConteudo() {
         <EditarDataHoraModal
           venda={vendaDataHoraEmEdicao}
           onFechar={() => setVendaDataHoraEmEdicao(null)}
-          onSalvo={() => carregar()}
+          onSalvo={carregar}
         />
       )}
-    </div>
-  );
-}
-
-function CardResumo({ rotulo, texto, destaque }: { rotulo: string; texto: string; destaque?: boolean }) {
-  return (
-    <div
-      className={`rounded-xl border px-4 py-3 ${
-        destaque ? "bg-primary-light border-primary/30" : "bg-surface border-border"
-      }`}
-    >
-      <p className="text-[11px] font-medium text-muted">{rotulo}</p>
-      <p className={`mt-0.5 font-mono font-semibold ${destaque ? "text-primary-dark text-lg" : "text-foreground"}`}>
-        {texto}
-      </p>
     </div>
   );
 }

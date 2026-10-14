@@ -6,7 +6,6 @@ import { useAuth } from "@/lib/auth-context";
 import { encontrarNavItemPorPath } from "@/lib/nav-items";
 import Sidebar from "@/components/Sidebar";
 import AtualizacaoSistema from "@/components/AtualizacaoSistema";
-import MonitorCaixa from "@/components/MonitorCaixa";
 import { Menu } from "lucide-react";
 import { TelaCarregamento } from "@/components/CarregamentoCatolico";
 
@@ -35,8 +34,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   return (
     <div className="flex min-h-screen bg-background">
       <AtualizacaoSistema />
-      {/* aviso de caixa aberto/fechado: só para quem tem perfil ADMIN */}
-      {usuario.perfil === "ADMIN" && <MonitorCaixa />}
       <Sidebar aberta={menuAberto} onFechar={() => setMenuAberto(false)} />
 
       <div className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">

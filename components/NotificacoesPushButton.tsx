@@ -116,7 +116,7 @@ export default function NotificacoesPushButton() {
             ? "Notificações bloqueadas nas permissões do navegador"
             : estado === "ativado"
               ? "Clique para desativar as notificações neste dispositivo"
-              : "Receber um aviso neste aparelho a cada venda ou abertura/fechamento de caixa"
+              : "Receber um aviso no celular a cada venda ou abertura/fechamento de caixa"
         }
         className="group relative w-full flex items-center gap-3 pl-3 pr-2.5 py-1.5 rounded-xl text-[13.5px] leading-tight text-left transition-all duration-200 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
       >
@@ -150,19 +150,13 @@ export default function NotificacoesPushButton() {
       )}
       {resultadoTeste && (
         <div className="pl-[56px] pr-2.5 mt-1 text-[11px] leading-relaxed text-white/60">
-          {resultadoTeste.enviadas > 0 && (
-            <p className="text-white/80">
-              Teste enviado para {resultadoTeste.enviadas} aparelho(s) de ADMIN:
-            </p>
-          )}
+          <p>
+            {resultadoTeste.enviadas} enviada(s), {resultadoTeste.removidas} expirada(s),{" "}
+            {resultadoTeste.falhas} falha(s).
+          </p>
           {resultadoTeste.detalhes.map((detalhe, i) => (
-            <p key={i}>• {detalhe}</p>
+            <p key={i}>{detalhe}</p>
           ))}
-          {(resultadoTeste.removidas > 0 || resultadoTeste.falhas > 0) && (
-            <p className="mt-1">
-              {resultadoTeste.removidas} expirada(s), {resultadoTeste.falhas} falha(s).
-            </p>
-          )}
         </div>
       )}
       {erro && <p className="px-2.5 mt-1 text-[11px] text-red-300">{erro}</p>}

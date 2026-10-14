@@ -4,10 +4,9 @@ import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
-import { situacaoEstoque, pesoSituacao } from "@/lib/estoque";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag, PackageX, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag } from "lucide-react";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
@@ -25,8 +24,8 @@ export default function EstoquePage() {
   const [produtoEmEdicao, setProdutoEmEdicao] = useState<Produto | null>(null);
   const [busca, setBusca] = useState("");
   const [categoriaFiltro, setCategoriaFiltro] = useState<string>("todas");
-  const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "criticos" | "padrao">("nome-asc");
-  const [filtroEspecial, setFiltroEspecial] = useState<"todos" | "em-falta" | "estoque-baixo" | "duplicados">("todos");
+  const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "padrao">("nome-asc");
+  const [filtroEspecial, setFiltroEspecial] = useState<"todos" | "estoque-baixo" | "duplicados">("todos");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
   const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
@@ -153,18 +152,10 @@ export default function EstoquePage() {
     return motivos;
   }, [produtos]);
 
-  // alertas de estoque olham pra TODOS os produtos (não só os filtrados na tela),
-  // pra o aviso não sumir quando alguém filtra por categoria ou busca algo
-  const { emFalta, estoqueBaixo } = useMemo(() => {
-    const faltando: Produto[] = [];
-    const baixos: Produto[] = [];
-    for (const produto of produtos) {
-      const situacao = situacaoEstoque(produto);
-      if (situacao === "em-falta") faltando.push(produto);
-      else if (situacao === "baixo") baixos.push(produto);
-    }
-    return { emFalta: faltando, estoqueBaixo: baixos };
-  }, [produtos]);
+  const estoqueBaixoCount = useMemo(
+    () => produtos.filter((p) => p.estoqueMinimo != null && p.quantidadeEstoque <= p.estoqueMinimo).length,
+    [produtos]
+  );
 
   const produtosFiltrados = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -183,26 +174,15 @@ export default function EstoquePage() {
       lista = lista.filter((produto) => String(produto.categoria?.id) === categoriaFiltro);
     }
 
-    if (filtroEspecial === "em-falta") {
-      lista = lista.filter((produto) => situacaoEstoque(produto) === "em-falta");
-    } else if (filtroEspecial === "estoque-baixo") {
-      lista = lista.filter((produto) => situacaoEstoque(produto) === "baixo");
+    if (filtroEspecial === "estoque-baixo") {
+      lista = lista.filter(
+        (produto) => produto.estoqueMinimo != null && produto.quantidadeEstoque <= produto.estoqueMinimo
+      );
     } else if (filtroEspecial === "duplicados") {
       lista = lista.filter((produto) => duplicados.has(produto.id));
     }
 
     if (ordenacao === "padrao") return lista;
-
-    if (ordenacao === "criticos") {
-      // em falta primeiro, depois estoque baixo (os com menos unidades antes), depois o resto
-      return [...lista].sort((a, b) => {
-        const porSituacao = pesoSituacao(situacaoEstoque(a)) - pesoSituacao(situacaoEstoque(b));
-        if (porSituacao !== 0) return porSituacao;
-        const porQuantidade = a.quantidadeEstoque - b.quantidadeEstoque;
-        if (porQuantidade !== 0) return porQuantidade;
-        return (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" });
-      });
-    }
 
     const ordenada = [...lista].sort((a, b) =>
       (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" })
@@ -246,31 +226,6 @@ export default function EstoquePage() {
       />
 
       <div className="p-4 md:p-8">
-        {!carregando && (emFalta.length > 0 || estoqueBaixo.length > 0) && (
-          <div className="mb-4 space-y-2">
-            {emFalta.length > 0 && (
-              <AlertaEstoque
-                tipo="em-falta"
-                produtos={emFalta}
-                ativo={filtroEspecial === "em-falta"}
-                onClick={() =>
-                  setFiltroEspecial((atual) => (atual === "em-falta" ? "todos" : "em-falta"))
-                }
-              />
-            )}
-            {estoqueBaixo.length > 0 && (
-              <AlertaEstoque
-                tipo="baixo"
-                produtos={estoqueBaixo}
-                ativo={filtroEspecial === "estoque-baixo"}
-                onClick={() =>
-                  setFiltroEspecial((atual) => (atual === "estoque-baixo" ? "todos" : "estoque-baixo"))
-                }
-              />
-            )}
-          </div>
-        )}
-
         <div className="mb-4 flex flex-wrap items-center gap-3">
           <div className="relative w-full max-w-sm">
             <input
@@ -319,7 +274,6 @@ export default function EstoquePage() {
             >
               <option value="nome-asc">Nome (A-Z)</option>
               <option value="nome-desc">Nome (Z-A)</option>
-              <option value="criticos">Mais críticos primeiro</option>
               <option value="padrao">Ordem de cadastro</option>
             </select>
           </div>
@@ -333,6 +287,21 @@ export default function EstoquePage() {
         )}
 
         <div className="mb-4 flex flex-wrap items-center gap-2">
+          {estoqueBaixoCount > 0 && (
+            <button
+              onClick={() =>
+                setFiltroEspecial((atual) => (atual === "estoque-baixo" ? "todos" : "estoque-baixo"))
+              }
+              className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border transition ${
+                filtroEspecial === "estoque-baixo"
+                  ? "bg-danger text-white border-danger"
+                  : "bg-danger-light text-danger border-danger/30 hover:bg-danger/10"
+              }`}
+            >
+              <AlertTriangle className="w-4 h-4" />
+              Estoque baixo ({estoqueBaixoCount})
+            </button>
+          )}
           {duplicados.size > 0 && (
             <button
               onClick={() =>
@@ -461,18 +430,10 @@ export default function EstoquePage() {
               </thead>
               <tbody>
                 {produtosFiltrados.map((produto) => {
-                  const situacao = situacaoEstoque(produto);
+                  const estoqueBaixo =
+                    produto.estoqueMinimo != null && produto.quantidadeEstoque <= produto.estoqueMinimo;
                   return (
-                    <tr
-                      key={produto.id}
-                      className={`border-b border-border last:border-0 ${
-                        situacao === "em-falta"
-                          ? "bg-danger-light/60"
-                          : situacao === "baixo"
-                            ? "bg-accent-light/50"
-                            : ""
-                      }`}
-                    >
+                    <tr key={produto.id} className="border-b border-border last:border-0">
                       <td className="px-5 py-3">
                         <input
                           type="checkbox"
@@ -501,40 +462,14 @@ export default function EstoquePage() {
                       <td className="px-5 py-3 text-muted">{produto.categoria?.nome ?? "—"}</td>
                       <td className="px-5 py-3 font-mono">{formatarMoeda(produto.precoVenda)}</td>
                       <td className="px-5 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={`font-mono font-semibold ${
-                              situacao === "em-falta"
-                                ? "text-danger"
-                                : situacao === "baixo"
-                                  ? "text-accent-dark"
-                                  : "text-foreground"
+                        <span
+                          title={estoqueBaixo ? `Abaixo do mínimo (${produto.estoqueMinimo})` : undefined}
+                          className={`inline-flex items-center gap-1 font-mono ${estoqueBaixo ? "text-danger" : "text-foreground"
                             }`}
-                          >
-                            {produto.quantidadeEstoque}
-                          </span>
-                          {situacao === "em-falta" && (
-                            <span
-                              title="Produto sem estoque — precisa ser reposto"
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-danger text-white"
-                            >
-                              <PackageX className="w-3 h-3" />
-                              Em falta
-                            </span>
-                          )}
-                          {situacao === "baixo" && (
-                            <span
-                              title={`Abaixo do mínimo (${produto.estoqueMinimo})`}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent text-white"
-                            >
-                              <AlertTriangle className="w-3 h-3" />
-                              Estoque baixo
-                            </span>
-                          )}
-                        </div>
-                        {produto.estoqueMinimo != null && (
-                          <p className="text-[11px] text-muted mt-0.5">mínimo: {produto.estoqueMinimo}</p>
-                        )}
+                        >
+                          {estoqueBaixo && <AlertTriangle className="w-3.5 h-3.5" />}
+                          {produto.quantidadeEstoque}
+                        </span>
                       </td>
                       {isAdmin && (
                         <td className="px-5 py-3">
@@ -564,11 +499,7 @@ export default function EstoquePage() {
             </table>
             {produtosFiltrados.length === 0 && (
               <p className="text-center text-sm text-muted py-10">
-                {busca
-                  ? "Nenhum produto encontrado para essa busca."
-                  : filtroEspecial !== "todos" || categoriaFiltro !== "todas"
-                    ? "Nenhum produto neste filtro."
-                    : "Nenhum produto cadastrado."}
+                {busca ? "Nenhum produto encontrado para essa busca." : "Nenhum produto cadastrado."}
               </p>
             )}
           </div>
@@ -802,35 +733,6 @@ function ModalProduto({
             </Campo>
           </div>
 
-          {(() => {
-            const qtd = Number(quantidadeEstoque);
-            const min = estoqueMinimo !== "" ? Number(estoqueMinimo) : null;
-            if (quantidadeEstoque !== "" && qtd <= 0) {
-              return (
-                <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2 flex items-center gap-2">
-                  <PackageX className="w-4 h-4 shrink-0" />
-                  Com quantidade zerada, o produto aparece como &quot;Em falta&quot;.
-                </div>
-              );
-            }
-            if (min != null && quantidadeEstoque !== "" && qtd <= min) {
-              return (
-                <div className="rounded-lg bg-accent-light text-accent-dark text-xs px-3 py-2 flex items-center gap-2">
-                  <AlertTriangle className="w-4 h-4 shrink-0" />
-                  A quantidade está no mínimo ou abaixo: o produto aparece como &quot;Estoque baixo&quot;.
-                </div>
-              );
-            }
-            if (min == null) {
-              return (
-                <p className="text-xs text-muted">
-                  Dica: defina o estoque mínimo para ser avisado quando o produto estiver acabando.
-                </p>
-              );
-            }
-            return null;
-          })()}
-
           {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
         </div>
 
@@ -852,60 +754,6 @@ function ModalProduto({
         </div>
       </div>
     </div>
-  );
-}
-
-const NOMES_NO_ALERTA = 3;
-
-function AlertaEstoque({
-  tipo,
-  produtos,
-  ativo,
-  onClick,
-}: {
-  tipo: "em-falta" | "baixo";
-  produtos: Produto[];
-  ativo: boolean;
-  onClick: () => void;
-}) {
-  const emFalta = tipo === "em-falta";
-  const qtd = produtos.length;
-  const titulo = emFalta
-    ? `${qtd} ${qtd === 1 ? "produto em falta" : "produtos em falta"}`
-    : `${qtd} ${qtd === 1 ? "produto com estoque baixo" : "produtos com estoque baixo"}`;
-
-  const nomes = [...produtos]
-    .sort((a, b) => (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" }))
-    .slice(0, NOMES_NO_ALERTA)
-    .map((p) => p.nome);
-  const restantes = qtd - nomes.length;
-  const detalhe = nomes.join(", ") + (restantes > 0 ? ` e mais ${restantes}` : "");
-
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      className={`w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3 transition ${
-        emFalta
-          ? ativo
-            ? "bg-danger text-white border-danger"
-            : "bg-danger-light text-danger border-danger/40 hover:bg-danger/10"
-          : ativo
-            ? "bg-accent text-white border-accent"
-            : "bg-accent-light text-accent-dark border-accent/40 hover:bg-accent/20"
-      }`}
-    >
-      {emFalta ? <PackageX className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{titulo}</span>
-        <span className={`block text-xs truncate ${ativo ? "text-white/90" : "opacity-80"}`}>{detalhe}</span>
-      </span>
-      <span className="shrink-0 flex items-center gap-1 text-xs font-medium">
-        {ativo ? "Mostrando — clique para ver todos" : "Ver produtos"}
-        <ChevronRight className="w-4 h-4" />
-      </span>
-    </button>
   );
 }
 

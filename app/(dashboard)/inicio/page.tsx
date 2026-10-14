@@ -16,7 +16,6 @@ import {
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { BarraCarregamento } from "@/components/CarregamentoCatolico";
 import { NAV_ITEMS } from "@/lib/nav-items";
 import { Caixa, Consignacao, Produto, Venda } from "@/lib/types";
 import {
@@ -91,28 +90,8 @@ function horaCurta(iso: string): string {
   return formatarDataHora(iso).slice(-5);
 }
 
-/**
- * Carregamento de um cartão: a mesma barra de terço do resto do sistema. As contas acendem
- * conforme o servidor vai respondendo as consultas (progresso real, não de enfeite) e, se
- * o servidor demorar (ex.: acordando depois de um tempo parado), a frase avisa.
- */
-function CarregandoCartao({
-  mensagem,
-  progresso,
-  demorando = false,
-}: {
-  mensagem: string;
-  progresso: number;
-  demorando?: boolean;
-}) {
-  return (
-    <div role="status" aria-live="polite" className="flex flex-col gap-2 py-1">
-      <BarraCarregamento progresso={progresso} />
-      <p className="text-xs text-muted">
-        {demorando ? "O servidor está acordando — pode levar até 1 minuto…" : mensagem}
-      </p>
-    </div>
-  );
+function Esqueleto({ className = "" }: { className?: string }) {
+  return <div className={`animate-pulse rounded-md bg-border/40 ${className}`} />;
 }
 
 function CartaoResumo({
@@ -148,39 +127,25 @@ function CartaoResumo({
 export default function InicioPage() {
   const { usuario } = useAuth();
   const [resumo, setResumo] = useState<Resumo | null>(null);
-  // quantas das 4 consultas ao servidor já foram respondidas (só na primeira carga) e se o servidor está demorando
-  const [consultasRespondidas, setConsultasRespondidas] = useState(0);
-  const [servidorDemorando, setServidorDemorando] = useState(false);
 
   useEffect(() => {
     let ativo = true;
-    let primeiraCarga = true;
-
-    // conta cada consulta respondida (com sucesso ou erro) pra barra mostrar o avanço real
-    function contar<T>(consulta: Promise<T>): Promise<T> {
-      return consulta.finally(() => {
-        if (ativo && primeiraCarga) setConsultasRespondidas((n) => n + 1);
-      });
-    }
 
     async function carregar() {
       const hoje = dataBrasiliaISO(new Date().toISOString());
       // allSettled: se uma consulta falhar, as outras continuam aparecendo
       const [rCaixa, rVendas, rProdutos, rConsig] = await Promise.allSettled([
-        contar(api.get<Caixa>("/caixa/atual")),
-        contar(
-          api.get<Venda[]>("/vendas", {
-            params: {
-              inicio: limiteDiaBrasiliaParaUtc(hoje, false),
-              fim: limiteDiaBrasiliaParaUtc(hoje, true),
-            },
-          })
-        ),
-        contar(api.get<Produto[]>("/produtos")),
-        contar(api.get<Consignacao[]>("/consignacoes")),
+        api.get<Caixa>("/caixa/atual"),
+        api.get<Venda[]>("/vendas", {
+          params: {
+            inicio: limiteDiaBrasiliaParaUtc(hoje, false),
+            fim: limiteDiaBrasiliaParaUtc(hoje, true),
+          },
+        }),
+        api.get<Produto[]>("/produtos"),
+        api.get<Consignacao[]>("/consignacoes"),
       ]);
       if (!ativo) return;
-      primeiraCarga = false;
       setResumo({
         caixa:
           rCaixa.status === "fulfilled"
@@ -203,17 +168,6 @@ export default function InicioPage() {
     };
   }, []);
 
-  // se o servidor passar de 8s sem responder, avisa (pode estar acordando)
-  const aguardandoServidor = resumo === null;
-  useEffect(() => {
-    if (!aguardandoServidor) {
-      setServidorDemorando(false);
-      return;
-    }
-    const espera = setTimeout(() => setServidorDemorando(true), 8_000);
-    return () => clearTimeout(espera);
-  }, [aguardandoServidor]);
-
   // a DashboardLayout só renderiza esta página depois de confirmar que existe
   // um usuário logado, mas mantemos essa guarda por segurança/tipagem.
   if (!usuario) return null;
@@ -234,8 +188,6 @@ export default function InicioPage() {
 
   // ---- números do resumo ----
   const carregando = resumo === null;
-  // mínimo de 5%: a primeira conta já acende, mostrando que começou
-  const progressoCarga = Math.max(5, (consultasRespondidas / 4) * 100);
   const caixa = resumo?.caixa;
   const vendas = resumo?.vendas ?? null;
   const totalHoje = vendas ? vendas.reduce((soma, v) => soma + v.total, 0) : 0;
@@ -304,7 +256,10 @@ export default function InicioPage() {
             icone={caixa ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
           >
             {carregando ? (
-              <CarregandoCartao mensagem="Consultando o caixa…" progresso={progressoCarga} demorando={servidorDemorando} />
+              <>
+                <Esqueleto className="h-6 w-28" />
+                <Esqueleto className="h-3.5 w-36" />
+              </>
             ) : caixa === undefined ? (
               <p className="text-sm text-muted">Não foi possível consultar o caixa.</p>
             ) : caixa ? (
@@ -342,7 +297,10 @@ export default function InicioPage() {
 
           <CartaoResumo titulo="Vendido hoje" icone={<ShoppingBag className="w-3.5 h-3.5" />}>
             {carregando ? (
-              <CarregandoCartao mensagem="Somando as vendas de hoje…" progresso={progressoCarga} demorando={servidorDemorando} />
+              <>
+                <Esqueleto className="h-6 w-28" />
+                <Esqueleto className="h-3.5 w-20" />
+              </>
             ) : vendas ? (
               <>
                 <p className="text-xl font-semibold text-foreground">{formatarMoeda(totalHoje)}</p>
@@ -359,7 +317,10 @@ export default function InicioPage() {
 
           <CartaoResumo titulo="Ticket médio" icone={<TrendingUp className="w-3.5 h-3.5" />}>
             {carregando ? (
-              <CarregandoCartao mensagem="Calculando o ticket médio…" progresso={progressoCarga} demorando={servidorDemorando} />
+              <>
+                <Esqueleto className="h-6 w-24" />
+                <Esqueleto className="h-3.5 w-28" />
+              </>
             ) : vendas ? (
               <>
                 <p className="text-xl font-semibold text-foreground">
@@ -384,7 +345,10 @@ export default function InicioPage() {
             }
           >
             {carregando ? (
-              <CarregandoCartao mensagem="Verificando pendências…" progresso={progressoCarga} demorando={servidorDemorando} />
+              <>
+                <Esqueleto className="h-4 w-40" />
+                <Esqueleto className="h-4 w-32" />
+              </>
             ) : !temAlerta ? (
               <p className="text-sm text-muted">Tudo em ordem por aqui.</p>
             ) : (
@@ -495,8 +459,10 @@ export default function InicioPage() {
               </Link>
             </div>
             {carregando ? (
-              <div className="p-4">
-                <CarregandoCartao mensagem="Buscando as vendas de hoje…" progresso={progressoCarga} demorando={servidorDemorando} />
+              <div className="p-4 flex flex-col gap-3">
+                <Esqueleto className="h-4 w-full" />
+                <Esqueleto className="h-4 w-5/6" />
+                <Esqueleto className="h-4 w-4/6" />
               </div>
             ) : !ultimasVendas ? (
               <p className="p-4 text-sm text-muted">Não foi possível consultar as vendas.</p>

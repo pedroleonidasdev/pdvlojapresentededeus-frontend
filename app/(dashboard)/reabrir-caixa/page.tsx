@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
-import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { Caixa } from "@/lib/types";
 import { formatarMoeda, formatarDataHora } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
@@ -53,7 +52,6 @@ export default function ReabrirCaixaPage() {
     setErro(null);
     try {
       await api.post(`/caixa/${id}/reabrir`);
-      avisarCaixaMudou();
       setIdEmConfirmacao(null);
       setIdReabertoComSucesso(id);
       await carregar();

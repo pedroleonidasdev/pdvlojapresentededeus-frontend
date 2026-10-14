@@ -5,9 +5,7 @@ import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
-import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { useAuth } from "@/lib/auth-context";
-import { BarraCarregamento } from "@/components/CarregamentoCatolico";
 import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
 import {
   formatarMoeda,
@@ -19,6 +17,7 @@ import {
 import Link from "next/link";
 import PageHeader from "@/components/PageHeader";
 import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixaModal";
+import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 import {
   Loader2,
   TrendingUp,
@@ -35,35 +34,80 @@ import {
   RotateCcw,
   FileText,
   ArrowRight,
+  ArrowUpRight,
+  ArrowDownRight,
+  CalendarDays,
+  Trophy,
 } from "lucide-react";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO"];
+
+// cor de cada forma de pagamento nas barras de "Por forma de pagamento"
+const COR_FORMA: Record<string, string> = {
+  PIX: "bg-info",
+  DINHEIRO: "bg-success",
+  CARTAO_CREDITO: "bg-secondary",
+  CARTAO_DEBITO: "bg-accent",
+};
+
+function somarDias(iso: string, dias: number): string {
+  const [a, m, d] = iso.split("-").map(Number);
+  return new Date(Date.UTC(a, m - 1, d + dias)).toISOString().slice(0, 10);
+}
+
+function diasEntre(inicio: string, fim: string): number {
+  const [a1, m1, d1] = inicio.split("-").map(Number);
+  const [a2, m2, d2] = fim.split("-").map(Number);
+  const dias = Math.round((Date.UTC(a2, m2 - 1, d2) - Date.UTC(a1, m1 - 1, d1)) / 86_400_000) + 1;
+  return Math.max(1, dias);
+}
+
+/** Período imediatamente anterior, com o mesmo número de dias (para comparar). */
+function periodoAnterior(inicio: string, fim: string) {
+  const dias = diasEntre(inicio, fim);
+  const fimAnt = somarDias(inicio, -1);
+  return { inicio: somarDias(fimAnt, -(dias - 1)), fim: fimAnt };
+}
+
+function dataCurta(iso: string): string {
+  const [, m, d] = iso.split("-");
+  return `${d}/${m}`;
+}
+
+function filtrarVendas(vendas: Venda[], formas: Set<FormaPagamento>, usuario: string): Venda[] {
+  return vendas.filter((v) => {
+    const formasDaVenda = v.pagamentos?.length ? v.pagamentos.map((p) => p.formaPagamento) : [v.formaPagamento];
+    if (!formasDaVenda.some((forma) => formas.has(forma))) return false;
+    if (usuario !== "TODOS" && v.usuarioNome !== usuario) return false;
+    return true;
+  });
+}
+
+function filtrarTrocas(trocas: Troca[], formas: Set<FormaPagamento>, usuario: string): Troca[] {
+  return trocas.filter((t) => {
+    if (t.formaPagamentoDiferenca && !formas.has(t.formaPagamentoDiferenca)) return false;
+    if (usuario !== "TODOS" && t.usuarioNome !== usuario) return false;
+    return true;
+  });
+}
 
 export default function RelatoriosPage() {
   const { usuario } = useAuth();
   const isAdmin = usuario?.perfil === "ADMIN";
 
-  const hoje = new Date();
-  const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+  // "hoje" no fuso de Brasília (toISOString() usaria UTC e viraria o dia à noite)
+  const hojeISO = dataBrasiliaISO(new Date().toISOString());
 
-  const [inicio, setInicio] = useState(primeiroDiaMes.toISOString().slice(0, 10));
-  const [fim, setFim] = useState(hoje.toISOString().slice(0, 10));
+  const [inicio, setInicio] = useState(`${hojeISO.slice(0, 8)}01`);
+  const [fim, setFim] = useState(hojeISO);
+  // período já carregado + vendas/trocas do período anterior (para o comparativo)
+  const [periodoGerado, setPeriodoGerado] = useState<{ inicio: string; fim: string } | null>(null);
+  const [vendasAnt, setVendasAnt] = useState<Venda[] | null>(null);
+  const [trocasAnt, setTrocasAnt] = useState<Troca[] | null>(null);
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [trocas, setTrocas] = useState<Troca[]>([]);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [carregando, setCarregando] = useState(false);
-  // consultas ao servidor já respondidas (de 4) enquanto o relatório é gerado, e se o servidor está demorando
-  const [consultasRespondidas, setConsultasRespondidas] = useState(0);
-  const [servidorDemorando, setServidorDemorando] = useState(false);
-
-  useEffect(() => {
-    if (!carregando) {
-      setServidorDemorando(false);
-      return;
-    }
-    const espera = setTimeout(() => setServidorDemorando(true), 8_000);
-    return () => clearTimeout(espera);
-  }, [carregando]);
   const [jaGerou, setJaGerou] = useState(false);
 
   // caixa aberto no momento (independe do período filtrado)
@@ -96,7 +140,6 @@ export default function RelatoriosPage() {
       await api.post("/caixa/fechar", {
         valorFinal: Number(valorFinalCaixa.replace(",", ".")) || 0,
       });
-      avisarCaixaMudou();
       setCaixaAtual(null);
       setValorFinalCaixa("");
       setConfirmandoFechamento(false);
@@ -118,24 +161,30 @@ export default function RelatoriosPage() {
   );
   const [usuarioSelecionado, setUsuarioSelecionado] = useState<string>("TODOS");
 
-  async function gerar() {
+  async function gerar(inicioPeriodo: string = inicio, fimPeriodo: string = fim) {
     setCarregando(true);
-    setConsultasRespondidas(0);
-    // conta cada consulta respondida pra barra mostrar o avanço real
-    function contar<T>(consulta: Promise<T>): Promise<T> {
-      return consulta.finally(() => setConsultasRespondidas((n) => n + 1));
-    }
     try {
       const params = {
-        inicio: limiteDiaBrasiliaParaUtc(inicio, false),
-        fim: limiteDiaBrasiliaParaUtc(fim, true),
+        inicio: limiteDiaBrasiliaParaUtc(inicioPeriodo, false),
+        fim: limiteDiaBrasiliaParaUtc(fimPeriodo, true),
       };
-      const [resVendas, resCaixas, resTrocas, resDespesas] = await Promise.all([
-        contar(api.get<Venda[]>("/vendas", { params })),
-        contar(api.get<Caixa[]>("/caixa", { params })),
-        contar(api.get<Troca[]>("/trocas", { params })),
-        contar(api.get<Despesa[]>("/despesas", { params })),
+      const anterior = periodoAnterior(inicioPeriodo, fimPeriodo);
+      const paramsAnt = {
+        inicio: limiteDiaBrasiliaParaUtc(anterior.inicio, false),
+        fim: limiteDiaBrasiliaParaUtc(anterior.fim, true),
+      };
+      const [resVendas, resCaixas, resTrocas, resDespesas, resVendasAnt, resTrocasAnt] = await Promise.all([
+        api.get<Venda[]>("/vendas", { params }),
+        api.get<Caixa[]>("/caixa", { params }),
+        api.get<Troca[]>("/trocas", { params }),
+        api.get<Despesa[]>("/despesas", { params }),
+        // o comparativo é um extra: se falhar, o relatório continua sem ele
+        api.get<Venda[]>("/vendas", { params: paramsAnt }).catch(() => null),
+        api.get<Troca[]>("/trocas", { params: paramsAnt }).catch(() => null),
       ]);
+      setPeriodoGerado({ inicio: inicioPeriodo, fim: fimPeriodo });
+      setVendasAnt(resVendasAnt?.data ?? null);
+      setTrocasAnt(resTrocasAnt?.data ?? null);
       setVendas(resVendas.data);
       setHistoricoCaixas(resCaixas.data);
       setTrocas(resTrocas.data);
@@ -147,6 +196,25 @@ export default function RelatoriosPage() {
     } finally {
       setCarregando(false);
     }
+  }
+
+  // atalhos de período: preenche as datas e já gera o relatório
+  const atalhos = useMemo(() => {
+    const [ano, mes] = hojeISO.split("-").map(Number);
+    const primeiroMesPassado = new Date(Date.UTC(ano, mes - 2, 1)).toISOString().slice(0, 10);
+    const ultimoMesPassado = somarDias(`${hojeISO.slice(0, 8)}01`, -1);
+    return [
+      { rotulo: "Hoje", inicio: hojeISO, fim: hojeISO },
+      { rotulo: "Últimos 7 dias", inicio: somarDias(hojeISO, -6), fim: hojeISO },
+      { rotulo: "Este mês", inicio: `${hojeISO.slice(0, 8)}01`, fim: hojeISO },
+      { rotulo: "Mês passado", inicio: primeiroMesPassado, fim: ultimoMesPassado },
+    ];
+  }, [hojeISO]);
+
+  function aplicarAtalho(i: string, f: string) {
+    setInicio(i);
+    setFim(f);
+    gerar(i, f);
   }
 
   const usuariosDoPeriodo = useMemo(() => {
@@ -169,26 +237,26 @@ export default function RelatoriosPage() {
     });
   }
 
-  const vendasFiltradas = useMemo(() => {
-    return vendas.filter((v) => {
-      const formasDaVenda = v.pagamentos?.length
-        ? v.pagamentos.map((p) => p.formaPagamento)
-        : [v.formaPagamento];
-      if (!formasDaVenda.some((forma) => formasSelecionadas.has(forma))) return false;
-      if (usuarioSelecionado !== "TODOS" && v.usuarioNome !== usuarioSelecionado) return false;
-      return true;
-    });
-  }, [vendas, formasSelecionadas, usuarioSelecionado]);
+  const vendasFiltradas = useMemo(
+    () => filtrarVendas(vendas, formasSelecionadas, usuarioSelecionado),
+    [vendas, formasSelecionadas, usuarioSelecionado]
+  );
 
   // trocas sem diferença (formaPagamentoDiferenca nula) sempre entram — não têm
   // forma de pagamento pra filtrar. As com diferença seguem o mesmo filtro das vendas.
-  const trocasFiltradas = useMemo(() => {
-    return trocas.filter((t) => {
-      if (t.formaPagamentoDiferenca && !formasSelecionadas.has(t.formaPagamentoDiferenca)) return false;
-      if (usuarioSelecionado !== "TODOS" && t.usuarioNome !== usuarioSelecionado) return false;
-      return true;
-    });
-  }, [trocas, formasSelecionadas, usuarioSelecionado]);
+  const trocasFiltradas = useMemo(
+    () => filtrarTrocas(trocas, formasSelecionadas, usuarioSelecionado),
+    [trocas, formasSelecionadas, usuarioSelecionado]
+  );
+
+  // comparativo com o período anterior (mesmos filtros aplicados)
+  const comparativo = useMemo(() => {
+    if (!vendasAnt || !trocasAnt) return null;
+    const v = filtrarVendas(vendasAnt, formasSelecionadas, usuarioSelecionado);
+    const t = filtrarTrocas(trocasAnt, formasSelecionadas, usuarioSelecionado);
+    const total = v.reduce((acc, x) => acc + x.total, 0) + t.reduce((acc, x) => acc + x.diferenca, 0);
+    return { total, quantidadeVendas: v.length };
+  }, [vendasAnt, trocasAnt, formasSelecionadas, usuarioSelecionado]);
 
   // métricas calculadas a partir do que está filtrado, garantindo consistência
   // entre os cards, o gráfico e a lista de vendas exibida
@@ -264,6 +332,20 @@ export default function RelatoriosPage() {
     () => Math.max(1, ...vendasPorDia.map((d) => d.total)),
     [vendasPorDia]
   );
+
+  const diasPeriodo = periodoGerado ? diasEntre(periodoGerado.inicio, periodoGerado.fim) : 1;
+  const mediaPorDia = metricas.totalFaturado / diasPeriodo;
+  const melhorDia = useMemo(
+    () => vendasPorDia.reduce<{ dia: string; total: number } | null>((m, d) => (!m || d.total > m.total ? d : m), null),
+    [vendasPorDia]
+  );
+  const variacaoPct =
+    comparativo && comparativo.total > 0 ? ((metricas.totalLiquido - comparativo.total) / comparativo.total) * 100 : null;
+  const formasOrdenadas = useMemo(() => {
+    const itens = Object.entries(metricas.totalPorFormaPagamento).sort((a, b) => b[1] - a[1]);
+    const base = itens.reduce((acc, [, v]) => acc + Math.max(v, 0), 0);
+    return { itens, base };
+  }, [metricas.totalPorFormaPagamento]);
 
   // conferência de cada caixa: quanto em dinheiro entrou (vendas + trocas + suprimento)
   // e saiu (sangria + despesas pagas em dinheiro) durante a janela em que ele ficou
@@ -569,6 +651,30 @@ export default function RelatoriosPage() {
         )}
 
         <div className="flex flex-wrap items-end gap-3 bg-surface border border-border rounded-xl p-4">
+          <div className="basis-full flex flex-wrap items-center gap-2">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-muted mr-1">
+              <CalendarDays className="w-3.5 h-3.5" />
+              Período rápido
+            </span>
+            {atalhos.map((a) => {
+              const ativo = periodoGerado?.inicio === a.inicio && periodoGerado?.fim === a.fim;
+              return (
+                <button
+                  key={a.rotulo}
+                  type="button"
+                  disabled={carregando}
+                  onClick={() => aplicarAtalho(a.inicio, a.fim)}
+                  className={`text-xs px-3 py-1.5 rounded-full border transition disabled:opacity-60 ${
+                    ativo
+                      ? "border-info bg-info text-white font-medium"
+                      : "border-border text-foreground hover:border-info hover:bg-info-light"
+                  }`}
+                >
+                  {a.rotulo}
+                </button>
+              );
+            })}
+          </div>
           <div>
             <label className="block text-xs font-medium text-muted mb-1.5">De</label>
             <input
@@ -588,7 +694,7 @@ export default function RelatoriosPage() {
             />
           </div>
           <button
-            onClick={gerar}
+            onClick={() => gerar()}
             disabled={carregando}
             className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-60 h-fit"
           >
@@ -627,15 +733,17 @@ export default function RelatoriosPage() {
           )}
         </div>
 
-        {carregando && (
-          <div role="status" aria-live="polite" className="flex flex-col items-center justify-center gap-3 px-6 py-12">
-            <BarraCarregamento progresso={Math.max(5, (consultasRespondidas / 4) * 100)} className="max-w-[16rem]" />
-            <p className="text-sm font-medium text-primary">
-              {consultasRespondidas < 4 ? "Gerando o relatório…" : "Montando o relatório…"}
+        {carregando && <CarregandoSecao mensagem="Gerando relatório…" />}
+
+        {!jaGerou && !carregando && (
+          <div className="flex flex-col items-center text-center gap-2 bg-surface border border-dashed border-border rounded-xl px-6 py-14">
+            <div className="w-12 h-12 rounded-full bg-info-light text-info flex items-center justify-center">
+              <TrendingUp className="w-6 h-6" />
+            </div>
+            <p className="font-medium">Escolha um período para ver o faturamento</p>
+            <p className="text-sm text-muted max-w-sm">
+              Use um dos atalhos acima ou defina as datas e clique em &quot;Gerar relatório&quot;.
             </p>
-            {servidorDemorando && (
-              <p className="text-xs text-muted text-center">O servidor está acordando — pode levar até 1 minuto.</p>
-            )}
           </div>
         )}
 
@@ -684,87 +792,168 @@ export default function RelatoriosPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <CardMetrica
-                icon={TrendingUp}
-                label="Faturamento líquido"
-                valor={formatarMoeda(metricas.totalLiquido)}
-                subtitulo={
-                  metricas.totalTrocas !== 0
-                    ? `${formatarMoeda(metricas.totalFaturado)} em vendas ${metricas.totalTrocas > 0 ? "+" : "-"} ${formatarMoeda(Math.abs(metricas.totalTrocas))} em trocas`
-                    : undefined
-                }
-              />
-              <CardMetrica
-                icon={Receipt}
-                label="Vendas realizadas"
-                valor={metricas.quantidadeVendas.toString()}
-              />
-              <CardMetrica
-                icon={Repeat}
-                label="Trocas no período"
-                valor={metricas.quantidadeTrocas.toString()}
-                subtitulo={
-                  metricas.quantidadeTrocas > 0
-                    ? `${metricas.totalTrocas >= 0 ? "+" : "-"}${formatarMoeda(Math.abs(metricas.totalTrocas))} de ajuste`
-                    : undefined
-                }
-              />
-              <CardMetrica
-                icon={Wallet}
-                label="Ticket médio"
-                valor={formatarMoeda(
-                  metricas.quantidadeVendas > 0
-                    ? metricas.totalFaturado / metricas.quantidadeVendas
-                    : 0
+            {/* destaque: faturamento líquido + comparativo com o período anterior */}
+            <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-primary-dark via-primary to-info-dark text-white p-5 sm:p-6 shadow-lg shadow-primary/20">
+              <div className="pointer-events-none absolute -top-16 -right-16 w-56 h-56 rounded-full bg-accent/20 blur-3xl" />
+              <div className="relative flex flex-wrap items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="flex items-center gap-2 text-xs uppercase tracking-[0.15em] text-white/70 font-medium">
+                    <TrendingUp className="w-4 h-4 text-accent" />
+                    Faturamento líquido
+                  </p>
+                  <p className="mt-2 text-3xl sm:text-4xl font-semibold font-mono tracking-tight">
+                    {formatarMoeda(metricas.totalLiquido)}
+                  </p>
+                  {metricas.totalTrocas !== 0 && (
+                    <p className="mt-1 text-xs text-white/70">
+                      {formatarMoeda(metricas.totalFaturado)} em vendas {metricas.totalTrocas > 0 ? "+" : "−"}{" "}
+                      {formatarMoeda(Math.abs(metricas.totalTrocas))} em trocas
+                    </p>
+                  )}
+                  {periodoGerado && (
+                    <p className="mt-1 text-xs text-white/60">
+                      {periodoGerado.inicio === periodoGerado.fim
+                        ? dataCurta(periodoGerado.inicio)
+                        : `${dataCurta(periodoGerado.inicio)} a ${dataCurta(periodoGerado.fim)}`}
+                      {" · "}
+                      {diasPeriodo} {diasPeriodo === 1 ? "dia" : "dias"}
+                    </p>
+                  )}
+                </div>
+
+                {comparativo && periodoGerado && (
+                  <div className="rounded-xl bg-white/10 ring-1 ring-white/15 px-4 py-3 text-right">
+                    <p className="text-[11px] uppercase tracking-wide text-white/60">vs. período anterior</p>
+                    {variacaoPct !== null ? (
+                      <p
+                        className={`mt-0.5 flex items-center justify-end gap-1 text-xl font-semibold font-mono ${
+                          variacaoPct >= 0 ? "text-emerald-300" : "text-red-300"
+                        }`}
+                      >
+                        {variacaoPct >= 0 ? <ArrowUpRight className="w-5 h-5" /> : <ArrowDownRight className="w-5 h-5" />}
+                        {Math.abs(variacaoPct).toFixed(1).replace(".", ",")}%
+                      </p>
+                    ) : (
+                      <p className="mt-0.5 text-sm text-white/80">Sem dados para comparar</p>
+                    )}
+                    <p className="text-[11px] text-white/60">
+                      {formatarMoeda(comparativo.total)} em{" "}
+                      {(() => {
+                        const ant = periodoAnterior(periodoGerado.inicio, periodoGerado.fim);
+                        return ant.inicio === ant.fim ? dataCurta(ant.inicio) : `${dataCurta(ant.inicio)} a ${dataCurta(ant.fim)}`;
+                      })()}
+                    </p>
+                  </div>
                 )}
-              />
+              </div>
+
+              <div className="relative mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+                <MiniIndicador icon={Receipt} label="Vendas realizadas" valor={metricas.quantidadeVendas.toString()} />
+                <MiniIndicador
+                  icon={Wallet}
+                  label="Ticket médio"
+                  valor={formatarMoeda(metricas.quantidadeVendas > 0 ? metricas.totalFaturado / metricas.quantidadeVendas : 0)}
+                />
+                <MiniIndicador icon={CalendarDays} label="Média por dia" valor={formatarMoeda(mediaPorDia)} />
+                <MiniIndicador
+                  icon={Repeat}
+                  label="Trocas no período"
+                  valor={metricas.quantidadeTrocas.toString()}
+                  subtitulo={
+                    metricas.quantidadeTrocas > 0
+                      ? `${metricas.totalTrocas >= 0 ? "+" : "−"}${formatarMoeda(Math.abs(metricas.totalTrocas))} de ajuste`
+                      : undefined
+                  }
+                />
+              </div>
             </div>
 
             {/* gráfico de vendas por dia */}
             <div className="bg-surface border border-border rounded-xl p-5">
-              <h3 className="text-sm font-semibold mb-4">Vendas por dia</h3>
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
+                <h3 className="text-sm font-semibold">Vendas por dia</h3>
+                {melhorDia && (
+                  <p className="flex items-center gap-1.5 text-xs text-muted">
+                    <Trophy className="w-3.5 h-3.5 text-accent-dark" />
+                    Melhor dia: <span className="font-medium text-foreground">{dataCurta(melhorDia.dia)}</span>
+                    <span className="font-mono text-foreground">{formatarMoeda(melhorDia.total)}</span>
+                  </p>
+                )}
+              </div>
               {vendasPorDia.length === 0 ? (
                 <p className="text-sm text-muted">Nenhuma venda no período.</p>
               ) : (
-                <div className="flex items-end gap-1.5 h-40">
-                  {vendasPorDia.map(({ dia, total }) => {
-                    const alturaPct = Math.max(4, (total / maiorValorDia) * 100);
-                    const [, mes, diaNum] = dia.split("-");
-                    return (
+                <div className="overflow-x-auto pt-6">
+                  <div style={{ minWidth: vendasPorDia.length > 20 ? vendasPorDia.length * 28 : undefined }}>
+                    <div className="relative h-40 flex items-end gap-1.5 border-b border-border/70">
+                      {/* linha da média diária do período */}
                       <div
-                        key={dia}
-                        className="flex-1 flex flex-col items-center justify-end h-full group relative"
+                        className="absolute inset-x-0 border-t border-dashed border-accent-dark/70 pointer-events-none"
+                        style={{ bottom: `${Math.min(100, (mediaPorDia / maiorValorDia) * 100)}%` }}
                       >
-                        <div className="absolute -top-7 opacity-0 group-hover:opacity-100 transition text-[11px] bg-primary-dark text-white px-2 py-1 rounded whitespace-nowrap pointer-events-none z-10">
-                          {formatarMoeda(total)}
-                        </div>
-                        <div
-                          className="w-full bg-primary hover:bg-primary-dark rounded-t transition-all"
-                          style={{ height: `${alturaPct}%` }}
-                        />
-                        <span className="text-[10px] text-muted mt-1.5 font-mono">
-                          {diaNum}/{mes}
+                        <span className="absolute right-0 -top-4 text-[10px] text-accent-dark bg-surface/80 px-1 rounded">
+                          média {formatarMoeda(mediaPorDia)}
                         </span>
                       </div>
-                    );
-                  })}
+                      {vendasPorDia.map(({ dia, total }) => {
+                        const alturaPct = Math.max(4, (total / maiorValorDia) * 100);
+                        const eMelhor = melhorDia?.dia === dia && vendasPorDia.length > 1;
+                        return (
+                          <div key={dia} className="flex-1 h-full flex items-end group relative">
+                            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition text-[11px] bg-primary-dark text-white px-2 py-1 rounded whitespace-nowrap pointer-events-none z-10">
+                              {dataCurta(dia)} · {formatarMoeda(total)}
+                            </div>
+                            <div
+                              className={`w-full rounded-t transition-all ${
+                                eMelhor ? "bg-accent hover:bg-accent-dark" : "bg-info hover:bg-info-dark"
+                              }`}
+                              style={{ height: `${alturaPct}%` }}
+                            />
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <div className="flex gap-1.5 mt-1.5">
+                      {vendasPorDia.map(({ dia }) => (
+                        <span key={dia} className="flex-1 text-center text-[10px] text-muted font-mono">
+                          {dataCurta(dia)}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="bg-surface border border-border rounded-xl p-5">
                 <h3 className="text-sm font-semibold mb-1">Por forma de pagamento</h3>
-                <p className="text-[11px] text-muted mb-3">Vendas e ajuste de trocas já somados</p>
-                <ul className="space-y-3">
-                  {Object.entries(metricas.totalPorFormaPagamento).map(([forma, valor]) => (
-                    <li key={forma} className="flex items-center justify-between text-sm">
-                      <span className="text-muted">{LABEL_FORMA_PAGAMENTO[forma] ?? forma}</span>
-                      <span className="font-mono font-medium">{formatarMoeda(valor)}</span>
-                    </li>
-                  ))}
-                  {Object.keys(metricas.totalPorFormaPagamento).length === 0 && (
+                <p className="text-[11px] text-muted mb-4">Vendas e ajuste de trocas já somados</p>
+                <ul className="space-y-4">
+                  {formasOrdenadas.itens.map(([forma, valor]) => {
+                    const pct = formasOrdenadas.base > 0 ? (Math.max(valor, 0) / formasOrdenadas.base) * 100 : 0;
+                    return (
+                      <li key={forma}>
+                        <div className="flex items-center justify-between text-sm gap-2">
+                          <span className="flex items-center gap-2 text-foreground">
+                            <span className={`w-2.5 h-2.5 rounded-full ${COR_FORMA[forma] ?? "bg-muted"}`} />
+                            {LABEL_FORMA_PAGAMENTO[forma] ?? forma}
+                          </span>
+                          <span className="flex items-baseline gap-2">
+                            <span className="text-[11px] text-muted font-mono">{pct.toFixed(0)}%</span>
+                            <span className="font-mono font-medium">{formatarMoeda(valor)}</span>
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-background overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${COR_FORMA[forma] ?? "bg-muted"}`}
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
+                  {formasOrdenadas.itens.length === 0 && (
                     <p className="text-sm text-muted">Nenhuma venda no período.</p>
                   )}
                 </ul>
@@ -772,20 +961,36 @@ export default function RelatoriosPage() {
 
               <div className="bg-surface border border-border rounded-xl p-5">
                 <h3 className="text-sm font-semibold mb-4">Produtos mais vendidos</h3>
-                <ul className="space-y-3">
-                  {metricas.produtosMaisVendidos.map((p, idx) => (
-                    <li key={p.nome} className="flex items-center justify-between text-sm gap-2">
-                      <span className="text-muted truncate">
-                        <span className="font-mono text-xs text-primary mr-2">
-                          {(idx + 1).toString().padStart(2, "0")}
-                        </span>
-                        {p.nome}
-                      </span>
-                      <span className="font-mono font-medium whitespace-nowrap">
-                        {p.quantidadeVendida}x
-                      </span>
-                    </li>
-                  ))}
+                <ul className="space-y-3.5">
+                  {metricas.produtosMaisVendidos.map((p, idx) => {
+                    const maior = metricas.produtosMaisVendidos[0]?.quantidadeVendida || 1;
+                    return (
+                      <li key={p.nome}>
+                        <div className="flex items-center justify-between text-sm gap-2">
+                          <span className="flex items-center gap-2 min-w-0">
+                            <span
+                              className={`shrink-0 w-6 h-6 rounded-full flex items-center justify-center font-mono text-[11px] font-semibold ${
+                                idx === 0 ? "bg-accent text-white" : "bg-info-light text-info-dark"
+                              }`}
+                            >
+                              {idx + 1}
+                            </span>
+                            <span className="truncate text-foreground">{p.nome}</span>
+                          </span>
+                          <span className="text-right whitespace-nowrap">
+                            <span className="font-mono font-medium">{p.quantidadeVendida}x</span>
+                            <span className="block text-[11px] text-muted font-mono">{formatarMoeda(p.totalVendido)}</span>
+                          </span>
+                        </div>
+                        <div className="mt-1.5 h-1.5 rounded-full bg-background overflow-hidden">
+                          <div
+                            className={`h-full rounded-full ${idx === 0 ? "bg-accent" : "bg-info"}`}
+                            style={{ width: `${(p.quantidadeVendida / maior) * 100}%` }}
+                          />
+                        </div>
+                      </li>
+                    );
+                  })}
                   {metricas.produtosMaisVendidos.length === 0 && (
                     <p className="text-sm text-muted">Nenhuma venda no período.</p>
                   )}
@@ -1008,7 +1213,7 @@ function LinhaConciliacao({
   );
 }
 
-function CardMetrica({
+function MiniIndicador({
   icon: Icon,
   label,
   valor,
@@ -1020,13 +1225,13 @@ function CardMetrica({
   subtitulo?: string;
 }) {
   return (
-    <div className="bg-surface border border-border rounded-xl p-5">
-      <div className="w-9 h-9 rounded-lg bg-primary-light flex items-center justify-center mb-3">
-        <Icon className="w-4 h-4 text-primary" />
-      </div>
-      <p className="text-xs text-muted">{label}</p>
-      <p className="text-2xl font-semibold font-mono mt-1 tracking-tight">{valor}</p>
-      {subtitulo && <p className="text-[11px] text-muted mt-1">{subtitulo}</p>}
+    <div className="rounded-xl bg-white/10 ring-1 ring-white/15 backdrop-blur-sm px-3.5 py-3">
+      <p className="flex items-center gap-1.5 text-[11px] text-white/70">
+        <Icon className="w-3.5 h-3.5 text-accent" />
+        {label}
+      </p>
+      <p className="mt-1 text-lg font-semibold font-mono tracking-tight">{valor}</p>
+      {subtitulo && <p className="text-[11px] text-white/60 mt-0.5">{subtitulo}</p>}
     </div>
   );
 }
