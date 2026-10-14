@@ -36,6 +36,24 @@ export function formatarDataHora(iso: string): string {
   }).format(paraDataUtc(iso));
 }
 
+/** "hoje às 08:13" se for hoje (fuso de Brasília), senão "13/10 às 08:13". */
+export function formatarDataHoraCurta(iso: string): string {
+  const d = paraDataUtc(iso);
+  const hora = new Intl.DateTimeFormat("pt-BR", {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZone: FUSO_BRASILIA,
+  }).format(d);
+  const hoje = dataBrasiliaISO(new Date().toISOString());
+  if (dataBrasiliaISO(iso) === hoje) return `hoje às ${hora}`;
+  const dia = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    timeZone: FUSO_BRASILIA,
+  }).format(d);
+  return `${dia} às ${hora}`;
+}
+
 /** Retorna "YYYY-MM-DD" da venda já no fuso de Brasília — usado para agrupar por dia (gráfico). */
 export function dataBrasiliaISO(iso: string): string {
   const formatter = new Intl.DateTimeFormat("en-CA", {

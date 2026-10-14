@@ -117,6 +117,8 @@ export interface UsuarioAdmin {
 export interface Caixa {
   id: number;
   usuarioAberturaNome: string;
+  /** Login de quem abriu (usado para saber se é a mesma pessoa logada agora). */
+  usuarioAberturaLogin: string | null;
   valorInicial: number;
   dataAbertura: string;
   usuarioFechamentoNome: string | null;

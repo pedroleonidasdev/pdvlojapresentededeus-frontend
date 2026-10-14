@@ -3,7 +3,9 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Caixa } from "@/lib/types";
-import { formatarDataHora, formatarMoeda, horasDesde } from "@/lib/format";
+import { formatarDataHora, formatarDataHoraCurta, formatarMoeda, horasDesde } from "@/lib/format";
+import { useAuth } from "@/lib/auth-context";
+import { UserRound } from "lucide-react";
 import EditarAberturaCaixa from "./EditarAberturaCaixa";
 
 /**
@@ -21,6 +23,7 @@ export default function CaixaStatusBadge({
    *  "dark": sem fundo, texto claro — usar sobre a sidebar (fundo verde escuro). */
   variant?: "pill" | "dark";
 }) {
+  const { usuario } = useAuth();
   // undefined = ainda carregando (não mostra nada, evita "piscar" errado)
   const [caixa, setCaixa] = useState<Caixa | null | undefined>(undefined);
 
@@ -55,6 +58,15 @@ export default function CaixaStatusBadge({
   const horasAberto = aberto && caixa ? Math.floor(horasDesde(caixa.dataAbertura)) : 0;
   const caixaEsquecido = horasAberto >= LIMITE_HORAS_ESQUECIDO;
 
+  // a pessoa logada agora não é quem abriu o caixa (ex.: troca de turno).
+  // Compara pelo login (único); se o backend não enviar, cai para o nome.
+  const normalizar = (n: string) => n.trim().toLowerCase();
+  const mesmaPessoa =
+    !!caixa && !!usuario && (caixa.usuarioAberturaLogin
+      ? normalizar(usuario.login) === normalizar(caixa.usuarioAberturaLogin)
+      : normalizar(usuario.nome) === normalizar(caixa.usuarioAberturaNome));
+  const operandoOutraPessoa = aberto && !!caixa && !!usuario && !mesmaPessoa;
+
   const dot = (
     <span className="relative flex h-2.5 w-2.5 shrink-0">
       {aberto && (
@@ -81,29 +93,55 @@ export default function CaixaStatusBadge({
           {aberto ? "Caixa aberto" : "Caixa fechado"}
         </div>
         {aberto && caixa && (
-          <p
-            className="mt-0.5 pl-4 text-[10px] leading-tight text-white/60"
-            title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}
-          >
-            <span className="block truncate">{caixa.usuarioAberturaNome}</span>
-            <span className="block">{formatarDataHora(caixa.dataAbertura)}</span>
-          </p>
-        )}
-        {aberto && caixa && (
-          <p
-            className="mt-0.5 pl-4 text-[10px] leading-tight text-white/60 flex items-center gap-0.5"
-            title={
-              caixa.valorInicialOriginal !== null
-                ? `Valor corrigido por ${caixa.usuarioEdicaoAberturaNome ?? "—"} (era ${formatarMoeda(caixa.valorInicialOriginal)})`
-                : "Valor de abertura do caixa"
-            }
-          >
-            <span>
-              Abertura: {formatarMoeda(caixa.valorInicial)}
-              {caixa.valorInicialOriginal !== null && " (corrigido)"}
-            </span>
-            <EditarAberturaCaixa caixa={caixa} onAtualizado={setCaixa} className="text-white/70 hover:bg-white/10" />
-          </p>
+          <div className="mt-1.5 space-y-1 pl-4 text-[10px] leading-tight text-white/60">
+            {/* quem abriu e quando */}
+            <p
+              title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}
+            >
+              Aberto por{" "}
+              <span className="font-semibold text-white/85">{caixa.usuarioAberturaNome}</span>
+              <span className="block">{formatarDataHoraCurta(caixa.dataAbertura)}</span>
+            </p>
+
+            {/* quem reabriu (só aparece se o caixa foi reaberto) */}
+            {caixa.usuarioReaberturaNome && caixa.dataReabertura && (
+              <p title={`Reaberto por ${caixa.usuarioReaberturaNome} em ${formatarDataHora(caixa.dataReabertura)}`}>
+                Reaberto por{" "}
+                <span className="font-semibold text-white/85">{caixa.usuarioReaberturaNome}</span>
+                <span className="block">{formatarDataHoraCurta(caixa.dataReabertura)}</span>
+              </p>
+            )}
+
+            {/* quem está operando agora, quando é outra pessoa (troca de turno) */}
+            {operandoOutraPessoa && usuario && (
+              <p
+                className="flex items-center gap-1.5 rounded-md bg-white/10 px-2 py-1 ring-1 ring-white/10"
+                title={`${usuario.nome} está logado(a) neste caixa, aberto por ${caixa.usuarioAberturaNome}`}
+              >
+                <UserRound className="h-3 w-3 shrink-0 text-accent-light" />
+                <span className="min-w-0">
+                  <span className="block text-[9px] uppercase tracking-wider text-white/50">Operando agora</span>
+                  <span className="block truncate font-semibold text-white">{usuario.nome}</span>
+                </span>
+              </p>
+            )}
+
+            {/* valor de abertura (editável) */}
+            <p
+              className="flex items-center gap-0.5"
+              title={
+                caixa.valorInicialOriginal !== null
+                  ? `Valor corrigido por ${caixa.usuarioEdicaoAberturaNome ?? "—"} (era ${formatarMoeda(caixa.valorInicialOriginal)})`
+                  : "Valor de abertura do caixa"
+              }
+            >
+              <span>
+                Abertura: {formatarMoeda(caixa.valorInicial)}
+                {caixa.valorInicialOriginal !== null && " (corrigido)"}
+              </span>
+              <EditarAberturaCaixa caixa={caixa} onAtualizado={setCaixa} className="text-white/70 hover:bg-white/10" />
+            </p>
+          </div>
         )}
         {caixaEsquecido && (
           <p
