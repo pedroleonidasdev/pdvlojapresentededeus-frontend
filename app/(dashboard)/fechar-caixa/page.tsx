@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
+import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { Caixa } from "@/lib/types";
 import { formatarMoeda, formatarDataHora } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
@@ -49,6 +50,7 @@ export default function FecharCaixaPage() {
       await api.post("/caixa/fechar", {
         valorFinal: Number(valorFinal.replace(",", ".")) || 0,
       });
+      avisarCaixaMudou();
       setFechadoComSucesso(true);
       setCaixa(null);
       setValorFinal("");
