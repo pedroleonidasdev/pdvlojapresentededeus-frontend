@@ -40,6 +40,7 @@ import {
   ChevronDown,
 } from "lucide-react";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
+import { AtalhosPeriodo, CampoFiltro, ChipFiltro, PainelFiltros } from "@/components/FiltrosPadrao";
 
 const TIPOS: TipoDespesa[] = ["DESPESA", "SANGRIA", "SUPRIMENTO"];
 
@@ -611,53 +612,35 @@ export default function FinancasPage() {
 
       <div className="p-4 md:p-8 space-y-6">
         {/* filtro de período */}
-        <div className="flex flex-wrap items-end gap-3 bg-surface border border-border rounded-xl p-4">
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">De</label>
-            <input
-              type="date"
-              value={inicio}
-              onChange={(e) => setInicio(e.target.value)}
-              className="input text-sm"
-            />
-          </div>
-          <div>
-            <label className="block text-xs font-medium text-muted mb-1">Até</label>
-            <input type="date" value={fim} onChange={(e) => setFim(e.target.value)} className="input text-sm" />
-          </div>
+        <PainelFiltros>
+          <AtalhosPeriodo
+            inicio={inicio}
+            fim={fim}
+            desabilitado={carregando}
+            onSelecionar={(a) => aplicarPeriodo({ inicio: a.inicio, fim: a.fim })}
+            atalhos={[
+              { rotulo: "Hoje", inicio: hojeISO(), fim: hojeISO() },
+              { rotulo: "7 dias", inicio: somarDias(hojeISO(), -6), fim: hojeISO() },
+              { rotulo: "Este mês", ...limitesDoMes(hojeISO()) },
+              { rotulo: "Mês passado", ...limitesDoMes(somarDias(limitesDoMes(hojeISO()).inicio, -1)) },
+              { rotulo: "Próximo mês", ...limitesDoMes(somarDias(limitesDoMes(hojeISO()).fim, 1)) },
+            ]}
+          />
+          <CampoFiltro label="De">
+            <input type="date" value={inicio} onChange={(e) => setInicio(e.target.value)} className="input" />
+          </CampoFiltro>
+          <CampoFiltro label="Até">
+            <input type="date" value={fim} onChange={(e) => setFim(e.target.value)} className="input" />
+          </CampoFiltro>
           <button
             onClick={() => carregar()}
             disabled={carregando}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
+            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-60 h-fit"
           >
             {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
             Filtrar
           </button>
-          <div className="flex flex-wrap items-center gap-1.5 sm:ml-auto">
-            {[
-              { label: "Hoje", get: () => ({ inicio: hojeISO(), fim: hojeISO() }) },
-              { label: "7 dias", get: () => ({ inicio: somarDias(hojeISO(), -6), fim: hojeISO() }) },
-              { label: "Este mês", get: () => limitesDoMes(hojeISO()) },
-              {
-                label: "Mês passado",
-                get: () => limitesDoMes(somarDias(limitesDoMes(hojeISO()).inicio, -1)),
-              },
-              {
-                label: "Próximo mês",
-                get: () => limitesDoMes(somarDias(limitesDoMes(hojeISO()).fim, 1)),
-              },
-            ].map((atalho) => (
-              <button
-                key={atalho.label}
-                onClick={() => aplicarPeriodo(atalho.get())}
-                disabled={carregando}
-                className="text-xs px-2.5 py-1.5 rounded-full border border-border text-muted hover:text-primary hover:border-primary/40 transition disabled:opacity-50"
-              >
-                {atalho.label}
-              </button>
-            ))}
-          </div>
-        </div>
+        </PainelFiltros>
 
         {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
 
@@ -851,42 +834,25 @@ export default function FinancasPage() {
                 : "Só o que foi registrado no período escolhido acima."}
             </span>
           </div>
-          <div className="flex flex-wrap items-center gap-2 px-4 py-3 border-b border-border">
-            <Filter className="w-3.5 h-3.5 text-muted" />
-            <div className="flex gap-1.5 flex-wrap">
-              <button
-                onClick={() => setFiltroTipo("TODOS")}
-                className={`text-xs px-2.5 py-1 rounded-full transition ${
-                  filtroTipo === "TODOS" ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"
-                }`}
-              >
+          <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-b border-border">
+            <div className="flex items-center gap-2 text-xs text-muted">
+              <Filter className="w-3.5 h-3.5" />
+              Filtros
+            </div>
+            <div className="flex gap-2 flex-wrap">
+              <ChipFiltro ativo={filtroTipo === "TODOS"} onClick={() => setFiltroTipo("TODOS")}>
                 Todos
-              </button>
+              </ChipFiltro>
               {TIPOS.map((tipo) => (
-                <button
-                  key={tipo}
-                  onClick={() => setFiltroTipo(tipo)}
-                  className={`text-xs px-2.5 py-1 rounded-full transition ${
-                    filtroTipo === tipo ? "bg-primary text-white" : "bg-background text-muted hover:text-foreground"
-                  }`}
-                >
+                <ChipFiltro key={tipo} ativo={filtroTipo === tipo} onClick={() => setFiltroTipo(tipo)}>
                   {LABEL_TIPO_DESPESA[tipo]}
-                </button>
+                </ChipFiltro>
               ))}
             </div>
-            <button
-              onClick={() => setAgrupar((v) => !v)}
-              aria-pressed={agrupar}
-              className={`text-xs px-2.5 py-1 rounded-full border transition ${
-                agrupar
-                  ? "bg-primary-light border-primary/30 text-primary-dark font-medium"
-                  : "border-border text-muted hover:text-foreground"
-              }`}
-              title="Agrupar por urgência de vencimento"
-            >
+            <ChipFiltro ativo={agrupar} onClick={() => setAgrupar((v) => !v)} title="Agrupar por urgência de vencimento">
               Agrupar por urgência
-            </button>
-            <div className="relative ml-2 min-w-[160px] flex-1 max-w-xs">
+            </ChipFiltro>
+            <div className="relative min-w-[160px] flex-1 max-w-xs">
               <Search className="w-3.5 h-3.5 text-muted absolute left-2.5 top-1/2 -translate-y-1/2" />
               <input
                 value={busca}
@@ -896,24 +862,12 @@ export default function FinancasPage() {
                 className="input text-xs py-1.5 pl-8 w-full"
               />
             </div>
-            <div className="flex gap-1.5 flex-wrap ml-auto items-center">
-              <span className="text-[11px] text-muted uppercase tracking-wide mr-0.5">Pagamento</span>
-              {(["TODOS", "PENDENTE", "PAGO"] as FiltroStatus[]).map((s) => (
-                <button
-                  key={s}
-                  onClick={() => setFiltroStatus(s)}
-                  className={`text-xs px-2.5 py-1 rounded-full transition ${
-                    filtroStatus === s
-                      ? s === "PENDENTE"
-                        ? "bg-danger text-white"
-                        : s === "PAGO"
-                        ? "bg-primary text-white"
-                        : "bg-foreground text-white"
-                      : "bg-background text-muted hover:text-foreground"
-                  }`}
-                >
-                  {s === "TODOS" ? "Todos" : s === "PENDENTE" ? "Em aberto" : "Pagos"}
-                </button>
+            <div className="flex gap-2 flex-wrap ml-auto items-center">
+              <span className="text-xs text-muted">Pagamento</span>
+              {(["TODOS", "PENDENTE", "PAGO"] as FiltroStatus[]).map((st) => (
+                <ChipFiltro key={st} ativo={filtroStatus === st} onClick={() => setFiltroStatus(st)}>
+                  {st === "TODOS" ? "Todos" : st === "PENDENTE" ? "Em aberto" : "Pagos"}
+                </ChipFiltro>
               ))}
             </div>
           </div>
