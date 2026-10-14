@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Caixa } from "@/lib/types";
-import { formatarDataHora, formatarDataHoraCurta, formatarMoeda, horasDesde } from "@/lib/format";
+import { formatarDataHora, formatarMoeda, horasDesde } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
 import { UserRound } from "lucide-react";
 import EditarAberturaCaixa from "./EditarAberturaCaixa";
@@ -70,6 +70,9 @@ export default function CaixaStatusBadge({
   const operandoOutraPessoa =
     aberto && !!caixa && !!usuario && !ehUsuarioAdmin && !mesmaPessoa;
 
+  // "14/10/2026 às 08:13" (data completa, sem "hoje", para ficar explícito)
+  const dataExplicita = (iso: string) => formatarDataHora(iso).replace(", ", " às ");
+
   const dot = (
     <span className="relative flex h-2.5 w-2.5 shrink-0">
       {aberto && (
@@ -87,7 +90,7 @@ export default function CaixaStatusBadge({
     return (
       <div className={className}>
         <div
-          className={`inline-flex items-center gap-1.5 text-[11px] font-medium ${
+          className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
             aberto ? "text-success-light" : "text-red-200"
           }`}
           title={aberto ? "Caixa aberto" : "Caixa fechado"}
@@ -96,59 +99,61 @@ export default function CaixaStatusBadge({
           {aberto ? "Caixa aberto" : "Caixa fechado"}
         </div>
         {aberto && caixa && (
-          <div className="mt-1.5 space-y-1 pl-4 text-[10px] leading-tight text-white/60">
+          <div className="mt-2 space-y-2.5 pl-4 leading-tight">
             {/* quem abriu e quando */}
-            <p
-              title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}
-            >
-              Aberto por{" "}
-              <span className="font-semibold text-white/85">{caixa.usuarioAberturaNome}</span>
-              <span className="block">{formatarDataHoraCurta(caixa.dataAbertura)}</span>
-            </p>
+            <div title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Aberto por</p>
+              <p className="truncate text-sm font-semibold text-white">{caixa.usuarioAberturaNome}</p>
+              <p className="text-xs text-white/75">em {dataExplicita(caixa.dataAbertura)}</p>
+            </div>
 
             {/* quem reabriu (só aparece se o caixa foi reaberto) */}
             {caixa.usuarioReaberturaNome && caixa.dataReabertura && (
-              <p title={`Reaberto por ${caixa.usuarioReaberturaNome} em ${formatarDataHora(caixa.dataReabertura)}`}>
-                Reaberto por{" "}
-                <span className="font-semibold text-white/85">{caixa.usuarioReaberturaNome}</span>
-                <span className="block">{formatarDataHoraCurta(caixa.dataReabertura)}</span>
-              </p>
+              <div title={`Reaberto por ${caixa.usuarioReaberturaNome} em ${formatarDataHora(caixa.dataReabertura)}`}>
+                <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Reaberto por</p>
+                <p className="truncate text-sm font-semibold text-white">{caixa.usuarioReaberturaNome}</p>
+                <p className="text-xs text-white/75">em {dataExplicita(caixa.dataReabertura)}</p>
+              </div>
             )}
 
             {/* quem está operando agora, quando é outra pessoa (troca de turno) */}
             {operandoOutraPessoa && usuario && (
-              <p
-                className="flex items-center gap-1.5 rounded-md bg-white/10 px-2 py-1 ring-1 ring-white/10"
+              <div
+                className="flex items-center gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 ring-1 ring-accent/40"
                 title={`${usuario.nome} está logado(a) neste caixa, aberto por ${caixa.usuarioAberturaNome}`}
               >
-                <UserRound className="h-3 w-3 shrink-0 text-accent-light" />
-                <span className="min-w-0">
-                  <span className="block text-[9px] uppercase tracking-wider text-white/50">Operando agora</span>
-                  <span className="block truncate font-semibold text-white">{usuario.nome}</span>
-                </span>
-              </p>
+                <UserRound className="h-4 w-4 shrink-0 text-accent-light" />
+                <div className="min-w-0">
+                  <p className="text-[11px] font-medium uppercase tracking-wide text-accent-light">Operando agora</p>
+                  <p className="truncate text-sm font-bold text-white">{usuario.nome}</p>
+                </div>
+              </div>
             )}
 
             {/* valor de abertura (editável) */}
-            <p
-              className="flex items-center gap-0.5"
+            <div
               title={
                 caixa.valorInicialOriginal !== null
                   ? `Valor corrigido por ${caixa.usuarioEdicaoAberturaNome ?? "—"} (era ${formatarMoeda(caixa.valorInicialOriginal)})`
                   : "Valor de abertura do caixa"
               }
             >
-              <span>
-                Abertura: {formatarMoeda(caixa.valorInicial)}
-                {caixa.valorInicialOriginal !== null && " (corrigido)"}
-              </span>
-              <EditarAberturaCaixa caixa={caixa} onAtualizado={setCaixa} className="text-white/70 hover:bg-white/10" />
-            </p>
+              <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Valor de abertura</p>
+              <p className="flex items-center gap-1 text-sm font-semibold text-white">
+                <span>
+                  {formatarMoeda(caixa.valorInicial)}
+                  {caixa.valorInicialOriginal !== null && (
+                    <span className="ml-1 text-xs font-normal text-white/70">(corrigido)</span>
+                  )}
+                </span>
+                <EditarAberturaCaixa caixa={caixa} onAtualizado={setCaixa} className="text-white/70 hover:bg-white/10" />
+              </p>
+            </div>
           </div>
         )}
         {caixaEsquecido && (
           <p
-            className="mt-1 pl-4 text-[10px] leading-tight font-medium text-amber-300"
+            className="mt-2 pl-4 text-xs leading-tight font-medium text-amber-300"
             title="Este caixa está aberto há muitas horas. Confira se não ficou aberto por esquecimento."
           >
             Aberto há {horasAberto}h — confira se precisa fechar
