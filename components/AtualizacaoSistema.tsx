@@ -2,37 +2,58 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { CheckCircle2, RefreshCw } from "lucide-react";
-import { BarraCarregamento, OracaoRotativa } from "@/components/CarregamentoCatolico";
+import { BarraCarregamento, CruzIcone, OracaoRotativa } from "@/components/CarregamentoCatolico";
 
 // Versão embutida neste JavaScript (definida em next.config.ts).
 const VERSAO_ATUAL = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
 const CHAVE_VERSAO_VISTA = "pdv_versao_vista";
 const INTERVALO_CHECAGEM_MS = 5 * 60_000;
-const ADIAMENTO_MS = 10 * 60_000;
+// tempo da barra de carregamento entre o clique e o recarregamento da página
+const DURACAO_ATUALIZACAO_MS = 5_000;
+
+const ETAPAS = [
+  { ate: 35, texto: "Baixando as melhorias…" },
+  { ate: 75, texto: "Aplicando a nova versão…" },
+  { ate: 100, texto: "Finalizando…" },
+];
+
+/** true quando este navegador já tinha aberto uma versão diferente da atual. */
+function versaoMudouDesdeUltimaVisita(): boolean {
+  if (typeof window === "undefined") return false;
+  if (process.env.NODE_ENV !== "production" || !VERSAO_ATUAL) return false;
+  try {
+    const vista = localStorage.getItem(CHAVE_VERSAO_VISTA);
+    return !!vista && vista !== VERSAO_ATUAL;
+  } catch {
+    return false;
+  }
+}
 
 /**
- * Avisa, no meio da tela, quando existe uma versão nova do sistema publicada.
- * - Confere ao abrir o painel (logo após o login), ao voltar para a aba/app e
- *   a cada 5 minutos.
- * - "Reiniciar sistema" recarrega a página (o login é mantido).
- * - Sempre que o painel abre numa versão diferente da última que este
- *   navegador viu (ex.: depois de reiniciar, ou ao entrar no dia seguinte),
- *   mostra "Sistema atualizado com sucesso". Na primeira vez que o navegador
- *   abre o sistema só registra a versão, sem mostrar nada.
- * - "Agora não" adia o aviso por 10 minutos, para não atrapalhar uma venda.
+ * Fluxo de atualização do sistema (tela cheia, no meio da tela):
+ *
+ * 1. Quando existe uma versão nova publicada (conferido ao abrir o painel, ao
+ *    voltar para a aba/app e a cada 5 minutos) aparece o aviso com um único
+ *    botão: "Atualizar Sistema".
+ * 2. Ao clicar, uma barra de carregamento (terço) enche em 5 segundos, com
+ *    mensagens de etapa, e a página é recarregada (o login é mantido).
+ * 3. Ao abrir na versão nova, aparece "Sistema Atualizado Com Sucesso!".
+ *    Sempre que o painel abre numa versão diferente da última que este
+ *    navegador viu a confirmação é mostrada; na primeira vez que o navegador
+ *    abre o sistema só registra a versão, sem mostrar nada.
  */
 export default function AtualizacaoSistema() {
   const [novaVersao, setNovaVersao] = useState<string | null>(null);
-  const [sucesso, setSucesso] = useState(false);
-  const [reiniciando, setReiniciando] = useState(false);
-  const adiadoAte = useRef(0);
+  const [sucesso, setSucesso] = useState(versaoMudouDesdeUltimaVisita);
+  const [atualizando, setAtualizando] = useState(false);
+  const [progresso, setProgresso] = useState(0);
+  const intervaloProgresso = useRef<ReturnType<typeof setInterval> | null>(null);
+  const atualizandoRef = useRef(false);
 
-  // Compara a versão atual com a última que este navegador já tinha visto.
+  // registra a versão que este navegador está usando agora
   useEffect(() => {
     if (process.env.NODE_ENV !== "production" || !VERSAO_ATUAL) return;
     try {
-      const vista = localStorage.getItem(CHAVE_VERSAO_VISTA);
-      if (vista && vista !== VERSAO_ATUAL) setSucesso(true);
       localStorage.setItem(CHAVE_VERSAO_VISTA, VERSAO_ATUAL);
     } catch {
       // sem acesso ao localStorage: só não mostra a confirmação
@@ -42,7 +63,7 @@ export default function AtualizacaoSistema() {
   const verificar = useCallback(async () => {
     // em desenvolvimento a versão muda a todo momento — não avisa
     if (process.env.NODE_ENV !== "production" || !VERSAO_ATUAL) return;
-    if (Date.now() < adiadoAte.current) return;
+    if (atualizandoRef.current) return;
     try {
       const resp = await fetch("/api/versao", { cache: "no-store" });
       if (!resp.ok) return;
@@ -54,83 +75,123 @@ export default function AtualizacaoSistema() {
   }, []);
 
   useEffect(() => {
-    verificar();
+    const primeira = setTimeout(verificar, 0);
     const intervalo = setInterval(verificar, INTERVALO_CHECAGEM_MS);
     const aoVoltar = () => {
       if (document.visibilityState === "visible") verificar();
     };
     document.addEventListener("visibilitychange", aoVoltar);
     return () => {
+      clearTimeout(primeira);
       clearInterval(intervalo);
       document.removeEventListener("visibilitychange", aoVoltar);
     };
   }, [verificar]);
 
-  function reiniciar() {
-    if (!novaVersao) return;
-    setReiniciando(true);
-    window.location.reload();
-  }
+  // limpa o cronômetro da barra se o componente sair da tela
+  useEffect(() => {
+    return () => {
+      if (intervaloProgresso.current) clearInterval(intervaloProgresso.current);
+    };
+  }, []);
 
-  function adiar() {
-    adiadoAte.current = Date.now() + ADIAMENTO_MS;
-    setNovaVersao(null);
+  function atualizar() {
+    if (atualizandoRef.current) return;
+    atualizandoRef.current = true;
+    setAtualizando(true);
+    setProgresso(0);
+
+    const inicio = Date.now();
+    intervaloProgresso.current = setInterval(() => {
+      const p = Math.min(100, ((Date.now() - inicio) / DURACAO_ATUALIZACAO_MS) * 100);
+      setProgresso(p);
+      if (p >= 100) {
+        if (intervaloProgresso.current) clearInterval(intervaloProgresso.current);
+        // deixa a barra cheia à vista por um instante antes de recarregar
+        setTimeout(() => window.location.reload(), 500);
+      }
+    }, 50);
   }
 
   if (!novaVersao && !sucesso) return null;
 
+  const etapa = ETAPAS.find((e) => progresso <= e.ate) ?? ETAPAS[ETAPAS.length - 1];
+
   return (
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-primary-dark/70 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
+      aria-labelledby="titulo-atualizacao"
     >
-      <div className="w-full max-w-sm rounded-2xl border border-border bg-surface p-6 text-center shadow-xl">
-        {novaVersao ? (
-          <>
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-primary-light text-primary">
-              <RefreshCw className="h-7 w-7" />
-            </div>
-            <h2 className="text-lg font-semibold text-foreground">Nova atualização disponível</h2>
-            <p className="mt-2 text-sm text-muted">
-              Uma versão mais nova do sistema foi publicada. Reinicie para carregar as melhorias.
-            </p>
-            <button
-              onClick={reiniciar}
-              disabled={reiniciando}
-              className="mt-5 flex w-full items-center justify-center gap-2 rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-dark disabled:opacity-70"
-            >
-              {reiniciando ? "Reiniciando..." : "Reiniciar sistema"}
-            </button>
-            {reiniciando && (
-              <div className="mt-4 space-y-2" role="status" aria-live="polite">
-                <BarraCarregamento />
-                <OracaoRotativa />
+      <div className="relative w-full max-w-md overflow-hidden rounded-2xl border border-border bg-surface text-center shadow-2xl">
+        <div className="h-1.5 w-full bg-gradient-to-r from-primary via-accent to-secondary" />
+
+        <div className="p-7 sm:p-9">
+          {atualizando ? (
+            <div role="status" aria-live="polite">
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-primary-light text-primary animate-icon-glow">
+                <RefreshCw className="h-8 w-8 animate-spin [animation-duration:2s]" />
               </div>
-            )}
-            <button
-              onClick={adiar}
-              disabled={reiniciando}
-              className="mt-2 w-full rounded-xl px-4 py-2 text-sm text-muted transition hover:bg-primary-soft"
-            >
-              Agora não
-            </button>
-          </>
-        ) : (
-          <>
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success-light text-success">
-              <CheckCircle2 className="h-7 w-7" />
+              <h2 id="titulo-atualizacao" className="text-xl font-semibold text-foreground">
+                Atualizando o sistema…
+              </h2>
+              <p className="mt-1.5 text-sm text-muted">{etapa.texto}</p>
+
+              <div className="mt-6">
+                <BarraCarregamento progresso={progresso} />
+                <p className="mt-2 font-mono text-sm font-semibold text-primary">{Math.floor(progresso)}%</p>
+              </div>
+
+              <OracaoRotativa className="mt-4" />
+              <p className="mt-5 text-xs text-muted">Não feche esta janela. Leva só alguns segundos.</p>
             </div>
-            <h2 className="text-lg font-semibold text-foreground">Sistema atualizado com sucesso!</h2>
-            <p className="mt-2 text-sm text-muted">Você já está usando a versão mais recente.</p>
-            <button
-              onClick={() => setSucesso(false)}
-              className="mt-5 w-full rounded-xl bg-primary px-4 py-2.5 text-sm font-medium text-white transition hover:bg-primary-dark"
-            >
-              Continuar
-            </button>
-          </>
-        )}
+          ) : novaVersao ? (
+            <>
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-primary-light text-primary">
+                <RefreshCw className="h-8 w-8" />
+              </div>
+              <h2 id="titulo-atualizacao" className="text-xl font-semibold text-foreground">
+                Nova atualização disponível
+              </h2>
+              <p className="mt-2 text-sm text-muted leading-relaxed">
+                Uma versão mais nova do sistema foi publicada. Atualize para carregar as melhorias — seu login é mantido.
+              </p>
+              <button
+                onClick={atualizar}
+                autoFocus
+                className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-dark px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary/25 transition hover:brightness-110 active:scale-[0.99]"
+              >
+                <RefreshCw className="h-4 w-4" />
+                Atualizar Sistema
+              </button>
+            </>
+          ) : (
+            <>
+              <div className="mx-auto mb-5 flex h-16 w-16 items-center justify-center rounded-full bg-success-light text-success animate-icon-glow">
+                <CheckCircle2 className="h-9 w-9" />
+              </div>
+              <h2 id="titulo-atualizacao" className="text-xl font-semibold text-foreground">
+                Sistema Atualizado Com Sucesso!
+              </h2>
+              <p className="mt-2 text-sm text-muted leading-relaxed">
+                Você já está usando a versão mais recente do sistema.
+              </p>
+              <div className="mt-4 flex items-center justify-center gap-2 text-accent-dark">
+                <span className="h-px w-10 bg-accent/60" />
+                <CruzIcone className="h-4 w-4" />
+                <span className="h-px w-10 bg-accent/60" />
+              </div>
+              <button
+                onClick={() => setSucesso(false)}
+                autoFocus
+                className="mt-6 w-full rounded-xl bg-gradient-to-r from-primary to-primary-dark px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary/25 transition hover:brightness-110 active:scale-[0.99]"
+              >
+                Continuar
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   );
