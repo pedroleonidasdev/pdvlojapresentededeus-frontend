@@ -21,7 +21,9 @@ api.interceptors.response.use(
     if (typeof window !== "undefined" && error.response?.status === 401 && !isRequisicaoDeLogin) {
       localStorage.removeItem("pdv_token");
       localStorage.removeItem("pdv_user");
-      window.location.href = "/login";
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login";
+      }
     }
     return Promise.reject(error);
   }

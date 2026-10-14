@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { UsuarioAdmin, Perfil } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, X, Loader2 } from "lucide-react";
+import { Plus, Pencil, Trash2, X, Loader2, LogOut } from "lucide-react";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 export default function UsuariosPage() {
@@ -12,6 +12,7 @@ export default function UsuariosPage() {
   const [carregando, setCarregando] = useState(true);
   const [modalAberto, setModalAberto] = useState(false);
   const [usuarioEmEdicao, setUsuarioEmEdicao] = useState<UsuarioAdmin | null>(null);
+  const [mensagem, setMensagem] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
   async function carregar() {
     setCarregando(true);
@@ -30,25 +31,65 @@ export default function UsuariosPage() {
     carregar();
   }
 
+  // Se a conta derrubada for a de quem clicou, o backend devolve um token novo
+  // e a sessão atual continua valendo; as demais (outros PCs) caem.
+  async function encerrarSessoes(u: UsuarioAdmin | null) {
+    const pergunta = u
+      ? `Encerrar todas as sessões de ${u.nome} (${u.login})? Quem estiver logado com essa conta voltará para a tela de login em até ~15 segundos.`
+      : "Encerrar as sessões de TODOS os usuários? Todos voltarão para a tela de login (menos você, neste aparelho).";
+    if (!confirm(pergunta)) return;
+
+    setMensagem(null);
+    try {
+      const { data } = await api.post<{ novoToken: string | null }>(
+        u ? `/usuarios/${u.id}/encerrar-sessoes` : "/usuarios/encerrar-sessoes"
+      );
+      if (data.novoToken) localStorage.setItem("pdv_token", data.novoToken);
+      setMensagem({
+        tipo: "ok",
+        texto: u ? `Sessões de ${u.nome} encerradas.` : "Sessões de todos os usuários encerradas.",
+      });
+    } catch {
+      setMensagem({ tipo: "erro", texto: "Não foi possível encerrar as sessões." });
+    }
+  }
+
   return (
     <div>
       <PageHeader
         title="Usuários"
         subtitle="Gerencie quem tem acesso ao sistema"
         action={
-          <button
-            onClick={() => {
-              setUsuarioEmEdicao(null);
-              setModalAberto(true);
-            }}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
-          >
-            <Plus className="w-4 h-4" /> Novo usuário
-          </button>
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => encerrarSessoes(null)}
+              className="flex items-center gap-2 border border-border hover:bg-background text-foreground text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              <LogOut className="w-4 h-4" /> Encerrar todas as sessões
+            </button>
+            <button
+              onClick={() => {
+                setUsuarioEmEdicao(null);
+                setModalAberto(true);
+              }}
+              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+            >
+              <Plus className="w-4 h-4" /> Novo usuário
+            </button>
+          </div>
         }
       />
 
       <div className="p-4 md:p-8">
+        {mensagem && (
+          <div
+            className={`mb-4 rounded-lg text-sm px-3 py-2 ${
+              mensagem.tipo === "ok" ? "bg-primary-light text-primary-dark" : "bg-danger-light text-danger"
+            }`}
+          >
+            {mensagem.texto}
+          </div>
+        )}
         {carregando ? (
           <CarregandoSecao />
         ) : (
@@ -85,6 +126,13 @@ export default function UsuariosPage() {
                     </td>
                     <td className="px-5 py-3">
                       <div className="flex justify-end gap-2">
+                        <button
+                          onClick={() => encerrarSessoes(u)}
+                          title="Encerrar sessões deste usuário"
+                          className="p-1.5 rounded-md text-muted hover:bg-background hover:text-primary transition"
+                        >
+                          <LogOut className="w-4 h-4" />
+                        </button>
                         <button
                           onClick={() => {
                             setUsuarioEmEdicao(u);
