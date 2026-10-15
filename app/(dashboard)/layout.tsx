@@ -7,6 +7,7 @@ import { encontrarNavItemPorPath } from "@/lib/nav-items";
 import Sidebar from "@/components/Sidebar";
 import AtualizacaoSistema from "@/components/AtualizacaoSistema";
 import MonitorCaixa from "@/components/MonitorCaixa";
+import ChatSuporte from "@/components/ChatSuporte";
 import api from "@/lib/api";
 import { Menu } from "lucide-react";
 import { TelaCarregamento } from "@/components/CarregamentoCatolico";
@@ -48,6 +49,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       <AtualizacaoSistema />
       {/* aviso de caixa aberto/fechado: só para quem tem perfil ADMIN */}
       {usuario.perfil === "ADMIN" && <MonitorCaixa />}
+      <ChatSuporte />
       <Sidebar aberta={menuAberto} onFechar={() => setMenuAberto(false)} />
 
       <div className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
