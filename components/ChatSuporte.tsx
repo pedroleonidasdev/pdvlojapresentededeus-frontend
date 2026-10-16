@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import axios from "axios";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { ArrowLeft, Loader2, MessageCircle, Mic, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
@@ -27,6 +28,16 @@ interface Mensagem {
   criadaEm: string;
   lida: boolean;
   tipo: string | null;
+}
+
+/** Texto de erro útil: usa a mensagem do servidor ou ao menos o código HTTP, para dar para diagnosticar. */
+function descreverErro(e: unknown, padrao: string): string {
+  if (axios.isAxiosError(e)) {
+    if (!e.response) return `${padrao} Sem conexão com o servidor.`;
+    const msg = (e.response.data as { message?: string } | undefined)?.message;
+    return `${padrao} (erro ${e.response.status}${msg ? `: ${msg}` : ""})`;
+  }
+  return padrao;
 }
 
 const CONTATOS_FECHADO_MS = 10_000;
@@ -226,8 +237,8 @@ export default function ChatSuporte() {
     try {
       await api.delete(`/suporte/conversas/${conversaId}/mensagens`);
       voltarParaLista();
-    } catch {
-      setErro("Não foi possível apagar a conversa. Tente de novo.");
+    } catch (e) {
+      setErro(descreverErro(e, "Não foi possível apagar a conversa."));
       setConfirmandoApagar(false);
     } finally {
       setApagando(false);
@@ -248,8 +259,8 @@ export default function ChatSuporte() {
       ultimoIdRef.current = Math.max(ultimoIdRef.current ?? 0, data.id);
       setMensagens((atuais) => (atuais.some((m) => m.id === data.id) ? atuais : [...atuais, data]));
       return true;
-    } catch {
-      setErro("Não foi possível enviar. Tente de novo.");
+    } catch (e) {
+      setErro(descreverErro(e, "Não foi possível enviar."));
       return false;
     } finally {
       setEnviando(false);
@@ -274,8 +285,8 @@ export default function ChatSuporte() {
       });
       ultimoIdRef.current = Math.max(ultimoIdRef.current ?? 0, data.id);
       setMensagens((atuais) => (atuais.some((m) => m.id === data.id) ? atuais : [...atuais, data]));
-    } catch {
-      setErro("Não foi possível enviar o áudio. Tente de novo.");
+    } catch (e) {
+      setErro(descreverErro(e, "Não foi possível enviar o áudio."));
     } finally {
       setEnviando(false);
     }
