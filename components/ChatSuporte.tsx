@@ -3,8 +3,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Loader2, MessageCircle, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Loader2, MessageCircle, Mic, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
 import SeletorEmoji from "@/components/SeletorEmoji";
+import GravadorAudio from "@/components/GravadorAudio";
+import MensagemAudio from "@/components/MensagemAudio";
 import { figurinhaTemTexto, soEmojis } from "@/lib/figurinhas";
 import { useChamada } from "@/components/ChamadaProvider";
 
@@ -71,6 +73,7 @@ export default function ChatSuporte() {
   const [erro, setErro] = useState<string | null>(null);
   const [confirmandoApagar, setConfirmandoApagar] = useState(false);
   const [seletorAberto, setSeletorAberto] = useState(false);
+  const [gravando, setGravando] = useState(false);
   const [apagando, setApagando] = useState(false);
 
   const abertoRef = useRef(false);
@@ -200,6 +203,7 @@ export default function ChatSuporte() {
     setTexto("");
     setConfirmandoApagar(false);
     setSeletorAberto(false);
+    setGravando(false);
     setConversaId(id);
   }
 
@@ -211,6 +215,7 @@ export default function ChatSuporte() {
     setErro(null);
     setConfirmandoApagar(false);
     setSeletorAberto(false);
+    setGravando(false);
     void buscarContatos();
   }
 
@@ -255,6 +260,31 @@ export default function ChatSuporte() {
     const conteudo = texto.trim();
     if (!conteudo) return;
     if (await postarMensagem(conteudo)) setTexto("");
+  }
+
+  async function enviarAudio(audio: Blob, duracao: number) {
+    setGravando(false);
+    if (enviando || conversaId === null) return;
+    setEnviando(true);
+    setErro(null);
+    try {
+      const { data } = await api.post<Mensagem>(`/suporte/conversas/${conversaId}/audios`, audio, {
+        params: { duracao },
+        headers: { "Content-Type": audio.type || "audio/webm" },
+      });
+      ultimoIdRef.current = Math.max(ultimoIdRef.current ?? 0, data.id);
+      setMensagens((atuais) => (atuais.some((m) => m.id === data.id) ? atuais : [...atuais, data]));
+    } catch {
+      setErro("Não foi possível enviar o áudio. Tente de novo.");
+    } finally {
+      setEnviando(false);
+    }
+  }
+
+  function comecarGravacao() {
+    setSeletorAberto(false);
+    setErro(null);
+    setGravando(true);
   }
 
   async function enviarFigurinha(conteudo: string) {
@@ -355,7 +385,10 @@ export default function ChatSuporte() {
                 </>
               )}
               <button
-                onClick={() => setAberto(false)}
+                onClick={() => {
+                  setGravando(false);
+                  setAberto(false);
+                }}
                 aria-label="Fechar chat"
                 className="p-1.5 rounded-lg hover:bg-white/10 transition"
               >
@@ -446,6 +479,20 @@ export default function ChatSuporte() {
                     );
                   }
                   const minha = m.destinatarioId === conversaId;
+                  if (m.tipo === "AUDIO") {
+                    return (
+                      <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`rounded-2xl px-3 py-2 text-sm ${
+                            minha ? "rounded-br-sm bg-primary text-white" : "rounded-bl-sm border border-border bg-surface"
+                          }`}
+                        >
+                          <MensagemAudio mensagemId={m.id} duracao={Number(m.texto) || 0} minha={minha} />
+                          <p className={`mt-1 text-[10px] ${minha ? "text-white/70" : "text-muted"}`}>{formatarHora(m.criadaEm)}</p>
+                        </div>
+                      </div>
+                    );
+                  }
                   if (m.tipo === "FIGURINHA") {
                     return (
                       <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
@@ -488,6 +535,13 @@ export default function ChatSuporte() {
                 <SeletorEmoji onEmoji={inserirEmoji} onFigurinha={(f) => void enviarFigurinha(f)} desabilitado={enviando} />
               )}
 
+              {gravando ? (
+                <GravadorAudio
+                  onEnviar={(audio, duracao) => void enviarAudio(audio, duracao)}
+                  onCancelar={() => setGravando(false)}
+                  onErro={setErro}
+                />
+              ) : (
               <div className="flex items-end gap-2 border-t border-border bg-surface p-3">
                 <button
                   onClick={() => setSeletorAberto((v) => !v)}
@@ -515,15 +569,28 @@ export default function ChatSuporte() {
                   placeholder="Escreva uma mensagem…"
                   className="input flex-1 resize-none max-h-28"
                 />
-                <button
-                  onClick={() => void enviar()}
-                  disabled={!texto.trim() || enviando}
-                  aria-label="Enviar mensagem"
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition hover:bg-primary-dark disabled:opacity-50"
-                >
-                  {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                </button>
+                {texto.trim() || enviando ? (
+                  <button
+                    onClick={() => void enviar()}
+                    disabled={!texto.trim() || enviando}
+                    aria-label="Enviar mensagem"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition hover:bg-primary-dark disabled:opacity-50"
+                  >
+                    {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  </button>
+                ) : (
+                  <button
+                    onClick={comecarGravacao}
+                    disabled={emChamada}
+                    aria-label="Gravar áudio"
+                    title={emChamada ? "Indisponível durante uma chamada" : "Gravar áudio"}
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition hover:bg-primary-dark disabled:opacity-50"
+                  >
+                    <Mic className="w-4 h-4" />
+                  </button>
+                )}
               </div>
+              )}
             </>
           )}
         </div>
