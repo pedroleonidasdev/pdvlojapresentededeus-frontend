@@ -288,12 +288,10 @@ export default function ChatSuporte() {
                 <p className="truncate text-sm font-semibold">
                   {conversaId === null ? "Conversas" : (contatoAtual?.nome ?? "Conversa")}
                 </p>
-                <p className="text-xs text-white/80">
+                <p className="truncate text-xs text-white/80">
                   {conversaId === null
-                    ? "Privadas: só você e a outra pessoa veem"
-                    : contatoAtual?.online
-                      ? "Online agora"
-                      : "Offline"}
+                    ? `Você: @${usuario.login} · conversas privadas`
+                    : `@${contatoAtual?.login ?? ""} · ${contatoAtual?.online ? "online agora" : "offline"}`}
                 </p>
               </div>
             </div>
@@ -387,8 +385,8 @@ export default function ChatSuporte() {
                     </span>
                     <span className="min-w-0 flex-1">
                       <span className="block truncate text-sm font-medium">{c.nome}</span>
-                      <span className="block text-xs text-muted">
-                        {c.perfil === "ADMIN" ? "Administrador" : "Caixa"} · {c.online ? "online" : "offline"}
+                      <span className="block truncate text-xs text-muted">
+                        {c.perfil === "ADMIN" ? "Administrador" : "Caixa"} · @{c.login} · {c.online ? "online" : "offline"}
                       </span>
                     </span>
                     {c.naoLidas > 0 && (
