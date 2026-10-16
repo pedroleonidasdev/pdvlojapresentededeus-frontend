@@ -8,6 +8,7 @@ import Sidebar from "@/components/Sidebar";
 import AtualizacaoSistema from "@/components/AtualizacaoSistema";
 import MonitorCaixa from "@/components/MonitorCaixa";
 import ChatSuporte from "@/components/ChatSuporte";
+import { ChamadaProvider } from "@/components/ChamadaProvider";
 import api from "@/lib/api";
 import { Menu } from "lucide-react";
 import { TelaCarregamento } from "@/components/CarregamentoCatolico";
@@ -45,6 +46,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
+    <ChamadaProvider>
     <div className="flex min-h-screen bg-background">
       <AtualizacaoSistema />
       {/* aviso de caixa aberto/fechado: só para quem tem perfil ADMIN */}
@@ -79,5 +81,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         </main>
       </div>
     </div>
+    </ChamadaProvider>
   );
 }

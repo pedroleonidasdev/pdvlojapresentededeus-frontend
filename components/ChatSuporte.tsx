@@ -3,7 +3,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Loader2, MessageCircle, Send, X } from "lucide-react";
+import { ArrowLeft, Loader2, MessageCircle, Phone, PhoneCall, Send, Trash2, Video, X } from "lucide-react";
+import { useChamada } from "@/components/ChamadaProvider";
 
 interface Contato {
   id: number;
@@ -21,6 +22,7 @@ interface Mensagem {
   texto: string;
   criadaEm: string;
   lida: boolean;
+  tipo: string | null;
 }
 
 const CONTATOS_FECHADO_MS = 10_000;
@@ -57,6 +59,7 @@ function formatarHora(iso: string): string {
 
 export default function ChatSuporte() {
   const { usuario } = useAuth();
+  const { iniciarChamada, emChamada } = useChamada();
   const [aberto, setAberto] = useState(false);
   const [contatos, setContatos] = useState<Contato[]>([]);
   const [conversaId, setConversaId] = useState<number | null>(null);
@@ -64,6 +67,8 @@ export default function ChatSuporte() {
   const [texto, setTexto] = useState("");
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
+  const [confirmandoApagar, setConfirmandoApagar] = useState(false);
+  const [apagando, setApagando] = useState(false);
 
   const abertoRef = useRef(false);
   const conversaIdRef = useRef<number | null>(null);
@@ -189,6 +194,7 @@ export default function ChatSuporte() {
     setMensagens([]);
     setErro(null);
     setTexto("");
+    setConfirmandoApagar(false);
     setConversaId(id);
   }
 
@@ -198,7 +204,28 @@ export default function ChatSuporte() {
     setConversaId(null);
     setMensagens([]);
     setErro(null);
+    setConfirmandoApagar(false);
     void buscarContatos();
+  }
+
+  async function apagarConversa() {
+    if (conversaId === null || apagando) return;
+    setApagando(true);
+    setErro(null);
+    try {
+      await api.delete(`/suporte/conversas/${conversaId}/mensagens`);
+      voltarParaLista();
+    } catch {
+      setErro("Não foi possível apagar a conversa. Tente de novo.");
+      setConfirmandoApagar(false);
+    } finally {
+      setApagando(false);
+    }
+  }
+
+  function ligar(tipo: "AUDIO" | "VIDEO") {
+    if (!contatoAtual) return;
+    void iniciarChamada({ id: contatoAtual.id, nome: contatoAtual.nome }, tipo);
   }
 
   async function enviar() {
@@ -270,14 +297,72 @@ export default function ChatSuporte() {
                 </p>
               </div>
             </div>
-            <button
-              onClick={() => setAberto(false)}
-              aria-label="Fechar chat"
-              className="p-1.5 rounded-lg hover:bg-white/10 transition"
-            >
-              <X className="w-5 h-5" />
-            </button>
+            <div className="flex shrink-0 items-center">
+              {conversaId !== null && (
+                <>
+                  <button
+                    onClick={() => ligar("AUDIO")}
+                    disabled={!contatoAtual?.online || emChamada}
+                    aria-label="Chamada de áudio"
+                    title={contatoAtual?.online ? "Chamada de áudio" : "Disponível quando a pessoa estiver online"}
+                    className="p-1.5 rounded-lg hover:bg-white/10 transition disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    <Phone className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => ligar("VIDEO")}
+                    disabled={!contatoAtual?.online || emChamada}
+                    aria-label="Chamada de vídeo"
+                    title={contatoAtual?.online ? "Chamada de vídeo" : "Disponível quando a pessoa estiver online"}
+                    className="p-1.5 rounded-lg hover:bg-white/10 transition disabled:opacity-40 disabled:hover:bg-transparent"
+                  >
+                    <Video className="w-5 h-5" />
+                  </button>
+                  <button
+                    onClick={() => setConfirmandoApagar(true)}
+                    aria-label="Apagar conversa"
+                    title="Apagar conversa"
+                    className="p-1.5 rounded-lg hover:bg-white/10 transition"
+                  >
+                    <Trash2 className="w-5 h-5" />
+                  </button>
+                </>
+              )}
+              <button
+                onClick={() => setAberto(false)}
+                aria-label="Fechar chat"
+                className="p-1.5 rounded-lg hover:bg-white/10 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
           </div>
+
+          {confirmandoApagar && (
+            <div className="space-y-2 border-b border-border bg-danger-light px-3 py-3 text-sm">
+              <p className="font-medium text-danger">Apagar esta conversa?</p>
+              <p className="text-xs text-foreground/80">
+                As mensagens somem só para você. {contatoAtual?.nome ?? "A outra pessoa"} continua vendo o histórico dela.
+              </p>
+              <div className="flex justify-end gap-2">
+                <button
+                  onClick={() => setConfirmandoApagar(false)}
+                  disabled={apagando}
+                  className="rounded-lg border border-border bg-surface px-3 py-1.5 text-xs font-medium transition hover:bg-surface-alt disabled:opacity-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={() => void apagarConversa()}
+                  disabled={apagando}
+                  className="flex items-center gap-1.5 rounded-lg bg-danger px-3 py-1.5 text-xs font-medium text-white transition hover:opacity-90 disabled:opacity-50"
+                >
+                  {apagando && <Loader2 className="h-3 w-3 animate-spin" />}
+                  Apagar
+                </button>
+              </div>
+            </div>
+          )}
 
           {conversaId === null ? (
             <div className="flex-1 min-h-0 overflow-y-auto bg-background">
@@ -324,6 +409,16 @@ export default function ChatSuporte() {
                   </p>
                 )}
                 {mensagens.map((m) => {
+                  if (m.tipo === "CHAMADA") {
+                    return (
+                      <div key={m.id} className="flex justify-center">
+                        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted">
+                          <PhoneCall className="h-3.5 w-3.5" />
+                          {m.texto} · {formatarHora(m.criadaEm)}
+                        </span>
+                      </div>
+                    );
+                  }
                   const minha = m.destinatarioId === conversaId;
                   return (
                     <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
