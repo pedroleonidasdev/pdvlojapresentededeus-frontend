@@ -1,4 +1,5 @@
 import axios, { InternalAxiosRequestConfig } from "axios";
+import { lerToken, limparSessao } from "./sessao";
 
 const api = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8080/api",
@@ -25,7 +26,7 @@ type ConfigRepetivel = InternalAxiosRequestConfig & { _repetida?: boolean };
 
 api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
-    const token = localStorage.getItem("pdv_token");
+    const token = lerToken();
     if (token) {
       config.headers.Authorization = `Bearer ${token}`;
     }
@@ -43,7 +44,7 @@ api.interceptors.response.use(
       // o token pode ter sido trocado enquanto esta requisição estava no ar: tenta uma vez com o novo
       if (config && !config._repetida) {
         if (trocaDeTokenPendente) await trocaDeTokenPendente;
-        const atual = localStorage.getItem("pdv_token");
+        const atual = lerToken();
         if (atual && config.headers.Authorization !== `Bearer ${atual}`) {
           config._repetida = true;
           config.headers.Authorization = `Bearer ${atual}`;
@@ -51,8 +52,7 @@ api.interceptors.response.use(
         }
       }
 
-      localStorage.removeItem("pdv_token");
-      localStorage.removeItem("pdv_user");
+      limparSessao();
       if (window.location.pathname !== "/login") {
         window.location.href = "/login";
       }

@@ -3,6 +3,7 @@
 import { createContext, ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import api from "@/lib/api";
+import { lerToken } from "@/lib/sessao";
 import { useAuth } from "@/lib/auth-context";
 import TelaChamada from "@/components/TelaChamada";
 
@@ -473,7 +474,7 @@ export function ChamadaProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const aoSair = () => {
       const id = idRef.current;
-      const token = localStorage.getItem("pdv_token");
+      const token = lerToken();
       if (!id || !token) return;
       void fetch(`${api.defaults.baseURL}/chamadas/${id}/encerrar`, {
         method: "POST",

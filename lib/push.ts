@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { lerToken } from "@/lib/sessao";
 
 // Converte a chave pública VAPID (base64url, como o backend fornece) para o
 // formato Uint8Array que a Push API do navegador exige.
@@ -91,7 +92,7 @@ async function salvarConfig(chave: string, valor: string): Promise<void> {
  */
 async function atualizarConfigServiceWorker(): Promise<void> {
   try {
-    const token = localStorage.getItem("pdv_token");
+    const token = lerToken();
     const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
     const apiUrl = api.defaults.baseURL;
     if (token) await salvarConfig("token", token);

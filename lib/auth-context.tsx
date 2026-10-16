@@ -4,6 +4,7 @@ import { createContext, useContext, useEffect, useState, ReactNode } from "react
 import { useRouter } from "next/navigation";
 import api from "./api";
 import { Usuario } from "./types";
+import { lerToken, lerUsuarioSalvo, limparSessao, salvarSessao } from "./sessao";
 
 interface AuthContextValue {
   usuario: Usuario | null;
@@ -21,8 +22,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    const stored = localStorage.getItem("pdv_user");
-    const token = localStorage.getItem("pdv_token");
+    const stored = lerUsuarioSalvo();
+    const token = lerToken();
     if (stored && token) {
       setUsuario(JSON.parse(stored));
     }
@@ -36,8 +37,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       nome: data.nome,
       perfil: data.perfil,
     };
-    localStorage.setItem("pdv_token", data.token);
-    localStorage.setItem("pdv_user", JSON.stringify(usuarioLogado));
+    salvarSessao(data.token, JSON.stringify(usuarioLogado));
     setUsuario(usuarioLogado);
   }
 
@@ -55,8 +55,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     // avisa o servidor para marcar como offline na hora (best-effort)
     api.post("/presenca/sair").catch(() => {});
-    localStorage.removeItem("pdv_token");
-    localStorage.removeItem("pdv_user");
+    limparSessao();
     setUsuario(null);
     router.push("/login");
   }

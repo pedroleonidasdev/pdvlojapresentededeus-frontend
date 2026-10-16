@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import api, { iniciarTrocaDeToken } from "@/lib/api";
+import { atualizarToken } from "@/lib/sessao";
 import { UsuarioAdmin, Perfil } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, X, Loader2, LogOut } from "lucide-react";
@@ -73,7 +74,7 @@ export default function UsuariosPage() {
       const { data } = await api.post<{ novoToken: string | null }>(
         u ? `/usuarios/${u.id}/encerrar-sessoes` : "/usuarios/encerrar-sessoes"
       );
-      if (data.novoToken) localStorage.setItem("pdv_token", data.novoToken);
+      if (data.novoToken) atualizarToken(data.novoToken);
       carregar(true);
       setMensagem({
         tipo: "ok",
