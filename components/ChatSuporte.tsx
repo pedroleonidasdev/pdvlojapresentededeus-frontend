@@ -3,7 +3,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Loader2, MessageCircle, Phone, PhoneCall, Send, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Loader2, MessageCircle, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
+import SeletorEmoji from "@/components/SeletorEmoji";
+import { figurinhaTemTexto, soEmojis } from "@/lib/figurinhas";
 import { useChamada } from "@/components/ChamadaProvider";
 
 interface Contato {
@@ -68,6 +70,7 @@ export default function ChatSuporte() {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmandoApagar, setConfirmandoApagar] = useState(false);
+  const [seletorAberto, setSeletorAberto] = useState(false);
   const [apagando, setApagando] = useState(false);
 
   const abertoRef = useRef(false);
@@ -77,6 +80,7 @@ export default function ChatSuporte() {
   const buscandoContatosRef = useRef(false);
   const buscandoMensagensRef = useRef(false);
   const fimRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
     abertoRef.current = aberto;
@@ -195,6 +199,7 @@ export default function ChatSuporte() {
     setErro(null);
     setTexto("");
     setConfirmandoApagar(false);
+    setSeletorAberto(false);
     setConversaId(id);
   }
 
@@ -205,6 +210,7 @@ export default function ChatSuporte() {
     setMensagens([]);
     setErro(null);
     setConfirmandoApagar(false);
+    setSeletorAberto(false);
     void buscarContatos();
   }
 
@@ -228,21 +234,43 @@ export default function ChatSuporte() {
     void iniciarChamada({ id: contatoAtual.id, nome: contatoAtual.nome }, tipo);
   }
 
-  async function enviar() {
-    const conteudo = texto.trim();
-    if (!conteudo || enviando || conversaId === null) return;
+  async function postarMensagem(conteudo: string, tipo?: "FIGURINHA"): Promise<boolean> {
+    if (enviando || conversaId === null) return false;
     setEnviando(true);
     setErro(null);
     try {
-      const { data } = await api.post<Mensagem>(`/suporte/conversas/${conversaId}/mensagens`, { texto: conteudo });
-      setTexto("");
+      const { data } = await api.post<Mensagem>(`/suporte/conversas/${conversaId}/mensagens`, { texto: conteudo, tipo });
       ultimoIdRef.current = Math.max(ultimoIdRef.current ?? 0, data.id);
       setMensagens((atuais) => (atuais.some((m) => m.id === data.id) ? atuais : [...atuais, data]));
+      return true;
     } catch {
       setErro("Não foi possível enviar. Tente de novo.");
+      return false;
     } finally {
       setEnviando(false);
     }
+  }
+
+  async function enviar() {
+    const conteudo = texto.trim();
+    if (!conteudo) return;
+    if (await postarMensagem(conteudo)) setTexto("");
+  }
+
+  async function enviarFigurinha(conteudo: string) {
+    if (await postarMensagem(conteudo, "FIGURINHA")) setSeletorAberto(false);
+  }
+
+  /** Coloca o emoji onde está o cursor (ou no fim, se a caixa nunca foi usada). */
+  function inserirEmoji(emoji: string) {
+    const el = textareaRef.current;
+    const inicio = el?.selectionStart ?? texto.length;
+    const fim = el?.selectionEnd ?? texto.length;
+    const novo = texto.slice(0, inicio) + emoji + texto.slice(fim);
+    if (novo.length > 1000) return;
+    setTexto(novo);
+    const posicao = inicio + emoji.length;
+    requestAnimationFrame(() => el?.setSelectionRange(posicao, posicao));
   }
 
   if (!usuario) return null;
@@ -418,6 +446,24 @@ export default function ChatSuporte() {
                     );
                   }
                   const minha = m.destinatarioId === conversaId;
+                  if (m.tipo === "FIGURINHA") {
+                    return (
+                      <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
+                        <div className="max-w-[85%]">
+                          {figurinhaTemTexto(m.texto) ? (
+                            <p className="rounded-2xl border border-accent/40 bg-accent-light px-4 py-3 text-center text-base font-semibold">
+                              {m.texto}
+                            </p>
+                          ) : (
+                            <p className="text-center text-6xl leading-none">{m.texto}</p>
+                          )}
+                          <p className={`mt-1 text-[10px] text-muted ${minha ? "text-right" : "text-left"}`}>
+                            {formatarHora(m.criadaEm)}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  }
                   return (
                     <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
                       <div
@@ -425,7 +471,7 @@ export default function ChatSuporte() {
                           minha ? "bg-primary text-white rounded-br-sm" : "bg-surface border border-border rounded-bl-sm"
                         }`}
                       >
-                        <p className="whitespace-pre-wrap break-words">{m.texto}</p>
+                        <p className={`whitespace-pre-wrap break-words ${soEmojis(m.texto) ? "text-3xl leading-tight" : ""}`}>{m.texto}</p>
                         <p className={`mt-1 text-[10px] ${minha ? "text-white/70" : "text-muted"}`}>
                           {formatarHora(m.criadaEm)}
                         </p>
@@ -438,8 +484,24 @@ export default function ChatSuporte() {
 
               {erro && <div className="bg-danger-light px-3 py-1.5 text-xs text-danger">{erro}</div>}
 
+              {seletorAberto && (
+                <SeletorEmoji onEmoji={inserirEmoji} onFigurinha={(f) => void enviarFigurinha(f)} desabilitado={enviando} />
+              )}
+
               <div className="flex items-end gap-2 border-t border-border bg-surface p-3">
+                <button
+                  onClick={() => setSeletorAberto((v) => !v)}
+                  aria-label="Emojis e figurinhas"
+                  title="Emojis e figurinhas"
+                  aria-pressed={seletorAberto}
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition hover:bg-background ${
+                    seletorAberto ? "bg-primary-light text-primary" : "text-muted"
+                  }`}
+                >
+                  <Smile className="w-5 h-5" />
+                </button>
                 <textarea
+                  ref={textareaRef}
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
                   onKeyDown={(e) => {
