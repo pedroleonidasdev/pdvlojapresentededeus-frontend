@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import api from "@/lib/api";
+import api, { iniciarTrocaDeToken } from "@/lib/api";
 import { UsuarioAdmin, Perfil } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
 import { Plus, Pencil, Trash2, X, Loader2, LogOut } from "lucide-react";
@@ -68,6 +68,7 @@ export default function UsuariosPage() {
     if (!confirm(pergunta)) return;
 
     setMensagem(null);
+    const concluirTroca = iniciarTrocaDeToken();
     try {
       const { data } = await api.post<{ novoToken: string | null }>(
         u ? `/usuarios/${u.id}/encerrar-sessoes` : "/usuarios/encerrar-sessoes"
@@ -80,6 +81,8 @@ export default function UsuariosPage() {
       });
     } catch {
       setMensagem({ tipo: "erro", texto: "Não foi possível encerrar as sessões." });
+    } finally {
+      concluirTroca();
     }
   }
 
