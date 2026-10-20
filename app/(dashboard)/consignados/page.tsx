@@ -369,6 +369,11 @@ function ModalConsignacaoForm({
   const listaItensRef = useRef<HTMLUListElement>(null);
   const [destaque, setDestaque] = useState<{ id: number; n: number } | null>(null);
 
+  const erroRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (erro) erroRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [erro]);
+
   useEffect(() => {
     if (!destaque) return;
     const linha = listaItensRef.current?.querySelector<HTMLElement>(`[data-item-id="${destaque.id}"]`);
@@ -441,6 +446,11 @@ function ModalConsignacaoForm({
 
   const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
 
+  /** Máximo permitido: o estoque atual, ou o que já estava enviado nesta consignação (se for maior),
+   *  para que dê para diminuir/manter um item cujo estoque ficou menor que a quantidade enviada. */
+  const limiteQtd = (p: Produto) =>
+    Math.max(p.quantidadeEstoque, consignacao?.itens.find((i) => i.produtoId === p.id)?.quantidadeEnviada ?? 0);
+
   /** Linha nova do formulário (preço e comissão da categoria no momento em que entra). */
   function novoItem(produto: Produto, quantidade: number): ItemForm {
     return {
@@ -460,14 +470,17 @@ function ModalConsignacaoForm({
    */
   function definirQtd(produto: Produto, desejada: number) {
     let quantidade = Math.max(0, Math.floor(desejada) || 0);
-    if (quantidade > produto.quantidadeEstoque) {
+    const limite = limiteQtd(produto);
+    if (quantidade > limite) {
       setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
-      quantidade = produto.quantidadeEstoque;
+      quantidade = limite;
     } else {
       setErro(null);
     }
-    // produto que ainda não estava na consignação: a lista da direita rola até ele
-    if (quantidade > 0 && !itens.some((i) => i.produtoId === produto.id)) {
+    // a lista da direita rola até o produto e o destaca sempre que a quantidade dele muda
+    // (novo OU já existente): com 100+ itens, sem isso a mudança acontece fora da tela
+    // e parece que a lista não atualizou
+    if (quantidade > 0 && quantidade !== qtdNaLista(produto.id)) {
       setDestaque((d) => ({ id: produto.id, n: (d?.n ?? 0) + 1 }));
     }
     setItens((prev) => {
@@ -718,7 +731,7 @@ function ModalConsignacaoForm({
                           <div className="shrink-0">
                             <QuantidadeStepper
                               valor={naLista}
-                              max={p.quantidadeEstoque}
+                              max={limiteQtd(p)}
                               desabilitado={semEstoque && naLista === 0}
                               rotulo={p.nome}
                               onChange={(n) => definirQtd(p, n)}
@@ -833,8 +846,11 @@ function ModalConsignacaoForm({
 
         {/* ------------------------------ Erro + rodapé ------------------------------ */}
         {erro && (
-          <div className="px-5 pt-3 shrink-0">
-            <div className="flex items-start gap-2 text-sm text-danger bg-danger-light rounded-lg px-3 py-2">
+          <div ref={erroRef} className="px-5 pt-3 shrink-0">
+            <div
+              role="alert"
+              className="flex items-start gap-2 text-sm font-semibold text-danger bg-danger-light border-2 border-danger rounded-lg px-3 py-2.5 shadow-sm"
+            >
               <p className="flex-1">{erro}</p>
               <button onClick={() => setErro(null)} className="shrink-0 p-0.5" aria-label="Fechar aviso">
                 <X className="w-4 h-4" />
@@ -973,6 +989,40 @@ function ModalDetalhe({
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
     aberta || editandoConf ? Math.min(Math.max(vendidas[id] ?? 0, 0), enviada) : atual;
+
+  /**
+   * Consignação que vai para o relatório/impressão. Com conferência em andamento (digitada agora ou
+   * guardada como rascunho neste navegador), as quantidades vendidas entram no relatório como PRÉVIA;
+   * sem isso o relatório sai como sempre (em aberto = colunas em branco; fechada = valores salvos).
+   */
+  function consignacaoParaImprimir(): Consignacao {
+    const origem: Record<number, number> | null = aberta
+      ? conferindo
+        ? vendidas
+        : lerRascunhoValido()
+      : editandoConf
+      ? vendidas
+      : null;
+    if (!origem || !mudouDaBase(origem)) return consignacao;
+    let totalVendidoP = 0;
+    let totalComissaoP = 0;
+    const itens = consignacao.itens.map((i) => {
+      const q = Math.min(Math.max(origem[i.id] ?? basePorItem(i.quantidadeVendida), 0), i.quantidadeEnviada);
+      const valorVendido = Math.round(q * i.precoUnitario * 100) / 100;
+      const comissao = Math.round(valorVendido * i.percentualComissao) / 100;
+      totalVendidoP += valorVendido;
+      totalComissaoP += comissao;
+      return { ...i, quantidadeVendida: q, quantidadeDevolvida: i.quantidadeEnviada - q, valorVendido, comissao };
+    });
+    return {
+      ...consignacao,
+      itens,
+      totalVendido: totalVendidoP,
+      totalComissao: totalComissaoP,
+      totalLiquidoLoja: totalVendidoP - totalComissaoP,
+      conferenciaPrevia: true,
+    };
+  }
 
   // prévia do acerto enquanto o operador digita as quantidades vendidas
   let totalVendido = 0;
@@ -1210,7 +1260,7 @@ function ModalDetalhe({
         <div className="p-4 border-t border-border shrink-0 flex flex-wrap items-center justify-between gap-2">
           <div className="flex gap-2">
             <button
-              onClick={() => onImprimir(consignacao)}
+              onClick={() => onImprimir(consignacaoParaImprimir())}
               className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
             >
               <Printer className="w-4 h-4" />

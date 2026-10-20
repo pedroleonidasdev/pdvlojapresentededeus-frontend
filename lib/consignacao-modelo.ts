@@ -59,6 +59,9 @@ const compararAlfabetico = (a: string, b: string) =>
 
 export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
   const fechada = c.status === "FECHADA";
+  // prévia: quantidades vendidas da conferência em andamento (consignação ainda aberta ou em correção)
+  const previa = c.conferenciaPrevia === true;
+  const comVendas = fechada || previa;
 
   const porCategoria = new Map<string, Consignacao["itens"]>();
   for (const item of c.itens) {
@@ -80,8 +83,8 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
         qtdEnviada: i.quantidadeEnviada,
         vlrUnitario: i.precoUnitario,
         vlrTotal: i.valorEnviado,
-        qtdVendida: fechada ? i.quantidadeVendida : null,
-        vlrVendido: fechada ? i.valorVendido : null,
+        qtdVendida: comVendas ? i.quantidadeVendida : null,
+        vlrVendido: comVendas ? i.valorVendido : null,
       })),
     });
   }
@@ -120,17 +123,19 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
       "15% do total vendido referente a Livros, Bíblias e Paulinas",
       "20% do total vendido referente aos demais Artigos Religiosos",
     ],
-    observacao: c.observacao,
+    observacao: previa
+      ? `PRÉVIA DA CONFERÊNCIA (consignação ainda não fechada)${c.observacao ? ` — ${c.observacao}` : ""}`
+      : c.observacao,
     dataExtenso: formatarDataExtenso(c.dataHora),
     prazo,
     grupos,
     totais: {
       qtdEnviada: c.itens.reduce((acc, i) => acc + i.quantidadeEnviada, 0),
       vlrEnviado: c.totalEnviado,
-      qtdVendida: fechada ? c.itens.reduce((acc, i) => acc + i.quantidadeVendida, 0) : null,
-      vlrVendido: fechada ? c.totalVendido : null,
+      qtdVendida: comVendas ? c.itens.reduce((acc, i) => acc + i.quantidadeVendida, 0) : null,
+      vlrVendido: comVendas ? c.totalVendido : null,
     },
-    acerto: fechada
+    acerto: comVendas
       ? { faixas, totalVendido: c.totalVendido, totalComissao: c.totalComissao, liquidoLoja: c.totalLiquidoLoja }
       : null,
     nomeArquivoBase: `consignacao-${c.id}-${slug || "relatorio"}`,
