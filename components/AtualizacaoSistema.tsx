@@ -8,6 +8,8 @@ import { BarraCarregamento, CruzIcone, OracaoRotativa } from "@/components/Carre
 const VERSAO_ATUAL = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
 const CHAVE_VERSAO_VISTA = "pdv_versao_vista";
 const INTERVALO_CHECAGEM_MS = 5 * 60_000;
+// depois de "Mais tarde" o aviso só volta a aparecer depois deste tempo
+const ADIAR_AVISO_MS = 30 * 60_000;
 // tempo da barra de carregamento entre o clique e o recarregamento da página
 const DURACAO_ATUALIZACAO_MS = 5_000;
 
@@ -33,8 +35,8 @@ function versaoMudouDesdeUltimaVisita(): boolean {
  * Fluxo de atualização do sistema (tela cheia, no meio da tela):
  *
  * 1. Quando existe uma versão nova publicada (conferido ao abrir o painel, ao
- *    voltar para a aba/app e a cada 5 minutos) aparece o aviso com um único
- *    botão: "Atualizar Sistema".
+ *    voltar para a aba/app e a cada 5 minutos) aparece o aviso com dois
+ *    botões: "Atualizar agora" e "Mais tarde" (adia o aviso por 30 minutos).
  * 2. Ao clicar, uma barra de carregamento (terço) enche em 5 segundos, com
  *    mensagens de etapa, e a página é recarregada (o login é mantido).
  * 3. Ao abrir na versão nova, aparece "Sistema Atualizado Com Sucesso!".
@@ -49,6 +51,8 @@ export default function AtualizacaoSistema() {
   const [progresso, setProgresso] = useState(0);
   const intervaloProgresso = useRef<ReturnType<typeof setInterval> | null>(null);
   const atualizandoRef = useRef(false);
+  // "Mais tarde": enquanto não chegar esse horário, o aviso não reaparece
+  const adiadoAteRef = useRef(0);
 
   // registra a versão que este navegador está usando agora
   useEffect(() => {
@@ -64,6 +68,7 @@ export default function AtualizacaoSistema() {
     // em desenvolvimento a versão muda a todo momento — não avisa
     if (process.env.NODE_ENV !== "production" || !VERSAO_ATUAL) return;
     if (atualizandoRef.current) return;
+    if (Date.now() < adiadoAteRef.current) return;
     try {
       const resp = await fetch("/api/versao", { cache: "no-store" });
       if (!resp.ok) return;
@@ -94,6 +99,11 @@ export default function AtualizacaoSistema() {
       if (intervaloProgresso.current) clearInterval(intervaloProgresso.current);
     };
   }, []);
+
+  function adiar() {
+    adiadoAteRef.current = Date.now() + ADIAR_AVISO_MS;
+    setNovaVersao(null);
+  }
 
   function atualizar() {
     if (atualizandoRef.current) return;
@@ -156,15 +166,24 @@ export default function AtualizacaoSistema() {
               </h2>
               <p className="mt-2 text-sm text-muted leading-relaxed">
                 Uma versão mais nova do sistema foi publicada. Atualize para carregar as melhorias — seu login é mantido.
+                Se escolher “Mais tarde”, o aviso volta a aparecer daqui a 30 minutos.
               </p>
-              <button
-                onClick={atualizar}
-                autoFocus
-                className="mt-7 flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-dark px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary/25 transition hover:brightness-110 active:scale-[0.99]"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Atualizar Sistema
-              </button>
+              <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row">
+                <button
+                  onClick={adiar}
+                  className="flex w-full items-center justify-center rounded-xl border border-border px-4 py-3 text-sm font-semibold text-muted transition hover:bg-background hover:text-foreground"
+                >
+                  Mais tarde
+                </button>
+                <button
+                  onClick={atualizar}
+                  autoFocus
+                  className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-dark px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary/25 transition hover:brightness-110 active:scale-[0.99]"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                  Atualizar agora
+                </button>
+              </div>
             </>
           ) : (
             <>
