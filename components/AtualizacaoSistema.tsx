@@ -46,6 +46,8 @@ function versaoMudouDesdeUltimaVisita(): boolean {
  */
 export default function AtualizacaoSistema() {
   const [novaVersao, setNovaVersao] = useState<string | null>(null);
+  // "Mais tarde" foi clicado: o aviso grande some, mas fica uma caixinha fixa na tela até atualizar
+  const [adiada, setAdiada] = useState(false);
   const [sucesso, setSucesso] = useState(versaoMudouDesdeUltimaVisita);
   const [atualizando, setAtualizando] = useState(false);
   const [progresso, setProgresso] = useState(0);
@@ -73,7 +75,10 @@ export default function AtualizacaoSistema() {
       const resp = await fetch("/api/versao", { cache: "no-store" });
       if (!resp.ok) return;
       const { versao } = (await resp.json()) as { versao?: string | null };
-      if (versao && versao !== VERSAO_ATUAL) setNovaVersao(versao);
+      if (versao && versao !== VERSAO_ATUAL) {
+        setNovaVersao(versao);
+        setAdiada(false);
+      }
     } catch {
       // sem internet agora — tenta de novo na próxima checagem
     }
@@ -103,11 +108,15 @@ export default function AtualizacaoSistema() {
   function adiar() {
     adiadoAteRef.current = Date.now() + ADIAR_AVISO_MS;
     setNovaVersao(null);
+    setAdiada(true);
   }
 
   function atualizar() {
     if (atualizandoRef.current) return;
     atualizandoRef.current = true;
+    // vindo da caixinha (aviso adiado) a tela de progresso precisa aparecer também
+    setNovaVersao((v) => v ?? "nova");
+    setAdiada(false);
     setAtualizando(true);
     setProgresso(0);
 
@@ -123,7 +132,29 @@ export default function AtualizacaoSistema() {
     }, 50);
   }
 
-  if (!novaVersao && !sucesso) return null;
+  // aviso adiado: caixinha pequena e fixa, sempre à vista, até a pessoa atualizar
+  if (!novaVersao && !sucesso) {
+    if (!adiada) return null;
+    return (
+      <div className="fixed bottom-4 left-1/2 z-[90] w-[calc(100%-2rem)] max-w-sm -translate-x-1/2 sm:w-auto sm:max-w-none">
+        <button
+          type="button"
+          onClick={atualizar}
+          className="flex w-full items-center gap-3 rounded-full border-2 border-accent bg-surface py-2 pl-3 pr-2 text-left shadow-xl transition hover:brightness-105 active:scale-[0.99]"
+          aria-label="Há uma atualização nova do sistema. Clique para atualizar."
+        >
+          <span className="relative flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-accent-light text-accent-dark">
+            <RefreshCw className="h-4 w-4" />
+            <span className="absolute -right-0.5 -top-0.5 h-2.5 w-2.5 rounded-full bg-danger" />
+          </span>
+          <span className="min-w-0 flex-1 text-sm font-semibold text-foreground">Há uma atualização nova</span>
+          <span className="shrink-0 rounded-full bg-gradient-to-r from-primary to-primary-dark px-3.5 py-1.5 text-xs font-semibold text-white">
+            Atualizar
+          </span>
+        </button>
+      </div>
+    );
+  }
 
   const etapa = ETAPAS.find((e) => progresso <= e.ate) ?? ETAPAS[ETAPAS.length - 1];
 
@@ -166,7 +197,7 @@ export default function AtualizacaoSistema() {
               </h2>
               <p className="mt-2 text-sm text-muted leading-relaxed">
                 Uma versão mais nova do sistema foi publicada. Atualize para carregar as melhorias — seu login é mantido.
-                Se escolher “Mais tarde”, o aviso volta a aparecer daqui a 30 minutos.
+                Se escolher “Mais tarde”, uma caixinha fica à vista na tela até você atualizar (o aviso grande volta em 30 minutos).
               </p>
               <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row">
                 <button
