@@ -45,6 +45,8 @@ export default function ConsignadosPage() {
   const [emEdicao, setEmEdicao] = useState<Consignacao | null>(null);
   const [selecionada, setSelecionada] = useState<Consignacao | null>(null);
   const [visualizando, setVisualizando] = useState<Consignacao | null>(null);
+  // abre o detalhe já no modo "editar conferência" (atalho do botão no card da lista)
+  const [abrirEditandoConf, setAbrirEditandoConf] = useState(false);
 
   const carregar = useCallback(async () => {
     setCarregando(true);
@@ -94,9 +96,22 @@ export default function ConsignadosPage() {
             <ul className="space-y-3">
               {lista.map((c) => (
                 <li key={c.id}>
-                  <button
-                    onClick={() => setSelecionada(c)}
-                    className="w-full text-left bg-surface border border-border rounded-xl p-4 hover:border-primary transition"
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => {
+                      setAbrirEditandoConf(false);
+                      setSelecionada(c);
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.target !== e.currentTarget) return;
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setAbrirEditandoConf(false);
+                        setSelecionada(c);
+                      }
+                    }}
+                    className="w-full text-left bg-surface border border-border rounded-xl p-4 hover:border-primary transition cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -106,7 +121,23 @@ export default function ConsignadosPage() {
                           {c.prazoDevolucao ? ` · devolução até ${formatarDataISO(c.prazoDevolucao)}` : ""}
                         </p>
                       </div>
-                      <StatusBadge status={c.status} />
+                      <div className="flex flex-col items-end gap-2 shrink-0">
+                        <StatusBadge status={c.status} />
+                        {c.status === "FECHADA" && (
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setAbrirEditandoConf(true);
+                              setSelecionada(c);
+                            }}
+                            className="flex items-center gap-1 text-xs font-medium text-primary border border-primary/40 hover:bg-primary/10 rounded-full px-2.5 py-1 transition"
+                          >
+                            <ClipboardCheck className="w-3 h-3" />
+                            Editar conferência
+                          </button>
+                        )}
+                      </div>
                     </div>
                     <div className="grid grid-cols-3 gap-3 mt-3 text-xs">
                       <Resumo rotulo="Enviado" valor={formatarMoeda(c.totalEnviado)} />
@@ -119,7 +150,7 @@ export default function ConsignadosPage() {
                         valor={c.status === "FECHADA" ? formatarMoeda(c.totalComissao) : "—"}
                       />
                     </div>
-                  </button>
+                  </div>
                 </li>
               ))}
             </ul>
@@ -146,6 +177,7 @@ export default function ConsignadosPage() {
       {selecionada && (
         <ModalDetalhe
           consignacao={selecionada}
+          iniciarEditandoConferencia={abrirEditandoConf}
           ehAdmin={ehAdmin}
           onClose={() => setSelecionada(null)}
           onAtualizada={(c) => {
@@ -872,6 +904,7 @@ function ModalConsignacaoForm({
 
 function ModalDetalhe({
   consignacao,
+  iniciarEditandoConferencia = false,
   ehAdmin,
   onClose,
   onAtualizada,
@@ -880,6 +913,7 @@ function ModalDetalhe({
   onEditar,
 }: {
   consignacao: Consignacao;
+  iniciarEditandoConferencia?: boolean;
   ehAdmin: boolean;
   onClose: () => void;
   onAtualizada: (c: Consignacao) => void;
@@ -888,10 +922,13 @@ function ModalDetalhe({
   onEditar: (c: Consignacao) => void;
 }) {
   const aberta = consignacao.status === "ABERTA";
-  const [vendidas, setVendidas] = useState<Record<number, number>>({});
+  const comecaEditando = iniciarEditandoConferencia && consignacao.status === "FECHADA";
+  const [vendidas, setVendidas] = useState<Record<number, number>>(() =>
+    comecaEditando ? Object.fromEntries(consignacao.itens.map((i) => [i.id, i.quantidadeVendida])) : {}
+  );
   const [conferindo, setConferindo] = useState(false);
   // edição da conferência de uma consignação JÁ FECHADA (corrige as quantidades vendidas)
-  const [editandoConf, setEditandoConf] = useState(false);
+  const [editandoConf, setEditandoConf] = useState(comecaEditando);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
