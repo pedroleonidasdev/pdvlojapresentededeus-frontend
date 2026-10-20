@@ -785,15 +785,15 @@ function ModalConsignacaoForm({
                 <ul ref={listaItensRef} className="flex-1 min-h-0 overflow-y-auto divide-y divide-accent/25">
                   {gruposItens.map((g) => (
                     <Fragment key={g.categoria}>
-                      <li className="sticky top-0 z-10 px-4 sm:px-5 py-1.5 text-[11px] font-semibold tracking-wide text-primary bg-accent-light border-b border-accent/25">
+                      <li className="sticky top-0 z-10 px-4 sm:px-5 py-2 text-xs font-extrabold uppercase tracking-wider text-white bg-primary-dark border-y border-primary shadow-sm">
                         {g.categoria}:
                       </li>
                       {g.itens.map((i) => (
                     <li
                       key={i.produtoId}
                       data-item-id={i.produtoId}
-                      className={`flex items-center gap-1 pl-3 pr-1.5 py-1.5 transition-colors duration-700 ${
-                        destaque?.id === i.produtoId ? "bg-accent/35" : "hover:bg-accent-light/60"
+                      className={`flex items-center gap-1 pl-3 pr-1.5 py-1.5 font-bold transition-colors duration-700 ${
+                        destaque?.id === i.produtoId ? "bg-accent/35" : "bg-surface hover:bg-accent-light/60"
                       }`}
                     >
                       <button
@@ -806,7 +806,7 @@ function ModalConsignacaoForm({
                           {i.quantidade}×
                         </span>
                         <span className="min-w-0 flex-1">
-                          <span className="block text-[13px] leading-tight font-medium truncate">{i.nome}</span>
+                          <span className="block text-[13px] leading-tight font-bold truncate">{i.nome}</span>
                           <span className="block text-[11px] leading-tight text-muted truncate">
                             {formatarMoeda(i.preco)} · {i.categoriaNome ?? "Sem categoria"} · {i.percentual}%
                           </span>
@@ -1116,7 +1116,7 @@ function ModalDetalhe({
               feche a consignação. Só a quantidade vendida dá baixa no estoque; o restante volta para a loja. Suas alterações são salvas automaticamente neste navegador.
             </p>
           )}
-          <table className="w-full text-xs">
+          <table className="w-full text-xs font-bold bg-surface">
             <thead>
               <tr className="text-left text-muted border-b border-border">
                 <th className="py-2 pr-2 font-medium">Produto</th>
@@ -1131,18 +1131,18 @@ function ModalDetalhe({
             <tbody>
               {gruposDetalhe.map((g) => (
                 <Fragment key={g.categoria}>
-                  <tr className="bg-primary/5">
-                    <td colSpan={7} className="py-1.5 px-2 text-[11px] font-semibold tracking-wide text-primary">
+                  <tr className="bg-primary-dark">
+                    <td colSpan={7} className="py-2 px-3 text-xs font-extrabold uppercase tracking-wider text-white">
                       {g.categoria}:
                     </td>
                   </tr>
                   {g.itens.map((i) => {
                 const q = vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida);
                 return (
-                  <tr key={i.id} className="border-b border-border/60">
+                  <tr key={i.id} className="border-b border-border bg-surface hover:bg-primary-light/60">
                     <td className="py-2 pr-2">
                       {i.produtoNome}
-                      <span className="block text-muted">{i.categoriaNome ?? "Sem categoria"}</span>
+                      <span className="block font-semibold text-muted">{i.categoriaNome ?? "Sem categoria"}</span>
                     </td>
                     <td className="py-2 px-2 text-right font-mono">{i.quantidadeEnviada}</td>
                     <td className="py-2 px-2 text-right font-mono">{formatarMoeda(i.precoUnitario)}</td>
