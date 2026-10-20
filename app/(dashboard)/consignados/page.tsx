@@ -957,23 +957,22 @@ function ModalDetalhe({
   onEditar: (c: Consignacao) => void;
 }) {
   const aberta = consignacao.status === "ABERTA";
-  // rascunho salvo automaticamente: se existir, a conferência volta exatamente como estava
   // valor "de partida" de cada item: em aberto = 0 vendidas; fechada = o que já foi conferido
-  const basePorItem = (id: number, vendidaAtual: number) => (aberta ? 0 : vendidaAtual);
-  const mudouEmRelacaoABase = (v: Record<number, number>) =>
-    consignacao.itens.some((i) => (v[i.id] ?? basePorItem(i.id, i.quantidadeVendida)) !== basePorItem(i.id, i.quantidadeVendida));
-  // só vale como rascunho se o operador realmente digitou algo diferente do ponto de partida;
-  // sem isso a tela abriria sempre direto na conferência
-  const [rascunho] = useState(() => {
+  const basePorItem = (vendidaAtual: number) => (aberta ? 0 : vendidaAtual);
+  const baseInicial = () => Object.fromEntries(consignacao.itens.map((i) => [i.id, basePorItem(i.quantidadeVendida)]));
+  const mudouDaBase = (v: Record<number, number>) =>
+    consignacao.itens.some((i) => (v[i.id] ?? basePorItem(i.quantidadeVendida)) !== basePorItem(i.quantidadeVendida));
+  /** Rascunho salvo automaticamente, só se tiver alguma quantidade diferente do ponto de partida. */
+  const lerRascunhoValido = (): Record<number, number> | null => {
     const salvo = lerRascunhoConferencia(consignacao.id);
-    return salvo !== null && mudouEmRelacaoABase(salvo) ? salvo : null;
-  });
-  const comecaEditando = !aberta && (iniciarEditandoConferencia || rascunho !== null);
+    return salvo !== null && mudouDaBase(salvo) ? { ...baseInicial(), ...salvo } : null;
+  };
+  // atalho "Editar conferência" do card da lista: já abre editando (com o rascunho, se houver)
+  const comecaEditando = !aberta && iniciarEditandoConferencia;
   const [vendidas, setVendidas] = useState<Record<number, number>>(() =>
-    rascunho ??
-    (comecaEditando ? Object.fromEntries(consignacao.itens.map((i) => [i.id, i.quantidadeVendida])) : {})
+    comecaEditando ? lerRascunhoValido() ?? baseInicial() : {}
   );
-  const [conferindo, setConferindo] = useState(aberta && rascunho !== null);
+  const [conferindo, setConferindo] = useState(false);
   // edição da conferência de uma consignação JÁ FECHADA (corrige as quantidades vendidas)
   const [editandoConf, setEditandoConf] = useState(comecaEditando);
   const [salvando, setSalvando] = useState(false);
@@ -990,7 +989,7 @@ function ModalDetalhe({
   const emConferencia = aberta ? conferindo : editandoConf;
   useEffect(() => {
     if (!emConferencia) return;
-    if (mudouEmRelacaoABase(vendidas)) salvarRascunhoConferencia(consignacao.id, vendidas);
+    if (mudouDaBase(vendidas)) salvarRascunhoConferencia(consignacao.id, vendidas);
     else apagarRascunhoConferencia(consignacao.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emConferencia, vendidas, consignacao.id]);
@@ -1038,10 +1037,15 @@ function ModalDetalhe({
     }
   }
 
+  function cancelarConferencia() {
+    apagarRascunhoConferencia(consignacao.id);
+    setVendidas({});
+    setConferindo(false);
+    setErro(null);
+  }
+
   function iniciarEdicaoConferencia() {
-    const inicial: Record<number, number> = {};
-    for (const i of consignacao.itens) inicial[i.id] = i.quantidadeVendida;
-    setVendidas(inicial);
+    setVendidas(lerRascunhoValido() ?? baseInicial());
     setEditandoConf(true);
     setErro(null);
   }
@@ -1078,15 +1082,7 @@ function ModalDetalhe({
     }
   }
 
-
-  function cancelarConferencia() {
-    apagarRascunhoConferencia(consignacao.id);
-    setVendidas({});
-    setConferindo(false);
-    setErro(null);
-  }
-
-  // o X fecha a janela; a conferência em andamento fica salva e volta como estava ao reabrir
+  // o X fecha a janela; a conferência em andamento fica salva e volta ao clicar no botão de conferência
   function fecharSemAlterar() {
     onClose();
   }
@@ -1278,7 +1274,10 @@ function ModalDetalhe({
           )}
           {aberta && !conferindo && (
             <button
-              onClick={() => setConferindo(true)}
+              onClick={() => {
+                setVendidas(lerRascunhoValido() ?? {});
+                setConferindo(true);
+              }}
               className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition"
             >
               <ClipboardCheck className="w-4 h-4" />
