@@ -989,8 +989,7 @@ function ModalDetalhe({
   const emConferencia = aberta ? conferindo : editandoConf;
   useEffect(() => {
     if (!emConferencia) return;
-    if (mudouDaBase(vendidas)) salvarRascunhoConferencia(consignacao.id, vendidas);
-    else apagarRascunhoConferencia(consignacao.id);
+    salvarRascunhoConferencia(consignacao.id, vendidas);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emConferencia, vendidas, consignacao.id]);
 
@@ -1037,8 +1036,8 @@ function ModalDetalhe({
     }
   }
 
+  // cancelar só sai do modo conferência: o que foi digitado continua salvo e volta ao reabrir
   function cancelarConferencia() {
-    apagarRascunhoConferencia(consignacao.id);
     setVendidas({});
     setConferindo(false);
     setErro(null);
@@ -1051,7 +1050,6 @@ function ModalDetalhe({
   }
 
   function cancelarEdicaoConferencia() {
-    apagarRascunhoConferencia(consignacao.id);
     setVendidas({});
     setEditandoConf(false);
     setErro(null);
