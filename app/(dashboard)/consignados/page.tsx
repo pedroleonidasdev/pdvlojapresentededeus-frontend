@@ -902,6 +902,41 @@ function ModalConsignacaoForm({
 
 /* ---------------------------------- Detalhe ---------------------------------- */
 
+/** Rascunho da conferência (quantidades vendidas digitadas), guardado neste navegador: se a página
+ *  recarregar ou o sistema atualizar no meio da conferência, o que foi digitado não se perde. */
+const chaveRascunhoConferencia = (id: number) => `pdv_consignacao_rascunho_conferencia_${id}`;
+
+function lerRascunhoConferencia(id: number): Record<number, number> | null {
+  try {
+    const bruto = localStorage.getItem(chaveRascunhoConferencia(id));
+    if (!bruto) return null;
+    const dados = JSON.parse(bruto) as Record<string, unknown>;
+    const resultado: Record<number, number> = {};
+    for (const [k, v] of Object.entries(dados)) {
+      if (typeof v === "number" && Number.isFinite(v)) resultado[Number(k)] = v;
+    }
+    return resultado;
+  } catch {
+    return null;
+  }
+}
+
+function salvarRascunhoConferencia(id: number, vendidas: Record<number, number>) {
+  try {
+    localStorage.setItem(chaveRascunhoConferencia(id), JSON.stringify(vendidas));
+  } catch {
+    // sem localStorage: vale só até fechar a tela
+  }
+}
+
+function apagarRascunhoConferencia(id: number) {
+  try {
+    localStorage.removeItem(chaveRascunhoConferencia(id));
+  } catch {
+    // ignora
+  }
+}
+
 function ModalDetalhe({
   consignacao,
   iniciarEditandoConferencia = false,
@@ -922,11 +957,14 @@ function ModalDetalhe({
   onEditar: (c: Consignacao) => void;
 }) {
   const aberta = consignacao.status === "ABERTA";
-  const comecaEditando = iniciarEditandoConferencia && consignacao.status === "FECHADA";
+  // rascunho salvo automaticamente: se existir, a conferência volta exatamente como estava
+  const [rascunho] = useState(() => lerRascunhoConferencia(consignacao.id));
+  const comecaEditando = !aberta && (iniciarEditandoConferencia || rascunho !== null);
   const [vendidas, setVendidas] = useState<Record<number, number>>(() =>
-    comecaEditando ? Object.fromEntries(consignacao.itens.map((i) => [i.id, i.quantidadeVendida])) : {}
+    rascunho ??
+    (comecaEditando ? Object.fromEntries(consignacao.itens.map((i) => [i.id, i.quantidadeVendida])) : {})
   );
-  const [conferindo, setConferindo] = useState(false);
+  const [conferindo, setConferindo] = useState(aberta && rascunho !== null);
   // edição da conferência de uma consignação JÁ FECHADA (corrige as quantidades vendidas)
   const [editandoConf, setEditandoConf] = useState(comecaEditando);
   const [salvando, setSalvando] = useState(false);
@@ -938,6 +976,12 @@ function ModalDetalhe({
     () => (ordemAZ ? ordenarPorNome(consignacao.itens, (i) => i.produtoNome) : consignacao.itens),
     [consignacao.itens, ordemAZ]
   );
+
+  // salva sozinho a cada alteração enquanto a conferência está em andamento
+  const emConferencia = aberta ? conferindo : editandoConf;
+  useEffect(() => {
+    if (emConferencia) salvarRascunhoConferencia(consignacao.id, vendidas);
+  }, [emConferencia, vendidas, consignacao.id]);
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
     aberta || editandoConf ? Math.min(Math.max(vendidas[id] ?? 0, 0), enviada) : atual;
@@ -972,6 +1016,7 @@ function ModalDetalhe({
           quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
         })),
       });
+      apagarRascunhoConferencia(consignacao.id);
       onAtualizada(data);
     } catch (e) {
       setErro(mensagemErro(e, "Não foi possível fechar a consignação."));
@@ -990,6 +1035,7 @@ function ModalDetalhe({
   }
 
   function cancelarEdicaoConferencia() {
+    apagarRascunhoConferencia(consignacao.id);
     setVendidas({});
     setEditandoConf(false);
     setErro(null);
@@ -1008,6 +1054,7 @@ function ModalDetalhe({
           quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
         })),
       });
+      apagarRascunhoConferencia(consignacao.id);
       setVendidas({});
       setEditandoConf(false);
       onAtualizada(data);
@@ -1019,25 +1066,16 @@ function ModalDetalhe({
     }
   }
 
-  const temConferenciaPendente = (conferindo || editandoConf) && (Object.values(vendidas) as number[]).some((q) => q > 0);
 
   function cancelarConferencia() {
+    apagarRascunhoConferencia(consignacao.id);
     setVendidas({});
     setConferindo(false);
     setErro(null);
   }
 
-  // o X fecha a janela sem alterar nada (nenhuma baixa é feita no estoque)
+  // o X fecha a janela; a conferência em andamento fica salva e volta como estava ao reabrir
   function fecharSemAlterar() {
-    if (
-      temConferenciaPendente &&
-      !confirm(
-        editandoConf
-          ? "Fechar sem alterações? As correções feitas na conferência serão descartadas."
-          : "Fechar sem alterações? As quantidades vendidas informadas na conferência serão descartadas e nenhuma baixa será feita no estoque."
-      )
-    )
-      return;
     onClose();
   }
 
@@ -1048,6 +1086,7 @@ function ModalDetalhe({
     if (!confirm(aviso)) return;
     try {
       await api.delete(`/consignacoes/${consignacao.id}`);
+      apagarRascunhoConferencia(consignacao.id);
       onExcluida();
     } catch (e) {
       setErro(mensagemErro(e, "Não foi possível excluir."));
@@ -1072,8 +1111,8 @@ function ModalDetalhe({
           </div>
           <button
             onClick={fecharSemAlterar}
-            title="Fechar sem alterações"
-            aria-label="Fechar sem alterações"
+            title="Fechar (a conferência em andamento fica salva)"
+            aria-label="Fechar"
             className="p-1 rounded-md hover:bg-background text-muted shrink-0"
           >
             <X className="w-4 h-4" />
@@ -1084,13 +1123,13 @@ function ModalDetalhe({
           {editandoConf && (
             <p className="text-xs text-muted bg-background rounded-lg px-3 py-2 mb-3">
               Corrija a quantidade <strong>vendida</strong> de cada item e salve. O estoque é ajustado pela diferença em
-              relação à conferência anterior.
+              relação à conferência anterior. Suas alterações são salvas automaticamente neste navegador.
             </p>
           )}
           {aberta && conferindo && (
             <p className="text-xs text-muted bg-background rounded-lg px-3 py-2 mb-3">
               Quando o consignatário prestar contas, informe quantas unidades de cada item foram <strong>vendidas</strong> e
-              feche a consignação. Só a quantidade vendida dá baixa no estoque; o restante volta para a loja.
+              feche a consignação. Só a quantidade vendida dá baixa no estoque; o restante volta para a loja. Suas alterações são salvas automaticamente neste navegador.
             </p>
           )}
           <div className="flex justify-end mb-2">
