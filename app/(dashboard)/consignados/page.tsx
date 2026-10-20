@@ -1221,7 +1221,7 @@ function ModalDetalhe({
                 className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
               >
                 {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                Salvar conferência
+                Fechar e dar baixa no estoque
               </button>
             </div>
           )}
