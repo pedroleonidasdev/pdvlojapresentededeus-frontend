@@ -466,8 +466,10 @@ function ModalConsignacaoForm({
     } else {
       setErro(null);
     }
-    // produto que ainda não estava na consignação: a lista da direita rola até ele
-    if (quantidade > 0 && !itens.some((i) => i.produtoId === produto.id)) {
+    // a lista da direita rola até o produto e o destaca sempre que a quantidade dele muda
+    // (novo OU já existente): com 100+ itens, sem isso a mudança acontece fora da tela
+    // e parece que a lista não atualizou
+    if (quantidade > 0 && quantidade !== qtdNaLista(produto.id)) {
       setDestaque((d) => ({ id: produto.id, n: (d?.n ?? 0) + 1 }));
     }
     setItens((prev) => {
