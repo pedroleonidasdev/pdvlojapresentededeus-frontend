@@ -890,6 +890,8 @@ function ModalDetalhe({
   const aberta = consignacao.status === "ABERTA";
   const [vendidas, setVendidas] = useState<Record<number, number>>({});
   const [conferindo, setConferindo] = useState(false);
+  // edição da conferência de uma consignação JÁ FECHADA (corrige as quantidades vendidas)
+  const [editandoConf, setEditandoConf] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
@@ -901,7 +903,7 @@ function ModalDetalhe({
   );
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
-    aberta ? Math.min(Math.max(vendidas[id] ?? 0, 0), enviada) : atual;
+    aberta || editandoConf ? Math.min(Math.max(vendidas[id] ?? 0, 0), enviada) : atual;
 
   // prévia do acerto enquanto o operador digita as quantidades vendidas
   let totalVendido = 0;
@@ -942,7 +944,45 @@ function ModalDetalhe({
     }
   }
 
-  const temConferenciaPendente = conferindo && (Object.values(vendidas) as number[]).some((q) => q > 0);
+  function iniciarEdicaoConferencia() {
+    const inicial: Record<number, number> = {};
+    for (const i of consignacao.itens) inicial[i.id] = i.quantidadeVendida;
+    setVendidas(inicial);
+    setEditandoConf(true);
+    setErro(null);
+  }
+
+  function cancelarEdicaoConferencia() {
+    setVendidas({});
+    setEditandoConf(false);
+    setErro(null);
+  }
+
+  async function salvarConferencia() {
+    if (enviandoRef.current) return;
+    if (!confirm("Salvar a conferência corrigida? O estoque será ajustado conforme a diferença nas quantidades vendidas.")) return;
+    enviandoRef.current = true;
+    setSalvando(true);
+    setErro(null);
+    try {
+      const { data } = await api.put<Consignacao>(`/consignacoes/${consignacao.id}/conferencia`, {
+        itens: consignacao.itens.map((i) => ({
+          itemId: i.id,
+          quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
+        })),
+      });
+      setVendidas({});
+      setEditandoConf(false);
+      onAtualizada(data);
+    } catch (e) {
+      setErro(mensagemErro(e, "Não foi possível salvar a conferência."));
+    } finally {
+      enviandoRef.current = false;
+      setSalvando(false);
+    }
+  }
+
+  const temConferenciaPendente = (conferindo || editandoConf) && (Object.values(vendidas) as number[]).some((q) => q > 0);
 
   function cancelarConferencia() {
     setVendidas({});
@@ -954,7 +994,11 @@ function ModalDetalhe({
   function fecharSemAlterar() {
     if (
       temConferenciaPendente &&
-      !confirm("Fechar sem alterações? As quantidades vendidas informadas na conferência serão descartadas e nenhuma baixa será feita no estoque.")
+      !confirm(
+        editandoConf
+          ? "Fechar sem alterações? As correções feitas na conferência serão descartadas."
+          : "Fechar sem alterações? As quantidades vendidas informadas na conferência serão descartadas e nenhuma baixa será feita no estoque."
+      )
     )
       return;
     onClose();
@@ -1000,6 +1044,12 @@ function ModalDetalhe({
         </div>
 
         <div className="flex-1 overflow-auto p-5">
+          {editandoConf && (
+            <p className="text-xs text-muted bg-background rounded-lg px-3 py-2 mb-3">
+              Corrija a quantidade <strong>vendida</strong> de cada item e salve. O estoque é ajustado pela diferença em
+              relação à conferência anterior.
+            </p>
+          )}
           {aberta && conferindo && (
             <p className="text-xs text-muted bg-background rounded-lg px-3 py-2 mb-3">
               Quando o consignatário prestar contas, informe quantas unidades de cada item foram <strong>vendidas</strong> e
@@ -1034,7 +1084,7 @@ function ModalDetalhe({
                     <td className="py-2 px-2 text-right font-mono">{formatarMoeda(i.precoUnitario)}</td>
                     <td className="py-2 px-2 text-right font-mono">{i.percentualComissao}%</td>
                     <td className="py-2 px-2 text-right">
-                      {aberta && conferindo ? (
+                      {(aberta && conferindo) || editandoConf ? (
                         <input
                           type="number"
                           min={0}
@@ -1110,6 +1160,34 @@ function ModalDetalhe({
               </button>
             )}
           </div>
+          {!aberta && !editandoConf && (
+            <button
+              onClick={iniciarEdicaoConferencia}
+              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition"
+            >
+              <ClipboardCheck className="w-4 h-4" />
+              Editar conferência
+            </button>
+          )}
+          {!aberta && editandoConf && (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={cancelarEdicaoConferencia}
+                disabled={salvando}
+                className="text-sm font-medium text-muted hover:text-foreground px-3 py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                Cancelar edição
+              </button>
+              <button
+                onClick={salvarConferencia}
+                disabled={salvando}
+                className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
+              >
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Salvar conferência
+              </button>
+            </div>
+          )}
           {aberta && !conferindo && (
             <button
               onClick={() => setConferindo(true)}
