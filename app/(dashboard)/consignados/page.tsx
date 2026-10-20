@@ -958,7 +958,16 @@ function ModalDetalhe({
 }) {
   const aberta = consignacao.status === "ABERTA";
   // rascunho salvo automaticamente: se existir, a conferência volta exatamente como estava
-  const [rascunho] = useState(() => lerRascunhoConferencia(consignacao.id));
+  // valor "de partida" de cada item: em aberto = 0 vendidas; fechada = o que já foi conferido
+  const basePorItem = (id: number, vendidaAtual: number) => (aberta ? 0 : vendidaAtual);
+  const mudouEmRelacaoABase = (v: Record<number, number>) =>
+    consignacao.itens.some((i) => (v[i.id] ?? basePorItem(i.id, i.quantidadeVendida)) !== basePorItem(i.id, i.quantidadeVendida));
+  // só vale como rascunho se o operador realmente digitou algo diferente do ponto de partida;
+  // sem isso a tela abriria sempre direto na conferência
+  const [rascunho] = useState(() => {
+    const salvo = lerRascunhoConferencia(consignacao.id);
+    return salvo !== null && mudouEmRelacaoABase(salvo) ? salvo : null;
+  });
   const comecaEditando = !aberta && (iniciarEditandoConferencia || rascunho !== null);
   const [vendidas, setVendidas] = useState<Record<number, number>>(() =>
     rascunho ??
@@ -980,7 +989,10 @@ function ModalDetalhe({
   // salva sozinho a cada alteração enquanto a conferência está em andamento
   const emConferencia = aberta ? conferindo : editandoConf;
   useEffect(() => {
-    if (emConferencia) salvarRascunhoConferencia(consignacao.id, vendidas);
+    if (!emConferencia) return;
+    if (mudouEmRelacaoABase(vendidas)) salvarRascunhoConferencia(consignacao.id, vendidas);
+    else apagarRascunhoConferencia(consignacao.id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [emConferencia, vendidas, consignacao.id]);
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
