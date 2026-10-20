@@ -369,6 +369,11 @@ function ModalConsignacaoForm({
   const listaItensRef = useRef<HTMLUListElement>(null);
   const [destaque, setDestaque] = useState<{ id: number; n: number } | null>(null);
 
+  const erroRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (erro) erroRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [erro]);
+
   useEffect(() => {
     if (!destaque) return;
     const linha = listaItensRef.current?.querySelector<HTMLElement>(`[data-item-id="${destaque.id}"]`);
@@ -441,6 +446,11 @@ function ModalConsignacaoForm({
 
   const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
 
+  /** Máximo permitido: o estoque atual, ou o que já estava enviado nesta consignação (se for maior),
+   *  para que dê para diminuir/manter um item cujo estoque ficou menor que a quantidade enviada. */
+  const limiteQtd = (p: Produto) =>
+    Math.max(p.quantidadeEstoque, consignacao?.itens.find((i) => i.produtoId === p.id)?.quantidadeEnviada ?? 0);
+
   /** Linha nova do formulário (preço e comissão da categoria no momento em que entra). */
   function novoItem(produto: Produto, quantidade: number): ItemForm {
     return {
@@ -460,9 +470,10 @@ function ModalConsignacaoForm({
    */
   function definirQtd(produto: Produto, desejada: number) {
     let quantidade = Math.max(0, Math.floor(desejada) || 0);
-    if (quantidade > produto.quantidadeEstoque) {
+    const limite = limiteQtd(produto);
+    if (quantidade > limite) {
       setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
-      quantidade = produto.quantidadeEstoque;
+      quantidade = limite;
     } else {
       setErro(null);
     }
@@ -720,7 +731,7 @@ function ModalConsignacaoForm({
                           <div className="shrink-0">
                             <QuantidadeStepper
                               valor={naLista}
-                              max={p.quantidadeEstoque}
+                              max={limiteQtd(p)}
                               desabilitado={semEstoque && naLista === 0}
                               rotulo={p.nome}
                               onChange={(n) => definirQtd(p, n)}
@@ -835,8 +846,11 @@ function ModalConsignacaoForm({
 
         {/* ------------------------------ Erro + rodapé ------------------------------ */}
         {erro && (
-          <div className="px-5 pt-3 shrink-0">
-            <div className="flex items-start gap-2 text-sm text-danger bg-danger-light rounded-lg px-3 py-2">
+          <div ref={erroRef} className="px-5 pt-3 shrink-0">
+            <div
+              role="alert"
+              className="flex items-start gap-2 text-sm font-semibold text-danger bg-danger-light border-2 border-danger rounded-lg px-3 py-2.5 shadow-sm"
+            >
               <p className="flex-1">{erro}</p>
               <button onClick={() => setErro(null)} className="shrink-0 p-0.5" aria-label="Fechar aviso">
                 <X className="w-4 h-4" />
