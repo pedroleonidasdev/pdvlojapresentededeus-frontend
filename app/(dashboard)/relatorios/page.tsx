@@ -6,7 +6,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { Venda, FormaPagamento, Caixa, Troca, Despesa } from "@/lib/types";
+import { Venda, FormaPagamento, Caixa, Troca, Despesa, Consignacao } from "@/lib/types";
 import {
   formatarMoeda,
   formatarDataHora,
@@ -91,6 +91,28 @@ function filtrarTrocas(trocas: Troca[], formas: Set<FormaPagamento>, usuario: st
   });
 }
 
+/**
+ * Valor dos recibos das consignações FECHADAS dentro do período (dia do fechamento, fuso de Brasília):
+ * é o valor do recibo (por padrão vendido − comissão, ou o valor editado no fechamento). Consignação não tem forma de
+ * pagamento, então só entra quando todas as formas estão marcadas; o filtro de operador vale normalmente.
+ */
+function recibosConsignacao(
+  consignacoes: Consignacao[],
+  inicio: string,
+  fim: string,
+  todasFormas: boolean,
+  usuario: string
+): Consignacao[] {
+  if (!todasFormas) return [];
+  return consignacoes.filter((c) => {
+    if (c.status !== "FECHADA" || !c.dataFechamento) return false;
+    const dia = dataBrasiliaISO(c.dataFechamento);
+    if (dia < inicio || dia > fim) return false;
+    if (usuario !== "TODOS" && c.usuarioNome !== usuario) return false;
+    return true;
+  });
+}
+
 export default function RelatoriosPage() {
   const { usuario } = useAuth();
   const isAdmin = usuario?.perfil === "ADMIN";
@@ -106,6 +128,8 @@ export default function RelatoriosPage() {
   const [trocasAnt, setTrocasAnt] = useState<Troca[] | null>(null);
   const [vendas, setVendas] = useState<Venda[]>([]);
   const [trocas, setTrocas] = useState<Troca[]>([]);
+  // todas as consignações (o filtro por período é feito na tela, pelo dia do fechamento)
+  const [consignacoes, setConsignacoes] = useState<Consignacao[]>([]);
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [carregando, setCarregando] = useState(false);
   const [jaGerou, setJaGerou] = useState(false);
@@ -173,7 +197,7 @@ export default function RelatoriosPage() {
         inicio: limiteDiaBrasiliaParaUtc(anterior.inicio, false),
         fim: limiteDiaBrasiliaParaUtc(anterior.fim, true),
       };
-      const [resVendas, resCaixas, resTrocas, resDespesas, resVendasAnt, resTrocasAnt] = await Promise.all([
+      const [resVendas, resCaixas, resTrocas, resDespesas, resVendasAnt, resTrocasAnt, resConsignacoes] = await Promise.all([
         api.get<Venda[]>("/vendas", { params }),
         api.get<Caixa[]>("/caixa", { params }),
         api.get<Troca[]>("/trocas", { params }),
@@ -181,6 +205,8 @@ export default function RelatoriosPage() {
         // o comparativo é um extra: se falhar, o relatório continua sem ele
         api.get<Venda[]>("/vendas", { params: paramsAnt }).catch(() => null),
         api.get<Troca[]>("/trocas", { params: paramsAnt }).catch(() => null),
+        // recibos das consignações fechadas entram no faturamento; se falhar, o relatório segue sem eles
+        api.get<Consignacao[]>("/consignacoes").catch(() => null),
       ]);
       setPeriodoGerado({ inicio: inicioPeriodo, fim: fimPeriodo });
       setVendasAnt(resVendasAnt?.data ?? null);
@@ -188,6 +214,7 @@ export default function RelatoriosPage() {
       setVendas(resVendas.data);
       setHistoricoCaixas(resCaixas.data);
       setTrocas(resTrocas.data);
+      setConsignacoes(resConsignacoes?.data ?? []);
       setDespesas(resDespesas.data);
       setJaGerou(true);
       // ao gerar um novo período, reseta os filtros locais
@@ -254,12 +281,33 @@ export default function RelatoriosPage() {
     if (!vendasAnt || !trocasAnt) return null;
     const v = filtrarVendas(vendasAnt, formasSelecionadas, usuarioSelecionado);
     const t = filtrarTrocas(trocasAnt, formasSelecionadas, usuarioSelecionado);
-    const total = v.reduce((acc, x) => acc + x.total, 0) + t.reduce((acc, x) => acc + x.diferenca, 0);
+    const ant = periodoGerado ? periodoAnterior(periodoGerado.inicio, periodoGerado.fim) : null;
+    const r = ant
+      ? recibosConsignacao(consignacoes, ant.inicio, ant.fim, formasSelecionadas.size === FORMAS.length, usuarioSelecionado)
+      : [];
+    const total =
+      v.reduce((acc, x) => acc + x.total, 0) +
+      t.reduce((acc, x) => acc + x.diferenca, 0) +
+      r.reduce((acc, c) => acc + (c.valorRecibo ?? c.totalLiquidoLoja), 0);
     return { total, quantidadeVendas: v.length };
-  }, [vendasAnt, trocasAnt, formasSelecionadas, usuarioSelecionado]);
+  }, [vendasAnt, trocasAnt, consignacoes, periodoGerado, formasSelecionadas, usuarioSelecionado]);
 
   // métricas calculadas a partir do que está filtrado, garantindo consistência
   // entre os cards, o gráfico e a lista de vendas exibida
+  const recibosFiltrados = useMemo(
+    () =>
+      periodoGerado
+        ? recibosConsignacao(
+            consignacoes,
+            periodoGerado.inicio,
+            periodoGerado.fim,
+            formasSelecionadas.size === FORMAS.length,
+            usuarioSelecionado
+          )
+        : [],
+    [consignacoes, periodoGerado, formasSelecionadas, usuarioSelecionado]
+  );
+
   const metricas = useMemo(() => {
     const totalFaturado = vendasFiltradas.reduce((acc, v) => acc + v.total, 0);
     const quantidadeVendas = vendasFiltradas.length;
@@ -268,7 +316,10 @@ export default function RelatoriosPage() {
     // negativa = loja devolveu troco (sai dinheiro) — soma líquida das duas.
     const totalTrocas = trocasFiltradas.reduce((acc, t) => acc + t.diferenca, 0);
     const quantidadeTrocas = trocasFiltradas.length;
-    const totalLiquido = totalFaturado + totalTrocas;
+    // valor dos recibos das consignações fechadas no período (líquido da loja)
+    const totalConsignacoes = recibosFiltrados.reduce((acc, c) => acc + (c.valorRecibo ?? c.totalLiquidoLoja), 0);
+    const quantidadeConsignacoes = recibosFiltrados.length;
+    const totalLiquido = totalFaturado + totalTrocas + totalConsignacoes;
 
     const totalPorFormaPagamento: Record<string, number> = {};
     for (const v of vendasFiltradas) {
@@ -310,11 +361,13 @@ export default function RelatoriosPage() {
       quantidadeVendas,
       totalTrocas,
       quantidadeTrocas,
+      totalConsignacoes,
+      quantidadeConsignacoes,
       totalLiquido,
       totalPorFormaPagamento,
       produtosMaisVendidos,
     };
-  }, [vendasFiltradas, trocasFiltradas]);
+  }, [vendasFiltradas, trocasFiltradas, recibosFiltrados]);
 
   // agrupamento por dia (no fuso de Brasília) para o gráfico
   const vendasPorDia = useMemo(() => {
@@ -495,11 +548,12 @@ export default function RelatoriosPage() {
       startY: y,
       margin: { left: margem, right: margem },
       theme: "grid",
-      head: [["Faturamento líquido", "Vendas", "Trocas", "Ticket médio"]],
+      head: [["Faturamento líquido", "Vendas", "Trocas", "Recibos de consignação", "Ticket médio"]],
       body: [[
         formatarMoeda(metricas.totalLiquido),
         metricas.quantidadeVendas.toString(),
         metricas.quantidadeTrocas.toString(),
+        formatarMoeda(metricas.totalConsignacoes),
         formatarMoeda(
           metricas.quantidadeVendas > 0 ? metricas.totalFaturado / metricas.quantidadeVendas : 0
         ),
@@ -804,10 +858,20 @@ export default function RelatoriosPage() {
                   <p className="mt-2 text-3xl sm:text-4xl font-semibold font-mono tracking-tight">
                     {formatarMoeda(metricas.totalLiquido)}
                   </p>
-                  {metricas.totalTrocas !== 0 && (
+                  {(metricas.totalTrocas !== 0 || metricas.quantidadeConsignacoes > 0) && (
                     <p className="mt-1 text-xs text-white/70">
-                      {formatarMoeda(metricas.totalFaturado)} em vendas {metricas.totalTrocas > 0 ? "+" : "−"}{" "}
-                      {formatarMoeda(Math.abs(metricas.totalTrocas))} em trocas
+                      {formatarMoeda(metricas.totalFaturado)} em vendas
+                      {metricas.totalTrocas !== 0 && (
+                        <>
+                          {" "}{metricas.totalTrocas > 0 ? "+" : "−"} {formatarMoeda(Math.abs(metricas.totalTrocas))} em trocas
+                        </>
+                      )}
+                      {metricas.quantidadeConsignacoes > 0 && (
+                        <>
+                          {" "}+ {formatarMoeda(metricas.totalConsignacoes)} em recibos de consignação
+                          ({metricas.quantidadeConsignacoes})
+                        </>
+                      )}
                     </p>
                   )}
                   {periodoGerado && (

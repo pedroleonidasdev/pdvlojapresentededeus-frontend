@@ -30,7 +30,7 @@ export async function gerarReciboConsignacao(m: ModeloConsignacao, quantidade = 
   } = await import("docx");
   const logo = await carregarLogo();
   const total = Math.max(1, Math.min(99, Math.floor(quantidade) || 1));
-  const valor = m.acerto ? formatarMoeda(m.acerto.liquidoLoja) : null;
+  const valor = m.acerto ? formatarMoeda(m.acerto.valorRecibo) : null;
 
   const semBorda = { style: BorderStyle.NONE, size: 0, color: "FFFFFF" };
   const semBordas = { top: semBorda, bottom: semBorda, left: semBorda, right: semBorda };

@@ -41,7 +41,7 @@ export async function gerarPdfRecibos(m: ModeloConsignacao, quantidade: number):
   const { jsPDF } = await import("jspdf");
   const logo = await carregarLogo();
   const total = Math.max(1, Math.min(MAX_RECIBOS, Math.floor(quantidade) || 1));
-  const valor = m.acerto ? formatarMoeda(m.acerto.liquidoLoja) : null;
+  const valor = m.acerto ? formatarMoeda(m.acerto.valorRecibo) : null;
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   doc.setProperties({ title: `Recibo - ${m.consignatario}`, author: "Presente de Deus" });

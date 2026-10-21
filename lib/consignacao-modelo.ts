@@ -49,7 +49,7 @@ export interface ModeloConsignacao {
   grupos: GrupoModelo[];
   totais: { qtdEnviada: number; vlrEnviado: number; qtdVendida: number | null; vlrVendido: number | null };
   /** Só existe depois do fechamento. */
-  acerto: { faixas: FaixaModelo[]; totalVendido: number; totalComissao: number; liquidoLoja: number } | null;
+  acerto: { faixas: FaixaModelo[]; totalVendido: number; totalComissao: number; liquidoLoja: number; valorRecibo: number } | null;
   nomeArquivoBase: string;
 }
 
@@ -136,7 +136,7 @@ export function montarModeloConsignacao(c: Consignacao): ModeloConsignacao {
       vlrVendido: comVendas ? c.totalVendido : null,
     },
     acerto: comVendas
-      ? { faixas, totalVendido: c.totalVendido, totalComissao: c.totalComissao, liquidoLoja: c.totalLiquidoLoja }
+      ? { faixas, totalVendido: c.totalVendido, totalComissao: c.totalComissao, liquidoLoja: c.totalLiquidoLoja, valorRecibo: c.valorRecibo ?? c.totalLiquidoLoja }
       : null,
     nomeArquivoBase: `consignacao-${c.id}-${slug || "relatorio"}`,
   };

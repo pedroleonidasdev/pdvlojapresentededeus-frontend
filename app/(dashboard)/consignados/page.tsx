@@ -1026,6 +1026,11 @@ function parsePreco(texto: string): number | null {
   return Math.round(valor * 100) / 100;
 }
 
+/** 850 -> "850,00" (formato que o campo editável aceita). */
+function formatarNumeroEditavel(n: number): string {
+  return n.toFixed(2).replace(".", ",");
+}
+
 function ModalDetalhe({
   consignacao,
   iniciarEditandoConferencia = false,
@@ -1168,6 +1173,10 @@ function ModalDetalhe({
     totalComissao += (valor * i.percentualComissao) / 100;
   }
   totalComissao = Math.round(totalComissao * 100) / 100;
+  // valor do recibo sugerido = o que a loja recebe do consignatário (vendido − comissão)
+  const valorReciboAuto = Math.round((totalVendido - totalComissao) * 100) / 100;
+  const [confirmandoFechamento, setConfirmandoFechamento] = useState(false);
+  const [reciboTexto, setReciboTexto] = useState("");
 
   async function fechar() {
     if (enviandoRef.current) return;
@@ -1175,11 +1184,18 @@ function ModalDetalhe({
       setErro("Há um preço inválido na lista. Use um valor como 12,50 (pode ser 0,00).");
       return;
     }
-    const msg =
-      totalUnidadesVendidas > 0
-        ? `Fechar a consignação e dar baixa de ${totalUnidadesVendidas} unidade(s) vendida(s) no estoque? Essa ação só pode ser desfeita por um administrador, excluindo a consignação.`
-        : "Nenhuma unidade foi marcada como vendida. Fechar mesmo assim (sem baixa no estoque)?";
-    if (!confirm(msg)) return;
+    // abre a janela com o valor do recibo (editável) antes de fechar de fato
+    setReciboTexto(formatarNumeroEditavel(valorReciboAuto));
+    setConfirmandoFechamento(true);
+  }
+
+  async function confirmarFechamento() {
+    if (enviandoRef.current) return;
+    const valorRecibo = parsePreco(reciboTexto);
+    if (valorRecibo === null) {
+      setErro("Valor do recibo inválido. Use um valor como 850,00 (pode ser 0,00).");
+      return;
+    }
     enviandoRef.current = true;
     setSalvando(true);
     setErro(null);
@@ -1190,8 +1206,10 @@ function ModalDetalhe({
           quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
           precoUnitario: precoMudou(i) ? precoDe(i) : undefined,
         })),
+        valorRecibo,
       });
       apagarRascunhoConferencia(consignacao.id);
+      setConfirmandoFechamento(false);
       onAtualizada(data);
     } catch (e) {
       setErro(mensagemErro(e, "Não foi possível fechar a consignação."));
@@ -1523,6 +1541,64 @@ function ModalDetalhe({
           )}
         </div>
       </div>
+
+      {confirmandoFechamento && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
+          <div className="w-full max-w-md rounded-xl bg-surface border border-border shadow-xl p-5">
+            <h3 className="text-base font-semibold">Valor do recibo das vendas consignadas</h3>
+            <p className="mt-1 text-xs text-muted">
+              Vendido {formatarMoeda(totalVendido)} − comissão {formatarMoeda(totalComissao)} ={" "}
+              <span className="font-mono">{formatarMoeda(valorReciboAuto)}</span>. Você pode editar o valor abaixo.
+            </p>
+            <label className="mt-4 block text-xs font-medium text-muted" htmlFor="valor-recibo">
+              Valor do recibo (R$)
+            </label>
+            <input
+              id="valor-recibo"
+              autoFocus
+              inputMode="decimal"
+              value={reciboTexto}
+              onChange={(e) => setReciboTexto(e.target.value)}
+              className={`mt-1 w-full rounded-lg border bg-background px-3 py-2 font-mono text-lg ${
+                parsePreco(reciboTexto) === null ? "border-red-400" : "border-border"
+              }`}
+            />
+            {parsePreco(reciboTexto) !== null && parsePreco(reciboTexto) !== valorReciboAuto && (
+              <button
+                type="button"
+                onClick={() => setReciboTexto(formatarNumeroEditavel(valorReciboAuto))}
+                className="mt-1 text-xs text-primary hover:underline"
+              >
+                Voltar ao valor calculado ({formatarMoeda(valorReciboAuto)})
+              </button>
+            )}
+            <p className="mt-3 text-xs text-muted">Esse valor será registrado no Faturamento.</p>
+            <p className="mt-2 text-xs text-muted">
+              {totalUnidadesVendidas > 0
+                ? `Serão baixadas ${totalUnidadesVendidas} unidade(s) vendida(s) do estoque. Só um administrador pode desfazer, excluindo a consignação.`
+                : "Nenhuma unidade foi marcada como vendida: não haverá baixa no estoque."}
+            </p>
+            {erro && <p className="mt-2 text-xs text-red-600">{erro}</p>}
+            <div className="mt-4 flex justify-end gap-2">
+              <button
+                onClick={() => setConfirmandoFechamento(false)}
+                disabled={salvando}
+                className="text-sm font-medium text-muted hover:text-foreground px-3 py-2 rounded-lg disabled:opacity-50"
+              >
+                Voltar
+              </button>
+              <button
+                onClick={confirmarFechamento}
+                disabled={salvando || parsePreco(reciboTexto) === null}
+                className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2 rounded-lg disabled:opacity-50"
+              >
+                {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                Confirmar e dar baixa
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

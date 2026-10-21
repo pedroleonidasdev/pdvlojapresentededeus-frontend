@@ -193,6 +193,8 @@ export interface Consignacao {
   totalVendido: number;
   totalComissao: number;
   totalLiquidoLoja: number;
+  /** Valor do recibo (editável no fechamento); sem edição = totalLiquidoLoja. É o que entra no Faturamento. */
+  valorRecibo: number;
   itens: ItemConsignacao[];
   /** Só no front: o relatório usa as quantidades da conferência em andamento (ainda não salva no servidor). */
   conferenciaPrevia?: boolean;
