@@ -370,6 +370,40 @@ export default function RelatoriosPage() {
   }, [vendasFiltradas, trocasFiltradas, recibosFiltrados]);
 
   // agrupamento por dia (no fuso de Brasília) para o gráfico
+  // composição do faturamento líquido: de onde vem cada parte (vendas, trocas, recibos de consignação)
+  const composicao = useMemo(() => {
+    const partes = [
+      { chave: "vendas", rotulo: "Vendas no PDV", detalhe: `${metricas.quantidadeVendas} venda(s)`, valor: metricas.totalFaturado, cor: "bg-info" },
+      {
+        chave: "trocas",
+        rotulo: "Ajuste de trocas",
+        detalhe: `${metricas.quantidadeTrocas} troca(s)`,
+        valor: metricas.totalTrocas,
+        cor: "bg-accent",
+      },
+      {
+        chave: "consignacoes",
+        rotulo: "Recebidos de consignação",
+        detalhe: `${metricas.quantidadeConsignacoes} consignação(ões) fechada(s)`,
+        valor: metricas.totalConsignacoes,
+        cor: "bg-primary",
+      },
+    ];
+    const base = partes.reduce((acc, x) => acc + Math.max(x.valor, 0), 0);
+    return { partes, base };
+  }, [metricas]);
+
+  const linhasConsignacao = useMemo(
+    () =>
+      [...recibosFiltrados]
+        .sort((a, b) => (b.dataFechamento ?? "").localeCompare(a.dataFechamento ?? ""))
+        .map((c) => {
+          const recibo = c.valorRecibo ?? c.totalLiquidoLoja;
+          return { c, recibo, editado: Math.abs(recibo - c.totalLiquidoLoja) > 0.004 };
+        }),
+    [recibosFiltrados]
+  );
+
   const vendasPorDia = useMemo(() => {
     const mapa = new Map<string, number>();
     for (const v of vendasFiltradas) {
@@ -526,6 +560,20 @@ export default function RelatoriosPage() {
     const livro = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(livro, planilha, "Vendas");
     XLSX.utils.book_append_sheet(livro, planilhaTrocas, "Trocas");
+    const planilhaConsignacoes = XLSX.utils.json_to_sheet(
+      linhasConsignacao.map(({ c, recibo, editado }) => ({
+        Consignação: c.id,
+        Consignatário: c.consignatario,
+        Operador: c.usuarioNome,
+        "Fechada em": c.dataFechamento ? formatarDataHora(c.dataFechamento) : "",
+        Vendido: c.totalVendido,
+        Comissão: c.totalComissao,
+        "Valor do recibo": recibo,
+        "Valor editado": editado ? "Sim" : "Não",
+      }))
+    );
+    planilhaConsignacoes["!cols"] = [{ wch: 12 }, { wch: 34 }, { wch: 16 }, { wch: 18 }, { wch: 14 }, { wch: 14 }, { wch: 16 }, { wch: 14 }];
+    XLSX.utils.book_append_sheet(livro, planilhaConsignacoes, "Consignações");
     XLSX.writeFile(livro, `relatorio-vendas_${inicio}_a_${fim}.xlsx`);
   }
 
@@ -576,6 +624,28 @@ export default function RelatoriosPage() {
         ]),
         styles: { fontSize: 9 },
         headStyles: { fillColor: [34, 120, 87] },
+      });
+      y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
+    }
+
+    if (linhasConsignacao.length > 0) {
+      doc.setFontSize(11);
+      doc.text("Recebidos de consignação", margem, y);
+      autoTable(doc, {
+        startY: y + 3,
+        margin: { left: margem, right: margem },
+        head: [["Consignatário", "Fechada em", "Vendido", "Comissão", "Valor do recibo"]],
+        body: linhasConsignacao.map(({ c, recibo }) => [
+          `#${c.id} ${c.consignatario}`,
+          c.dataFechamento ? formatarDataHora(c.dataFechamento) : "",
+          formatarMoeda(c.totalVendido),
+          formatarMoeda(c.totalComissao),
+          formatarMoeda(recibo),
+        ]),
+        foot: [["Total", "", "", "", formatarMoeda(metricas.totalConsignacoes)]],
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [34, 120, 87] },
+        footStyles: { fillColor: [235, 235, 235], textColor: 0 },
       });
       y = (doc as unknown as { lastAutoTable: { finalY: number } }).lastAutoTable.finalY + 8;
     }
@@ -911,7 +981,7 @@ export default function RelatoriosPage() {
                 )}
               </div>
 
-              <div className="relative mt-5 grid grid-cols-2 md:grid-cols-4 gap-3">
+              <div className="relative mt-5 grid grid-cols-2 md:grid-cols-5 gap-3">
                 <MiniIndicador icon={Receipt} label="Vendas realizadas" valor={metricas.quantidadeVendas.toString()} />
                 <MiniIndicador
                   icon={Wallet}
@@ -919,6 +989,12 @@ export default function RelatoriosPage() {
                   valor={formatarMoeda(metricas.quantidadeVendas > 0 ? metricas.totalFaturado / metricas.quantidadeVendas : 0)}
                 />
                 <MiniIndicador icon={CalendarDays} label="Média por dia" valor={formatarMoeda(mediaPorDia)} />
+                <MiniIndicador
+                  icon={FileText}
+                  label="Recibos de consignação"
+                  valor={formatarMoeda(metricas.totalConsignacoes)}
+                  subtitulo={`${metricas.quantidadeConsignacoes} fechada(s) no período`}
+                />
                 <MiniIndicador
                   icon={Repeat}
                   label="Trocas no período"
@@ -989,6 +1065,40 @@ export default function RelatoriosPage() {
               )}
             </div>
 
+            <div className="bg-surface border border-border rounded-xl p-5">
+              <h3 className="text-sm font-semibold mb-1">Composição do faturamento líquido</h3>
+              <p className="text-[11px] text-muted mb-4">
+                De onde vem o valor total: vendas feitas no PDV, ajuste das trocas e o que a loja recebeu das consignações fechadas no período.
+              </p>
+              <ul className="space-y-4">
+                {composicao.partes.map((x) => {
+                  const pct = composicao.base > 0 ? (Math.max(x.valor, 0) / composicao.base) * 100 : 0;
+                  return (
+                    <li key={x.chave}>
+                      <div className="flex items-center justify-between text-sm gap-2">
+                        <span className="flex items-center gap-2 text-foreground min-w-0">
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${x.cor}`} />
+                          <span className="truncate">{x.rotulo}</span>
+                          <span className="text-[11px] text-muted hidden sm:inline">· {x.detalhe}</span>
+                        </span>
+                        <span className="flex items-baseline gap-2 shrink-0">
+                          <span className="text-[11px] text-muted font-mono">{pct.toFixed(0)}%</span>
+                          <span className="font-mono font-medium">{formatarMoeda(x.valor)}</span>
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1.5 rounded-full bg-background overflow-hidden">
+                        <div className={`h-full rounded-full ${x.cor}`} style={{ width: `${pct}%` }} />
+                      </div>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="mt-4 pt-3 border-t border-border flex items-center justify-between text-sm font-semibold">
+                <span>Faturamento líquido total</span>
+                <span className="font-mono">{formatarMoeda(metricas.totalLiquido)}</span>
+              </div>
+            </div>
+
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
               <div className="bg-surface border border-border rounded-xl p-5">
                 <h3 className="text-sm font-semibold mb-1">Por forma de pagamento</h3>
@@ -1021,6 +1131,34 @@ export default function RelatoriosPage() {
                     <p className="text-sm text-muted">Nenhuma venda no período.</p>
                   )}
                 </ul>
+
+                <div className="mt-5 pt-4 border-t border-border">
+                  <p className="text-[11px] font-semibold uppercase tracking-wide text-muted">Recebidos de consignação</p>
+                  <p className="text-[11px] text-muted mt-0.5 mb-3">
+                    Valor dos recibos das consignações fechadas no período. Fica separado porque não é uma venda do PDV nem tem forma de
+                    pagamento.
+                  </p>
+                  <div className="flex items-center justify-between text-sm gap-2">
+                    <span className="flex items-center gap-2 text-foreground">
+                      <span className="w-2.5 h-2.5 rounded-full bg-primary" />
+                      Recibos de consignação ({metricas.quantidadeConsignacoes})
+                    </span>
+                    <span className="flex items-baseline gap-2">
+                      <span className="text-[11px] text-muted font-mono">
+                        {metricas.totalLiquido > 0 ? ((metricas.totalConsignacoes / metricas.totalLiquido) * 100).toFixed(0) : 0}% do total
+                      </span>
+                      <span className="font-mono font-medium">{formatarMoeda(metricas.totalConsignacoes)}</span>
+                    </span>
+                  </div>
+                  <div className="mt-1.5 h-1.5 rounded-full bg-background overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-primary"
+                      style={{
+                        width: `${metricas.totalLiquido > 0 ? Math.min(100, (Math.max(metricas.totalConsignacoes, 0) / metricas.totalLiquido) * 100) : 0}%`,
+                      }}
+                    />
+                  </div>
+                </div>
               </div>
 
               <div className="bg-surface border border-border rounded-xl p-5">
@@ -1060,6 +1198,85 @@ export default function RelatoriosPage() {
                   )}
                 </ul>
               </div>
+            </div>
+
+            <div className="bg-surface border border-border rounded-xl p-5">
+              <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <FileText className="w-4 h-4 text-primary" />
+                  Recebidos de consignação
+                </h3>
+                <Link href="/consignados" className="text-xs text-primary hover:underline flex items-center gap-1">
+                  Abrir consignados <ArrowRight className="w-3 h-3" />
+                </Link>
+              </div>
+              <p className="text-[11px] text-muted mb-4">
+                Consignações fechadas no período (pelo dia do fechamento). O valor do recibo é o que a loja recebeu do consignatário:
+                vendido − comissão, ou o valor que você editou na consignação.
+              </p>
+              {linhasConsignacao.length === 0 ? (
+                <p className="text-sm text-muted">
+                  {formasSelecionadas.size !== FORMAS.length
+                    ? "Consignações não têm forma de pagamento: marque todas as formas de pagamento no filtro para vê-las aqui."
+                    : "Nenhuma consignação fechada no período."}
+                </p>
+              ) : (
+                <div className="overflow-x-auto -mx-1">
+                  <table className="w-full text-sm min-w-[560px]">
+                    <thead>
+                      <tr className="text-left text-[11px] uppercase tracking-wide text-muted border-b border-border">
+                        <th className="px-1 py-2 font-medium">Consignatário</th>
+                        <th className="px-1 py-2 font-medium">Fechada em</th>
+                        <th className="px-1 py-2 font-medium text-right">Vendido</th>
+                        <th className="px-1 py-2 font-medium text-right">Comissão</th>
+                        <th className="px-1 py-2 font-medium text-right">Valor do recibo</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {linhasConsignacao.map(({ c, recibo, editado }) => (
+                        <tr key={c.id} className="border-b border-border/60 last:border-0">
+                          <td className="px-1 py-2.5">
+                            <span className="font-medium text-foreground">{c.consignatario}</span>
+                            <span className="block text-[11px] text-muted">
+                              #{c.id} · {c.usuarioNome}
+                            </span>
+                          </td>
+                          <td className="px-1 py-2.5 text-muted whitespace-nowrap">
+                            {c.dataFechamento ? formatarDataHora(c.dataFechamento) : "—"}
+                          </td>
+                          <td className="px-1 py-2.5 text-right font-mono">{formatarMoeda(c.totalVendido)}</td>
+                          <td className="px-1 py-2.5 text-right font-mono text-muted">− {formatarMoeda(c.totalComissao)}</td>
+                          <td className="px-1 py-2.5 text-right font-mono font-semibold whitespace-nowrap">
+                            {formatarMoeda(recibo)}
+                            {editado && (
+                              <span
+                                className="ml-1.5 align-middle rounded bg-accent-light px-1.5 py-0.5 text-[10px] font-sans font-medium text-accent-dark"
+                                title={`Valor editado (o cálculo automático seria ${formatarMoeda(c.totalLiquidoLoja)})`}
+                              >
+                                editado
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="border-t border-border font-semibold">
+                        <td className="px-1 py-2.5" colSpan={2}>
+                          Total recebido de consignação ({linhasConsignacao.length})
+                        </td>
+                        <td className="px-1 py-2.5 text-right font-mono">
+                          {formatarMoeda(linhasConsignacao.reduce((acc, x) => acc + x.c.totalVendido, 0))}
+                        </td>
+                        <td className="px-1 py-2.5 text-right font-mono text-muted">
+                          − {formatarMoeda(linhasConsignacao.reduce((acc, x) => acc + x.c.totalComissao, 0))}
+                        </td>
+                        <td className="px-1 py-2.5 text-right font-mono">{formatarMoeda(metricas.totalConsignacoes)}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
 
             <div className="bg-surface border border-border rounded-xl p-5">
