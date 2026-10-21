@@ -12,6 +12,7 @@ import {
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import VisualizarConsignacao from "@/components/VisualizarConsignacao";
+import LerConferenciaFoto from "@/components/LerConferenciaFoto";
 import {
   Search,
   Trash2,
@@ -27,6 +28,7 @@ import {
   Pencil,
   Package,
   ClipboardCheck,
+  Camera,
 } from "lucide-react";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
@@ -369,6 +371,11 @@ function ModalConsignacaoForm({
   const listaItensRef = useRef<HTMLUListElement>(null);
   const [destaque, setDestaque] = useState<{ id: number; n: number } | null>(null);
 
+  const erroRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (erro) erroRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [erro]);
+
   useEffect(() => {
     if (!destaque) return;
     const linha = listaItensRef.current?.querySelector<HTMLElement>(`[data-item-id="${destaque.id}"]`);
@@ -441,6 +448,11 @@ function ModalConsignacaoForm({
 
   const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
 
+  /** Máximo permitido: o estoque atual, ou o que já estava enviado nesta consignação (se for maior),
+   *  para que dê para diminuir/manter um item cujo estoque ficou menor que a quantidade enviada. */
+  const limiteQtd = (p: Produto) =>
+    Math.max(p.quantidadeEstoque, consignacao?.itens.find((i) => i.produtoId === p.id)?.quantidadeEnviada ?? 0);
+
   /** Linha nova do formulário (preço e comissão da categoria no momento em que entra). */
   function novoItem(produto: Produto, quantidade: number): ItemForm {
     return {
@@ -460,14 +472,17 @@ function ModalConsignacaoForm({
    */
   function definirQtd(produto: Produto, desejada: number) {
     let quantidade = Math.max(0, Math.floor(desejada) || 0);
-    if (quantidade > produto.quantidadeEstoque) {
+    const limite = limiteQtd(produto);
+    if (quantidade > limite) {
       setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
-      quantidade = produto.quantidadeEstoque;
+      quantidade = limite;
     } else {
       setErro(null);
     }
-    // produto que ainda não estava na consignação: a lista da direita rola até ele
-    if (quantidade > 0 && !itens.some((i) => i.produtoId === produto.id)) {
+    // a lista da direita rola até o produto e o destaca sempre que a quantidade dele muda
+    // (novo OU já existente): com 100+ itens, sem isso a mudança acontece fora da tela
+    // e parece que a lista não atualizou
+    if (quantidade > 0 && quantidade !== qtdNaLista(produto.id)) {
       setDestaque((d) => ({ id: produto.id, n: (d?.n ?? 0) + 1 }));
     }
     setItens((prev) => {
@@ -718,7 +733,7 @@ function ModalConsignacaoForm({
                           <div className="shrink-0">
                             <QuantidadeStepper
                               valor={naLista}
-                              max={p.quantidadeEstoque}
+                              max={limiteQtd(p)}
                               desabilitado={semEstoque && naLista === 0}
                               rotulo={p.nome}
                               onChange={(n) => definirQtd(p, n)}
@@ -833,8 +848,11 @@ function ModalConsignacaoForm({
 
         {/* ------------------------------ Erro + rodapé ------------------------------ */}
         {erro && (
-          <div className="px-5 pt-3 shrink-0">
-            <div className="flex items-start gap-2 text-sm text-danger bg-danger-light rounded-lg px-3 py-2">
+          <div ref={erroRef} className="px-5 pt-3 shrink-0">
+            <div
+              role="alert"
+              className="flex items-start gap-2 text-sm font-semibold text-danger bg-danger-light border-2 border-danger rounded-lg px-3 py-2.5 shadow-sm"
+            >
               <p className="flex-1">{erro}</p>
               <button onClick={() => setErro(null)} className="shrink-0 p-0.5" aria-label="Fechar aviso">
                 <X className="w-4 h-4" />
@@ -952,6 +970,8 @@ function ModalDetalhe({
     comecaEditando ? lerRascunhoValido() ?? baseInicial() : {}
   );
   const [conferindo, setConferindo] = useState(false);
+  const [lendoFotos, setLendoFotos] = useState(false);
+  const [veioDasFotos, setVeioDasFotos] = useState(false);
   // edição da conferência de uma consignação JÁ FECHADA (corrige as quantidades vendidas)
   const [editandoConf, setEditandoConf] = useState(comecaEditando);
   const [salvando, setSalvando] = useState(false);
@@ -973,6 +993,49 @@ function ModalDetalhe({
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
     aberta || editandoConf ? Math.min(Math.max(vendidas[id] ?? 0, 0), enviada) : atual;
+
+  /** Preenche a conferência com as quantidades lidas das fotos. Não fecha nem baixa nada. */
+  function aplicarLeituraFotos(mapa: Record<number, number>) {
+    const base = aberta ? (conferindo ? vendidas : lerRascunhoValido() ?? {}) : vendidas;
+    setVendidas({ ...base, ...mapa });
+    if (aberta) setConferindo(true);
+    setVeioDasFotos(true);
+    setLendoFotos(false);
+  }
+
+  /**
+   * Consignação que vai para o relatório/impressão. Com conferência em andamento (digitada agora ou
+   * guardada como rascunho neste navegador), as quantidades vendidas entram no relatório como PRÉVIA;
+   * sem isso o relatório sai como sempre (em aberto = colunas em branco; fechada = valores salvos).
+   */
+  function consignacaoParaImprimir(): Consignacao {
+    const origem: Record<number, number> | null = aberta
+      ? conferindo
+        ? vendidas
+        : lerRascunhoValido()
+      : editandoConf
+      ? vendidas
+      : null;
+    if (!origem || !mudouDaBase(origem)) return consignacao;
+    let totalVendidoP = 0;
+    let totalComissaoP = 0;
+    const itens = consignacao.itens.map((i) => {
+      const q = Math.min(Math.max(origem[i.id] ?? basePorItem(i.quantidadeVendida), 0), i.quantidadeEnviada);
+      const valorVendido = Math.round(q * i.precoUnitario * 100) / 100;
+      const comissao = Math.round(valorVendido * i.percentualComissao) / 100;
+      totalVendidoP += valorVendido;
+      totalComissaoP += comissao;
+      return { ...i, quantidadeVendida: q, quantidadeDevolvida: i.quantidadeEnviada - q, valorVendido, comissao };
+    });
+    return {
+      ...consignacao,
+      itens,
+      totalVendido: totalVendidoP,
+      totalComissao: totalComissaoP,
+      totalLiquidoLoja: totalVendidoP - totalComissaoP,
+      conferenciaPrevia: true,
+    };
+  }
 
   // prévia do acerto enquanto o operador digita as quantidades vendidas
   let totalVendido = 0;
@@ -1079,6 +1142,13 @@ function ModalDetalhe({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 no-print">
+      {lendoFotos && (
+        <LerConferenciaFoto
+          consignacao={consignacao}
+          onAplicar={aplicarLeituraFotos}
+          onFechar={() => setLendoFotos(false)}
+        />
+      )}
       <div className="bg-surface rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
           <div className="min-w-0">
@@ -1207,10 +1277,16 @@ function ModalDetalhe({
           )}
         </div>
 
+        {veioDasFotos && emConferencia && (
+          <div className="px-4 py-2 bg-accent-light text-accent-dark text-sm shrink-0">
+            Quantidades preenchidas a partir das fotos. Confira na lista antes de fechar; nada foi baixado do estoque ainda.
+          </div>
+        )}
+
         <div className="p-4 border-t border-border shrink-0 flex flex-wrap items-center justify-between gap-2">
           <div className="flex gap-2">
             <button
-              onClick={() => onImprimir(consignacao)}
+              onClick={() => onImprimir(consignacaoParaImprimir())}
               className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
             >
               <Printer className="w-4 h-4" />
@@ -1223,6 +1299,15 @@ function ModalDetalhe({
               >
                 <Pencil className="w-4 h-4" />
                 Editar / acrescentar produtos
+              </button>
+            )}
+            {(aberta || editandoConf) && (
+              <button
+                onClick={() => setLendoFotos(true)}
+                className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
+              >
+                <Camera className="w-4 h-4" />
+                Ler fotos do relatório
               </button>
             )}
           </div>
