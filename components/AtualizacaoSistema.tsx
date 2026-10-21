@@ -14,9 +14,9 @@ const ADIAR_AVISO_MS = 30 * 60_000;
 const DURACAO_ATUALIZACAO_MS = 5_000;
 
 const ETAPAS = [
-  { ate: 35, texto: "Baixando as melhorias…" },
-  { ate: 75, texto: "Aplicando a nova versão…" },
-  { ate: 100, texto: "Finalizando…" },
+  { ate: 35, texto: "Preparando a atualização…" },
+  { ate: 75, texto: "Carregando a nova versão…" },
+  { ate: 100, texto: "Quase pronto…" },
 ];
 
 /** true quando este navegador já tinha aberto uma versão diferente da atual. */
@@ -36,7 +36,8 @@ function versaoMudouDesdeUltimaVisita(): boolean {
  *
  * 1. Quando existe uma versão nova publicada (conferido ao abrir o painel, ao
  *    voltar para a aba/app e a cada 5 minutos) aparece o aviso com dois
- *    botões: "Atualizar agora" e "Mais tarde" (adia o aviso por 30 minutos).
+ *    botões: "Atualizar agora" e "Mais tarde" (adia o aviso por 30 minutos). O foco inicial
+ *    fica em "Mais tarde" para o Enter do leitor de código de barras não recarregar a página.
  * 2. Ao clicar, uma barra de carregamento (terço) enche em 5 segundos, com
  *    mensagens de etapa, e a página é recarregada (o login é mantido).
  * 3. Ao abrir na versão nova, aparece "Sistema Atualizado Com Sucesso!".
@@ -165,19 +166,27 @@ export default function AtualizacaoSistema() {
                 Nova atualização disponível
               </h2>
               <p className="mt-2 text-sm text-muted leading-relaxed">
-                Uma versão mais nova do sistema foi publicada. Atualize para carregar as melhorias — seu login é mantido.
-                Se escolher “Mais tarde”, o aviso volta a aparecer daqui a 30 minutos.
+                Uma versão mais nova do sistema foi publicada. Ao atualizar, a página é recarregada e seu login é mantido.
+              </p>
+              <p className="mt-3 rounded-lg bg-accent-light px-3 py-2 text-left text-xs leading-relaxed text-accent-dark">
+                <strong>Atenção:</strong> se estiver no meio de uma venda, termine antes de atualizar. O carrinho em
+                andamento não é guardado e se perde ao recarregar.
+              </p>
+              <p className="mt-3 text-xs text-muted">
+                Se escolher “Mais tarde”, este aviso volta a aparecer daqui a 30 minutos.
               </p>
               <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row">
+                {/* o foco inicial fica em "Mais tarde": o leitor de código de barras dá Enter ao ler um produto
+                    e isso NÃO pode recarregar a página no meio de uma venda */}
                 <button
                   onClick={adiar}
+                  autoFocus
                   className="flex w-full items-center justify-center rounded-xl border border-border px-4 py-3 text-sm font-semibold text-muted transition hover:bg-background hover:text-foreground"
                 >
                   Mais tarde
                 </button>
                 <button
                   onClick={atualizar}
-                  autoFocus
                   className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-dark px-4 py-3 text-sm font-semibold text-white shadow-md shadow-primary/25 transition hover:brightness-110 active:scale-[0.99]"
                 >
                   <RefreshCw className="h-4 w-4" />

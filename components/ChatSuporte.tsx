@@ -4,10 +4,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Loader2, MessageCircle, Mic, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Loader2, MessageCircle, Mic, Paperclip, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
 import SeletorEmoji from "@/components/SeletorEmoji";
 import GravadorAudio from "@/components/GravadorAudio";
 import MensagemAudio from "@/components/MensagemAudio";
+import MensagemArquivo from "@/components/MensagemArquivo";
+import { MAX_ANEXO_BYTES, MAX_ANEXO_MB, formatarTamanho } from "@/lib/anexos";
 import { figurinhaTemTexto, soEmojis } from "@/lib/figurinhas";
 import { useChamada } from "@/components/ChamadaProvider";
 
@@ -86,6 +88,9 @@ export default function ChatSuporte() {
   const [seletorAberto, setSeletorAberto] = useState(false);
   const [gravando, setGravando] = useState(false);
   const [apagando, setApagando] = useState(false);
+  // envio de arquivos: nome do que está subindo e o andamento (0-100)
+  const [anexoEnviando, setAnexoEnviando] = useState<{ nome: string; progresso: number } | null>(null);
+  const [arrastando, setArrastando] = useState(false);
 
   const abertoRef = useRef(false);
   const conversaIdRef = useRef<number | null>(null);
@@ -95,6 +100,7 @@ export default function ChatSuporte() {
   const buscandoMensagensRef = useRef(false);
   const fimRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const arquivoInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     abertoRef.current = aberto;
@@ -215,6 +221,7 @@ export default function ChatSuporte() {
     setConfirmandoApagar(false);
     setSeletorAberto(false);
     setGravando(false);
+    setArrastando(false);
     setConversaId(id);
   }
 
@@ -296,6 +303,54 @@ export default function ChatSuporte() {
     setSeletorAberto(false);
     setErro(null);
     setGravando(true);
+  }
+
+  /** Envia um ou mais arquivos (de qualquer formato), um de cada vez. */
+  async function enviarArquivos(lista: File[]) {
+    const id = conversaId;
+    if (id === null || enviando || lista.length === 0) return;
+    setSeletorAberto(false);
+    setErro(null);
+    setEnviando(true);
+    const problemas: string[] = [];
+    try {
+      for (const arquivo of lista) {
+        if (arquivo.size === 0) {
+          problemas.push(`“${arquivo.name}” está vazio.`);
+          continue;
+        }
+        if (arquivo.size > MAX_ANEXO_BYTES) {
+          problemas.push(`“${arquivo.name}” tem ${formatarTamanho(arquivo.size)} (o máximo é ${MAX_ANEXO_MB} MB).`);
+          continue;
+        }
+        setAnexoEnviando({ nome: arquivo.name, progresso: 0 });
+        try {
+          const form = new FormData();
+          form.append("arquivo", arquivo, arquivo.name);
+          const { data } = await api.post<Mensagem>(`/suporte/conversas/${id}/anexos`, form, {
+            onUploadProgress: (ev) => {
+              if (ev.total) setAnexoEnviando({ nome: arquivo.name, progresso: Math.round((ev.loaded / ev.total) * 100) });
+            },
+          });
+          if (conversaIdRef.current === id) {
+            ultimoIdRef.current = Math.max(ultimoIdRef.current ?? 0, data.id);
+            setMensagens((atuais) => (atuais.some((m) => m.id === data.id) ? atuais : [...atuais, data]));
+          }
+        } catch (e) {
+          problemas.push(descreverErro(e, `Não foi possível enviar “${arquivo.name}”.`));
+        }
+      }
+    } finally {
+      setAnexoEnviando(null);
+      setEnviando(false);
+      if (problemas.length > 0) setErro(problemas.join(" "));
+    }
+  }
+
+  function aoEscolherArquivos(e: React.ChangeEvent<HTMLInputElement>) {
+    const lista = Array.from(e.target.files ?? []);
+    e.target.value = ""; // permite escolher o mesmo arquivo de novo depois
+    void enviarArquivos(lista);
   }
 
   async function enviarFigurinha(conteudo: string) {
@@ -472,7 +527,29 @@ export default function ChatSuporte() {
             </div>
           ) : (
             <>
-              <div className="flex-1 min-h-0 space-y-2 overflow-y-auto bg-background px-3 py-3">
+              <div
+                className={`relative flex-1 min-h-0 space-y-2 overflow-y-auto bg-background px-3 py-3 ${
+                  arrastando ? "outline-2 -outline-offset-4 outline-dashed outline-primary" : ""
+                }`}
+                onDragOver={(e) => {
+                  if (e.dataTransfer.types.includes("Files")) {
+                    e.preventDefault();
+                    setArrastando(true);
+                  }
+                }}
+                onDragLeave={() => setArrastando(false)}
+                onDrop={(e) => {
+                  if (!e.dataTransfer.types.includes("Files")) return;
+                  e.preventDefault();
+                  setArrastando(false);
+                  void enviarArquivos(Array.from(e.dataTransfer.files));
+                }}
+              >
+                {arrastando && (
+                  <p className="pointer-events-none sticky top-0 z-10 rounded-lg bg-primary-light px-3 py-2 text-center text-xs font-medium text-primary">
+                    Solte aqui para enviar o arquivo
+                  </p>
+                )}
                 {mensagens.length === 0 && (
                   <p className="py-8 text-center text-sm text-muted">
                     Nenhuma mensagem ainda. Escreva abaixo para começar a conversa.
@@ -500,6 +577,20 @@ export default function ChatSuporte() {
                         >
                           <MensagemAudio mensagemId={m.id} duracao={Number(m.texto) || 0} minha={minha} />
                           <p className={`mt-1 text-[10px] ${minha ? "text-white/70" : "text-muted"}`}>{formatarHora(m.criadaEm)}</p>
+                        </div>
+                      </div>
+                    );
+                  }
+                  if (m.tipo === "ARQUIVO") {
+                    return (
+                      <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
+                        <div
+                          className={`max-w-[85%] rounded-2xl px-2.5 py-2 text-sm ${
+                            minha ? "rounded-br-sm bg-primary text-white" : "rounded-bl-sm border border-border bg-surface"
+                          }`}
+                        >
+                          <MensagemArquivo mensagemId={m.id} texto={m.texto} minha={minha} />
+                          <p className={`mt-1 px-0.5 text-[10px] ${minha ? "text-white/70" : "text-muted"}`}>{formatarHora(m.criadaEm)}</p>
                         </div>
                       </div>
                     );
@@ -540,6 +631,18 @@ export default function ChatSuporte() {
                 <div ref={fimRef} />
               </div>
 
+              {anexoEnviando && (
+                <div className="border-t border-border bg-surface px-3 py-2 text-xs" role="status" aria-live="polite">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="min-w-0 truncate">Enviando “{anexoEnviando.nome}”…</span>
+                    <span className="shrink-0 font-mono">{anexoEnviando.progresso}%</span>
+                  </div>
+                  <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-border/50">
+                    <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${anexoEnviando.progresso}%` }} />
+                  </div>
+                </div>
+              )}
+
               {erro && <div className="bg-danger-light px-3 py-1.5 text-xs text-danger">{erro}</div>}
 
               {seletorAberto && (
@@ -565,10 +668,28 @@ export default function ChatSuporte() {
                 >
                   <Smile className="w-5 h-5" />
                 </button>
+                <button
+                  onClick={() => arquivoInputRef.current?.click()}
+                  disabled={enviando}
+                  aria-label="Anexar arquivo"
+                  title={`Anexar arquivo (até ${MAX_ANEXO_MB} MB)`}
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-background disabled:opacity-50"
+                >
+                  <Paperclip className="w-5 h-5" />
+                </button>
+                <input ref={arquivoInputRef} type="file" multiple className="hidden" onChange={aoEscolherArquivos} />
                 <textarea
                   ref={textareaRef}
                   value={texto}
                   onChange={(e) => setTexto(e.target.value)}
+                  onPaste={(e) => {
+                    // colar print/arquivo (Ctrl+V) envia como anexo; colar texto continua normal
+                    const colados = Array.from(e.clipboardData.files);
+                    if (colados.length > 0) {
+                      e.preventDefault();
+                      void enviarArquivos(colados);
+                    }
+                  }}
                   onKeyDown={(e) => {
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();

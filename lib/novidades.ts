@@ -16,6 +16,26 @@ export interface Novidade {
 
 export const NOVIDADES: Novidade[] = [
   {
+    id: "2026-10-21-chat-anexos",
+    data: "2026-10-21",
+    titulo: "Anexar arquivos no chat",
+    itens: [
+      "No chat de Conversas, use o clipe (📎) para enviar arquivos de qualquer formato: PDF, planilhas, documentos, fotos, áudios e mais.",
+      "Também dá para arrastar o arquivo para dentro da conversa ou colar um print com Ctrl+V.",
+      "Imagens aparecem em miniatura (clique para ampliar). Os outros arquivos viram um cartão: toque para baixar.",
+      "Cada arquivo pode ter até 5 MB e fica disponível por 7 dias. Depois disso a mensagem continua, mas o arquivo expira.",
+    ],
+  },
+  {
+    id: "2026-10-21-aviso-atualizacao",
+    data: "2026-10-21",
+    titulo: "Aviso de atualização mais seguro",
+    itens: [
+      "O aviso “Nova atualização disponível” agora lembra de terminar a venda em andamento antes de atualizar, porque o carrinho não é guardado ao recarregar.",
+      "O leitor de código de barras não aciona mais o botão “Atualizar agora” sem querer: o foco inicial ficou em “Mais tarde”.",
+    ],
+  },
+  {
     id: "2026-10-21-consignados-precos",
     data: "2026-10-21",
     titulo: "Preços nos consignados",
