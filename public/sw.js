@@ -49,6 +49,7 @@ self.addEventListener("push", (event) => {
   // Só "Caixa aberto/reaberto/fechado" ganham a tag do caixa. Venda e "Abertura de
   // caixa corrigida" (que também citam "caixa"/"abertura") ficam sem tag, pra não
   // substituir o aviso de abertura/fechamento.
+  const ehVenda = /venda/.test(texto);
   const semTagDeCaixa = /venda|corrig/.test(texto);
   const tag =
     dados.tag ||
@@ -65,6 +66,11 @@ self.addEventListener("push", (event) => {
       body: dados.corpo,
       icon: "/icon-192.png",
       badge: "/icon-192.png",
+      lang: "pt-BR",
+      timestamp: Date.now(),
+      vibrate: [120, 60, 120],
+      // botão de ação: aparece no Android/Chrome e desktop; tocar nele (ou na notificação) abre a tela certa
+      actions: [{ action: "abrir", title: ehVenda ? "Ver vendas" : "Abrir" }],
       ...(tag ? { tag, renotify: true } : {}),
       data: { url: dados.url || "/inicio" },
     })
