@@ -1030,6 +1030,55 @@ function parsePreco(texto: string): number | null {
   return Math.round(valor * 100) / 100;
 }
 
+/** Tempo que a barra de progresso do recibo fica na tela (o servidor salva logo no início; o resto é só feedback visual). */
+const DURACAO_PROGRESSO_MS = 8000;
+
+/** Janela com barra de progresso: valor alterado → salvando relatório → lançando no Faturamento. */
+function ProgressoRecibo({ pct, titulo }: { pct: number; titulo: string }) {
+  const etapas = [
+    { ate: 0, texto: titulo },
+    { ate: 30, texto: "Salvando relatório de consignação" },
+    { ate: 65, texto: "Lançando no Faturamento" },
+  ];
+  const concluido = pct >= 100;
+  return (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-black/50 p-4" role="alert" aria-live="polite">
+      <div className="w-full max-w-sm rounded-xl bg-surface border border-border shadow-xl p-5">
+        <h3 className="text-base font-semibold">{concluido ? "Tudo certo!" : "Aguarde, estamos finalizando…"}</h3>
+        <div
+          className="mt-4 h-3 w-full overflow-hidden rounded-full bg-border/60"
+          role="progressbar"
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={Math.round(pct)}
+        >
+          <div className="h-full rounded-full bg-primary transition-[width] duration-100 ease-linear" style={{ width: `${pct}%` }} />
+        </div>
+        <p className="mt-1 text-right text-xs font-mono text-muted">{Math.round(pct)}%</p>
+        <ul className="mt-2 space-y-2 text-sm">
+          {etapas.map((e, idx) => {
+            const feita = pct > e.ate && (idx === 0 || pct >= e.ate);
+            const atual = !concluido && feita && (idx === etapas.length - 1 || pct < etapas[idx + 1].ate);
+            const ok = concluido || (feita && !atual);
+            return (
+              <li key={e.texto} className={`flex items-center gap-2 ${feita || idx === 0 ? "" : "text-muted/60"}`}>
+                {ok ? (
+                  <CheckCircle2 className="w-4 h-4 text-primary shrink-0" />
+                ) : atual ? (
+                  <Loader2 className="w-4 h-4 animate-spin text-primary shrink-0" />
+                ) : (
+                  <span className="w-4 h-4 rounded-full border border-border shrink-0" />
+                )}
+                <span>{e.texto}{ok ? " ✓" : atual ? "…" : ""}</span>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
+    </div>
+  );
+}
+
 /** 850 -> "850,00" (formato que o campo editável aceita). */
 function formatarNumeroEditavel(n: number): string {
   return n.toFixed(2).replace(".", ",");
@@ -1185,6 +1234,31 @@ function ModalDetalhe({
   const [editandoRecibo, setEditandoRecibo] = useState(false);
   const valorReciboAtual = consignacao.valorRecibo ?? consignacao.totalLiquidoLoja;
 
+  // barra de progresso exibida ao salvar o valor do recibo (dura DURACAO_PROGRESSO_MS, mesmo que o servidor responda antes)
+  const [progressoRecibo, setProgressoRecibo] = useState<{ pct: number; titulo: string } | null>(null);
+
+  /** Roda a chamada ao servidor junto com a barra de progresso; só devolve o resultado quando a barra chega a 100%. */
+  async function executarComProgresso(titulo: string, chamada: () => Promise<Consignacao>): Promise<Consignacao> {
+    const inicio = Date.now();
+    setProgressoRecibo({ pct: 0, titulo });
+    const timer = window.setInterval(() => {
+      const pct = Math.min(100, ((Date.now() - inicio) / DURACAO_PROGRESSO_MS) * 100);
+      setProgressoRecibo({ pct, titulo });
+    }, 100);
+    try {
+      const [data] = await Promise.all([
+        chamada(),
+        new Promise<void>((resolve) => window.setTimeout(resolve, DURACAO_PROGRESSO_MS)),
+      ]);
+      setProgressoRecibo({ pct: 100, titulo });
+      await new Promise<void>((resolve) => window.setTimeout(resolve, 600)); // mostra o 100% "concluído" um instante
+      return data;
+    } finally {
+      window.clearInterval(timer);
+      setProgressoRecibo(null);
+    }
+  }
+
   async function salvarValorRecibo() {
     const valor = parsePreco(reciboTexto);
     if (valor === null) {
@@ -1194,7 +1268,10 @@ function ModalDetalhe({
     setSalvando(true);
     setErro(null);
     try {
-      const { data } = await api.put<Consignacao>(`/consignacoes/${consignacao.id}/valor-recibo`, { valorRecibo: valor });
+      const data = await executarComProgresso("Valor do recibo alterado", async () => {
+        const r = await api.put<Consignacao>(`/consignacoes/${consignacao.id}/valor-recibo`, { valorRecibo: valor });
+        return r.data;
+      });
       setEditandoRecibo(false);
       onAtualizada(data);
     } catch (e) {
@@ -1226,16 +1303,19 @@ function ModalDetalhe({
     setSalvando(true);
     setErro(null);
     try {
-      const { data } = await api.post<Consignacao>(`/consignacoes/${consignacao.id}/fechar`, {
-        itens: consignacao.itens.map((i) => ({
-          itemId: i.id,
-          quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
-          precoUnitario: precoMudou(i) ? precoDe(i) : undefined,
-        })),
-        valorRecibo,
+      setConfirmandoFechamento(false);
+      const data = await executarComProgresso("Consignação fechada e estoque baixado", async () => {
+        const r = await api.post<Consignacao>(`/consignacoes/${consignacao.id}/fechar`, {
+          itens: consignacao.itens.map((i) => ({
+            itemId: i.id,
+            quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
+            precoUnitario: precoMudou(i) ? precoDe(i) : undefined,
+          })),
+          valorRecibo,
+        });
+        return r.data;
       });
       apagarRascunhoConferencia(consignacao.id);
-      setConfirmandoFechamento(false);
       onAtualizada(data);
     } catch (e) {
       setErro(mensagemErro(e, "Não foi possível fechar a consignação."));
@@ -1618,6 +1698,8 @@ function ModalDetalhe({
           )}
         </div>
       </div>
+
+      {progressoRecibo && <ProgressoRecibo pct={progressoRecibo.pct} titulo={progressoRecibo.titulo} />}
 
       {confirmandoFechamento && (
         <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 p-4" role="dialog" aria-modal="true">
