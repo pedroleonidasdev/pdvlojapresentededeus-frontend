@@ -12,6 +12,7 @@ import {
 } from "@/lib/format";
 import PageHeader from "@/components/PageHeader";
 import VisualizarConsignacao from "@/components/VisualizarConsignacao";
+import LerConferenciaFoto from "@/components/LerConferenciaFoto";
 import {
   Search,
   Trash2,
@@ -27,6 +28,7 @@ import {
   Pencil,
   Package,
   ClipboardCheck,
+  Camera,
 } from "lucide-react";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
@@ -48,8 +50,8 @@ export default function ConsignadosPage() {
   // abre o detalhe já no modo "editar conferência" (atalho do botão no card da lista)
   const [abrirEditandoConf, setAbrirEditandoConf] = useState(false);
 
-  const carregar = useCallback(async () => {
-    setCarregando(true);
+  const carregar = useCallback(async (silencioso = false) => {
+    if (!silencioso) setCarregando(true);
     try {
       const { data } = await api.get<Consignacao[]>("/consignacoes");
       setLista(data);
@@ -64,6 +66,11 @@ export default function ConsignadosPage() {
   useEffect(() => {
     carregar();
   }, [carregar]);
+
+  /** Mostra na lista, na hora, a consignação que o servidor acabou de devolver (criada ou alterada). */
+  function aplicarNaLista(c: Consignacao) {
+    setLista((prev) => (prev.some((x) => x.id === c.id) ? prev.map((x) => (x.id === c.id ? c : x)) : [c, ...prev]));
+  }
 
   return (
     <div className="min-h-full bg-background">
@@ -168,7 +175,8 @@ export default function ConsignadosPage() {
           onSalva={(c) => {
             setNovaAberta(false);
             setEmEdicao(null);
-            carregar();
+            aplicarNaLista(c);
+            carregar(true);
             setSelecionada(c);
           }}
         />
@@ -182,11 +190,14 @@ export default function ConsignadosPage() {
           onClose={() => setSelecionada(null)}
           onAtualizada={(c) => {
             setSelecionada(c);
-            carregar();
+            aplicarNaLista(c);
+            carregar(true);
           }}
           onExcluida={() => {
+            const idExcluido = selecionada?.id;
             setSelecionada(null);
-            carregar();
+            if (idExcluido !== undefined) setLista((prev) => prev.filter((x) => x.id !== idExcluido));
+            carregar(true);
           }}
           onImprimir={(c) => setVisualizando(c)}
           onEditar={(c) => {
@@ -365,9 +376,16 @@ function ModalConsignacaoForm({
   const [erro, setErro] = useState<string | null>(null);
   const enviandoRef = useRef(false);
   const buscaRef = useRef<HTMLInputElement>(null);
+  // edição do preço de uma linha (só vale nesta consignação; o cadastro do produto não muda)
+  const [precoEmEdicao, setPrecoEmEdicao] = useState<{ produtoId: number; texto: string } | null>(null);
   // lista da direita: ao entrar um produto NOVO ela rola sozinha até ele e o destaca por uns instantes
   const listaItensRef = useRef<HTMLUListElement>(null);
   const [destaque, setDestaque] = useState<{ id: number; n: number } | null>(null);
+
+  const erroRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (erro) erroRef.current?.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }, [erro]);
 
   useEffect(() => {
     if (!destaque) return;
@@ -441,6 +459,11 @@ function ModalConsignacaoForm({
 
   const qtdNaLista = (produtoId: number) => itens.find((i) => i.produtoId === produtoId)?.quantidade ?? 0;
 
+  /** Máximo permitido: o estoque atual, ou o que já estava enviado nesta consignação (se for maior),
+   *  para que dê para diminuir/manter um item cujo estoque ficou menor que a quantidade enviada. */
+  const limiteQtd = (p: Produto) =>
+    Math.max(p.quantidadeEstoque, consignacao?.itens.find((i) => i.produtoId === p.id)?.quantidadeEnviada ?? 0);
+
   /** Linha nova do formulário (preço e comissão da categoria no momento em que entra). */
   function novoItem(produto: Produto, quantidade: number): ItemForm {
     return {
@@ -460,14 +483,17 @@ function ModalConsignacaoForm({
    */
   function definirQtd(produto: Produto, desejada: number) {
     let quantidade = Math.max(0, Math.floor(desejada) || 0);
-    if (quantidade > produto.quantidadeEstoque) {
+    const limite = limiteQtd(produto);
+    if (quantidade > limite) {
       setErro(`Estoque insuficiente para ${produto.nome} (disponível: ${produto.quantidadeEstoque})`);
-      quantidade = produto.quantidadeEstoque;
+      quantidade = limite;
     } else {
       setErro(null);
     }
-    // produto que ainda não estava na consignação: a lista da direita rola até ele
-    if (quantidade > 0 && !itens.some((i) => i.produtoId === produto.id)) {
+    // a lista da direita rola até o produto e o destaca sempre que a quantidade dele muda
+    // (novo OU já existente): com 100+ itens, sem isso a mudança acontece fora da tela
+    // e parece que a lista não atualizou
+    if (quantidade > 0 && quantidade !== qtdNaLista(produto.id)) {
       setDestaque((d) => ({ id: produto.id, n: (d?.n ?? 0) + 1 }));
     }
     setItens((prev) => {
@@ -504,6 +530,26 @@ function ModalConsignacaoForm({
   const totalUnidades = itens.reduce((acc, i) => acc + i.quantidade, 0);
   const podeSalvar = consignatario.trim() !== "" && itens.length > 0;
 
+  function abrirEdicaoPreco(item: ItemForm) {
+    setPrecoEmEdicao({ produtoId: item.produtoId, texto: item.preco.toFixed(2).replace(".", ",") });
+  }
+
+  function confirmarPreco() {
+    if (!precoEmEdicao) return;
+    const bruto = precoEmEdicao.texto.trim();
+    // "1.234,50" (milhar com ponto + vírgula) ou "12.50" / "12,50": a vírgula, se houver, é o decimal
+    const valor = Number(bruto.includes(",") ? bruto.replace(/\./g, "").replace(",", ".") : bruto);
+    if (!Number.isFinite(valor) || valor < 0.01 || valor > 99999999) {
+      setErro("Informe um preço válido (maior que zero), por exemplo 12,50.");
+      return;
+    }
+    const preco = Math.round(valor * 100) / 100;
+    setItens((prev) => prev.map((x) => (x.produtoId === precoEmEdicao.produtoId ? { ...x, preco } : x)));
+    setDestaque((d) => ({ id: precoEmEdicao.produtoId, n: (d?.n ?? 0) + 1 }));
+    setPrecoEmEdicao(null);
+    setErro(null);
+  }
+
   async function salvar() {
     if (!podeSalvar || enviandoRef.current) return;
     enviandoRef.current = true;
@@ -514,7 +560,7 @@ function ModalConsignacaoForm({
         consignatario: consignatario.trim(),
         prazoDevolucao: prazo || undefined,
         observacao: observacao.trim() || undefined,
-        itens: itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade })),
+        itens: itens.map((i) => ({ produtoId: i.produtoId, quantidade: i.quantidade, precoUnitario: i.preco })),
       };
       const { data } = editando
         ? await api.put<Consignacao>(`/consignacoes/${consignacao.id}`, corpo)
@@ -557,7 +603,7 @@ function ModalConsignacaoForm({
             <h2 className="font-semibold text-base">{editando ? `Editar consignação #${consignacao.id}` : "Nova consignação"}</h2>
             <p className="text-xs text-white/70 mt-0.5">
               {editando
-                ? "Acrescente produtos, mude quantidades ou remova itens. Itens que já estavam mantêm o preço original."
+                ? "Acrescente produtos, mude quantidades, preços ou remova itens. O preço alterado vale só para esta consignação."
                 : "O estoque só dá baixa quando a consignação for fechada."}
             </p>
           </div>
@@ -718,7 +764,7 @@ function ModalConsignacaoForm({
                           <div className="shrink-0">
                             <QuantidadeStepper
                               valor={naLista}
-                              max={p.quantidadeEstoque}
+                              max={limiteQtd(p)}
                               desabilitado={semEstoque && naLista === 0}
                               rotulo={p.nome}
                               onChange={(n) => definirQtd(p, n)}
@@ -780,7 +826,7 @@ function ModalConsignacaoForm({
             ) : (
               <>
                 <p className="shrink-0 px-4 sm:px-5 py-1.5 text-[11px] text-muted bg-accent-light/50 border-b border-accent/25">
-                  Para mudar a quantidade, clique no item ou use a lista de produtos.
+                  Para mudar a quantidade, clique no item ou use a lista de produtos. Para mudar o preço, use o lápis $ ao lado de cada item.
                 </p>
                 <ul ref={listaItensRef} className="flex-1 min-h-0 overflow-y-auto divide-y divide-accent/25">
                   {gruposItens.map((g) => (
@@ -792,7 +838,7 @@ function ModalConsignacaoForm({
                     <li
                       key={i.produtoId}
                       data-item-id={i.produtoId}
-                      className={`flex items-center gap-1 pl-3 pr-1.5 py-1.5 font-bold transition-colors duration-700 ${
+                      className={`flex flex-wrap items-center gap-1 pl-3 pr-1.5 py-1.5 font-bold transition-colors duration-700 ${
                         destaque?.id === i.produtoId ? "bg-accent/35" : "bg-surface hover:bg-accent-light/60"
                       }`}
                     >
@@ -809,9 +855,22 @@ function ModalConsignacaoForm({
                           <span className="block text-[13px] leading-tight font-bold truncate">{i.nome}</span>
                           <span className="block text-[11px] leading-tight text-muted truncate">
                             {formatarMoeda(i.preco)} · {i.categoriaNome ?? "Sem categoria"} · {i.percentual}%
+                            {(() => {
+                              const cat = catalogo.find((p) => p.id === i.produtoId);
+                              return cat && cat.precoVenda !== i.preco ? " · preço alterado" : "";
+                            })()}
                           </span>
                         </span>
                         <span className="shrink-0 text-[13px] font-mono font-semibold">{formatarMoeda(i.preco * i.quantidade)}</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => abrirEdicaoPreco(i)}
+                        title="Mudar o preço deste item nesta consignação"
+                        className="p-1.5 rounded-md hover:bg-accent-light text-primary shrink-0 text-xs font-mono font-bold leading-none"
+                        aria-label={`Mudar o preço de ${i.nome}`}
+                      >
+                        R$
                       </button>
                       <button
                         type="button"
@@ -821,6 +880,45 @@ function ModalConsignacaoForm({
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
+                      {precoEmEdicao?.produtoId === i.produtoId && (
+                        <div className="basis-full flex flex-wrap items-center gap-2 py-1.5 pr-1.5 font-normal">
+                          <label className="text-xs text-muted">Novo preço (R$)</label>
+                          <input
+                            autoFocus
+                            inputMode="decimal"
+                            value={precoEmEdicao.texto}
+                            onChange={(e) => setPrecoEmEdicao({ produtoId: i.produtoId, texto: e.target.value })}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter") {
+                                e.preventDefault();
+                                confirmarPreco();
+                              }
+                              if (e.key === "Escape") setPrecoEmEdicao(null);
+                            }}
+                            className="w-28 border border-border rounded-md px-2 py-1 text-sm font-mono bg-surface"
+                          />
+                          <button
+                            type="button"
+                            onClick={confirmarPreco}
+                            className="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-md"
+                          >
+                            Aplicar
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setPrecoEmEdicao(null)}
+                            className="text-xs text-muted hover:text-foreground px-2 py-1.5"
+                          >
+                            Cancelar
+                          </button>
+                          {(() => {
+                            const cat = catalogo.find((p) => p.id === i.produtoId);
+                            return cat && cat.precoVenda !== i.preco ? (
+                              <span className="text-[11px] text-muted">Preço no cadastro: {formatarMoeda(cat.precoVenda)}</span>
+                            ) : null;
+                          })()}
+                        </div>
+                      )}
                     </li>
                       ))}
                     </Fragment>
@@ -833,8 +931,11 @@ function ModalConsignacaoForm({
 
         {/* ------------------------------ Erro + rodapé ------------------------------ */}
         {erro && (
-          <div className="px-5 pt-3 shrink-0">
-            <div className="flex items-start gap-2 text-sm text-danger bg-danger-light rounded-lg px-3 py-2">
+          <div ref={erroRef} className="px-5 pt-3 shrink-0">
+            <div
+              role="alert"
+              className="flex items-start gap-2 text-sm font-semibold text-danger bg-danger-light border-2 border-danger rounded-lg px-3 py-2.5 shadow-sm"
+            >
               <p className="flex-1">{erro}</p>
               <button onClick={() => setErro(null)} className="shrink-0 p-0.5" aria-label="Fechar aviso">
                 <X className="w-4 h-4" />
@@ -952,6 +1053,8 @@ function ModalDetalhe({
     comecaEditando ? lerRascunhoValido() ?? baseInicial() : {}
   );
   const [conferindo, setConferindo] = useState(false);
+  const [lendoFotos, setLendoFotos] = useState(false);
+  const [veioDasFotos, setVeioDasFotos] = useState(false);
   // edição da conferência de uma consignação JÁ FECHADA (corrige as quantidades vendidas)
   const [editandoConf, setEditandoConf] = useState(comecaEditando);
   const [salvando, setSalvando] = useState(false);
@@ -973,6 +1076,49 @@ function ModalDetalhe({
 
   const vendidaDe = (id: number, enviada: number, atual: number) =>
     aberta || editandoConf ? Math.min(Math.max(vendidas[id] ?? 0, 0), enviada) : atual;
+
+  /** Preenche a conferência com as quantidades lidas das fotos. Não fecha nem baixa nada. */
+  function aplicarLeituraFotos(mapa: Record<number, number>) {
+    const base = aberta ? (conferindo ? vendidas : lerRascunhoValido() ?? {}) : vendidas;
+    setVendidas({ ...base, ...mapa });
+    if (aberta) setConferindo(true);
+    setVeioDasFotos(true);
+    setLendoFotos(false);
+  }
+
+  /**
+   * Consignação que vai para o relatório/impressão. Com conferência em andamento (digitada agora ou
+   * guardada como rascunho neste navegador), as quantidades vendidas entram no relatório como PRÉVIA;
+   * sem isso o relatório sai como sempre (em aberto = colunas em branco; fechada = valores salvos).
+   */
+  function consignacaoParaImprimir(): Consignacao {
+    const origem: Record<number, number> | null = aberta
+      ? conferindo
+        ? vendidas
+        : lerRascunhoValido()
+      : editandoConf
+      ? vendidas
+      : null;
+    if (!origem || !mudouDaBase(origem)) return consignacao;
+    let totalVendidoP = 0;
+    let totalComissaoP = 0;
+    const itens = consignacao.itens.map((i) => {
+      const q = Math.min(Math.max(origem[i.id] ?? basePorItem(i.quantidadeVendida), 0), i.quantidadeEnviada);
+      const valorVendido = Math.round(q * i.precoUnitario * 100) / 100;
+      const comissao = Math.round(valorVendido * i.percentualComissao) / 100;
+      totalVendidoP += valorVendido;
+      totalComissaoP += comissao;
+      return { ...i, quantidadeVendida: q, quantidadeDevolvida: i.quantidadeEnviada - q, valorVendido, comissao };
+    });
+    return {
+      ...consignacao,
+      itens,
+      totalVendido: totalVendidoP,
+      totalComissao: totalComissaoP,
+      totalLiquidoLoja: totalVendidoP - totalComissaoP,
+      conferenciaPrevia: true,
+    };
+  }
 
   // prévia do acerto enquanto o operador digita as quantidades vendidas
   let totalVendido = 0;
@@ -1079,6 +1225,13 @@ function ModalDetalhe({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 no-print">
+      {lendoFotos && (
+        <LerConferenciaFoto
+          consignacao={consignacao}
+          onAplicar={aplicarLeituraFotos}
+          onFechar={() => setLendoFotos(false)}
+        />
+      )}
       <div className="bg-surface rounded-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden">
         <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-border shrink-0">
           <div className="min-w-0">
@@ -1207,10 +1360,16 @@ function ModalDetalhe({
           )}
         </div>
 
+        {veioDasFotos && emConferencia && (
+          <div className="px-4 py-2 bg-accent-light text-accent-dark text-sm shrink-0">
+            Quantidades preenchidas a partir das fotos. Confira na lista antes de fechar; nada foi baixado do estoque ainda.
+          </div>
+        )}
+
         <div className="p-4 border-t border-border shrink-0 flex flex-wrap items-center justify-between gap-2">
           <div className="flex gap-2">
             <button
-              onClick={() => onImprimir(consignacao)}
+              onClick={() => onImprimir(consignacaoParaImprimir())}
               className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
             >
               <Printer className="w-4 h-4" />
@@ -1223,6 +1382,15 @@ function ModalDetalhe({
               >
                 <Pencil className="w-4 h-4" />
                 Editar / acrescentar produtos
+              </button>
+            )}
+            {(aberta || editandoConf) && (
+              <button
+                onClick={() => setLendoFotos(true)}
+                className="flex items-center gap-2 border border-border hover:bg-background text-sm font-medium px-4 py-2 rounded-lg transition"
+              >
+                <Camera className="w-4 h-4" />
+                Ler fotos do relatório
               </button>
             )}
           </div>

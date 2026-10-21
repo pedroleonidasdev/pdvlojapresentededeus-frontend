@@ -194,4 +194,6 @@ export interface Consignacao {
   totalComissao: number;
   totalLiquidoLoja: number;
   itens: ItemConsignacao[];
+  /** Só no front: o relatório usa as quantidades da conferência em andamento (ainda não salva no servidor). */
+  conferenciaPrevia?: boolean;
 }
