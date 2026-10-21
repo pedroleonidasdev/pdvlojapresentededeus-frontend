@@ -146,7 +146,7 @@ export default function ConsignadosPage() {
                         )}
                       </div>
                     </div>
-                    <div className="grid grid-cols-3 gap-3 mt-3 text-xs">
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-3 text-xs">
                       <Resumo rotulo="Enviado" valor={formatarMoeda(c.totalEnviado)} />
                       <Resumo
                         rotulo="Vendido"
@@ -155,6 +155,10 @@ export default function ConsignadosPage() {
                       <Resumo
                         rotulo="Comissão"
                         valor={c.status === "FECHADA" ? formatarMoeda(c.totalComissao) : "—"}
+                      />
+                      <Resumo
+                        rotulo="Recibo"
+                        valor={c.status === "FECHADA" ? formatarMoeda(c.valorRecibo ?? c.totalLiquidoLoja) : "—"}
                       />
                     </div>
                   </div>
@@ -1177,6 +1181,28 @@ function ModalDetalhe({
   const valorReciboAuto = Math.round((totalVendido - totalComissao) * 100) / 100;
   const [confirmandoFechamento, setConfirmandoFechamento] = useState(false);
   const [reciboTexto, setReciboTexto] = useState("");
+  // edição do valor do recibo de uma consignação JÁ FECHADA
+  const [editandoRecibo, setEditandoRecibo] = useState(false);
+  const valorReciboAtual = consignacao.valorRecibo ?? consignacao.totalLiquidoLoja;
+
+  async function salvarValorRecibo() {
+    const valor = parsePreco(reciboTexto);
+    if (valor === null) {
+      setErro("Valor do recibo inválido. Use um valor como 850,00 (pode ser 0,00).");
+      return;
+    }
+    setSalvando(true);
+    setErro(null);
+    try {
+      const { data } = await api.put<Consignacao>(`/consignacoes/${consignacao.id}/valor-recibo`, { valorRecibo: valor });
+      setEditandoRecibo(false);
+      onAtualizada(data);
+    } catch (e) {
+      setErro(mensagemErro(e, "Não foi possível salvar o valor do recibo."));
+    } finally {
+      setSalvando(false);
+    }
+  }
 
   async function fechar() {
     if (enviandoRef.current) return;
@@ -1429,6 +1455,57 @@ function ModalDetalhe({
               <span>Líquido para a loja</span>
               <span className="font-mono">{formatarMoeda(totalVendido - totalComissao)}</span>
             </div>
+            {!aberta && !editandoConf && (
+              <div className="pt-2 mt-1 border-t border-border">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold">Valor do recibo</span>
+                  {!editandoRecibo && (
+                    <span className="flex items-center gap-2">
+                      <span className="font-mono font-semibold">{formatarMoeda(valorReciboAtual)}</span>
+                      <button
+                        onClick={() => {
+                          setReciboTexto(formatarNumeroEditavel(valorReciboAtual));
+                          setErro(null);
+                          setEditandoRecibo(true);
+                        }}
+                        className="text-xs text-primary hover:underline"
+                      >
+                        Editar
+                      </button>
+                    </span>
+                  )}
+                </div>
+                {editandoRecibo && (
+                  <div className="mt-2 flex items-center gap-2">
+                    <input
+                      autoFocus
+                      inputMode="decimal"
+                      value={reciboTexto}
+                      onChange={(e) => setReciboTexto(e.target.value)}
+                      aria-label="Valor do recibo (R$)"
+                      className={`w-32 rounded-lg border bg-background px-2 py-1 font-mono text-sm ${
+                        parsePreco(reciboTexto) === null ? "border-red-400" : "border-border"
+                      }`}
+                    />
+                    <button
+                      onClick={salvarValorRecibo}
+                      disabled={salvando || parsePreco(reciboTexto) === null}
+                      className="bg-primary hover:bg-primary-dark text-white text-xs font-medium px-3 py-1.5 rounded-lg disabled:opacity-50"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      onClick={() => setEditandoRecibo(false)}
+                      disabled={salvando}
+                      className="text-xs text-muted hover:text-foreground px-2 py-1.5"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+                <p className="mt-1 text-[11px] text-muted">É este valor que entra no Faturamento.</p>
+              </div>
+            )}
           </div>
 
           {erro && <p className="text-sm text-danger bg-danger/10 rounded-lg px-3 py-2 mt-4">{erro}</p>}
