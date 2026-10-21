@@ -1,14 +1,15 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { LogOut, UserCog, X } from "lucide-react";
+import { LogOut, Sparkles, UserCog, X } from "lucide-react";
 import { NAV_ITEMS, LayoutGrid } from "@/lib/nav-items";
 import TrocarUsuarioModal from "./TrocarUsuarioModal";
 import CaixaStatusBadge from "./CaixaStatusBadge";
 import NotificacoesPushButton from "./NotificacoesPushButton";
+import { EVENTO_ABRIR_NOVIDADES, EVENTO_NOVIDADES_VISTAS, temNovidadeNaoVista } from "@/lib/novidades";
 
 // Seção de cada item no menu. Fica aqui no próprio componente (sem depender de
 // campo extra no NAV_ITEMS). O "Início" fica solto, no topo, sem título.
@@ -46,10 +47,17 @@ const ICONE_BASE =
 const ICONE_INATIVO =
   "bg-white/5 text-white/70 group-hover:bg-white/15 group-hover:text-white group-hover:scale-110 group-hover:-rotate-3";
 
+function assinarNovidades(aoMudar: () => void) {
+  window.addEventListener(EVENTO_NOVIDADES_VISTAS, aoMudar);
+  return () => window.removeEventListener(EVENTO_NOVIDADES_VISTAS, aoMudar);
+}
+
 export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFechar: () => void }) {
   const pathname = usePathname();
   const { usuario, logout } = useAuth();
   const [trocandoUsuario, setTrocandoUsuario] = useState(false);
+  // selo "NOVO" no botão Novidades enquanto existir novidade que este navegador ainda não viu
+  const novidadeNova = useSyncExternalStore(assinarNovidades, temNovidadeNaoVista, () => false);
 
   if (!usuario) return null;
 
@@ -157,6 +165,23 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
 
           {usuario.perfil === "ADMIN" && <NotificacoesPushButton />}
 
+          <button
+            onClick={() => {
+              window.dispatchEvent(new Event(EVENTO_ABRIR_NOVIDADES));
+              onFechar();
+            }}
+            className={`${LINHA_BASE} ${LINHA_INATIVA}`}
+          >
+            <span className={`${ICONE_BASE} ${ICONE_INATIVO}`}>
+              <Sparkles className="w-[17px] h-[17px]" />
+            </span>
+            Novidades
+            {novidadeNova && (
+              <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-dark animate-pulse">
+                Novo
+              </span>
+            )}
+          </button>
           <button onClick={() => setTrocandoUsuario(true)} className={`${LINHA_BASE} ${LINHA_INATIVA}`}>
             <span className={`${ICONE_BASE} ${ICONE_INATIVO}`}>
               <UserCog className="w-[17px] h-[17px]" />
