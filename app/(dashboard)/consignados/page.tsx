@@ -539,8 +539,8 @@ function ModalConsignacaoForm({
     const bruto = precoEmEdicao.texto.trim();
     // "1.234,50" (milhar com ponto + vírgula) ou "12.50" / "12,50": a vírgula, se houver, é o decimal
     const valor = Number(bruto.includes(",") ? bruto.replace(/\./g, "").replace(",", ".") : bruto);
-    if (!Number.isFinite(valor) || valor < 0.01 || valor > 99999999) {
-      setErro("Informe um preço válido (maior que zero), por exemplo 12,50.");
+    if (!Number.isFinite(valor) || valor < 0 || valor > 99999999) {
+      setErro("Informe um preço válido (pode ser 0,00), por exemplo 12,50.");
       return;
     }
     const preco = Math.round(valor * 100) / 100;
@@ -1017,6 +1017,15 @@ function apagarRascunhoConferencia(id: number) {
   }
 }
 
+/** Converte "12,50", "12.50" ou "1.234,50" em número (>= 0). Devolve null se for inválido. */
+function parsePreco(texto: string): number | null {
+  const bruto = texto.trim();
+  if (bruto === "") return null;
+  const valor = Number(bruto.includes(",") ? bruto.replace(/\./g, "").replace(",", ".") : bruto);
+  if (!Number.isFinite(valor) || valor < 0 || valor > 99999999) return null;
+  return Math.round(valor * 100) / 100;
+}
+
 function ModalDetalhe({
   consignacao,
   iniciarEditandoConferencia = false,
@@ -1053,6 +1062,16 @@ function ModalDetalhe({
     comecaEditando ? lerRascunhoValido() ?? baseInicial() : {}
   );
   const [conferindo, setConferindo] = useState(false);
+  // preços corrigidos na conferência (texto digitado por item); só valem para esta consignação
+  const [precosTexto, setPrecosTexto] = useState<Record<number, string>>({});
+  /** Preço efetivo do item: o corrigido (se válido) ou o gravado na consignação. */
+  const precoDe = (i: { id: number; precoUnitario: number }) => {
+    const t = precosTexto[i.id];
+    if (t === undefined) return i.precoUnitario;
+    return parsePreco(t) ?? i.precoUnitario;
+  };
+  const precoMudou = (i: { id: number; precoUnitario: number }) => precoDe(i) !== i.precoUnitario;
+  const algumPrecoInvalido = Object.values(precosTexto).some((t) => parsePreco(t) === null);
   const [lendoFotos, setLendoFotos] = useState(false);
   const [veioDasFotos, setVeioDasFotos] = useState(false);
   // edição da conferência de uma consignação JÁ FECHADA (corrige as quantidades vendidas)
@@ -1099,20 +1118,35 @@ function ModalDetalhe({
       : editandoConf
       ? vendidas
       : null;
-    if (!origem || !mudouDaBase(origem)) return consignacao;
+    const algumPreco = consignacao.itens.some(precoMudou);
+    if (!origem && !algumPreco) return consignacao;
+    if (origem && !mudouDaBase(origem) && !algumPreco) return consignacao;
+    let totalEnviadoP = 0;
     let totalVendidoP = 0;
     let totalComissaoP = 0;
     const itens = consignacao.itens.map((i) => {
-      const q = Math.min(Math.max(origem[i.id] ?? basePorItem(i.quantidadeVendida), 0), i.quantidadeEnviada);
-      const valorVendido = Math.round(q * i.precoUnitario * 100) / 100;
+      const preco = precoDe(i);
+      const q = Math.min(Math.max(origem?.[i.id] ?? basePorItem(i.quantidadeVendida), 0), i.quantidadeEnviada);
+      const valorEnviado = Math.round(i.quantidadeEnviada * preco * 100) / 100;
+      const valorVendido = Math.round(q * preco * 100) / 100;
       const comissao = Math.round(valorVendido * i.percentualComissao) / 100;
+      totalEnviadoP += valorEnviado;
       totalVendidoP += valorVendido;
       totalComissaoP += comissao;
-      return { ...i, quantidadeVendida: q, quantidadeDevolvida: i.quantidadeEnviada - q, valorVendido, comissao };
+      return {
+        ...i,
+        precoUnitario: preco,
+        valorEnviado,
+        quantidadeVendida: q,
+        quantidadeDevolvida: i.quantidadeEnviada - q,
+        valorVendido,
+        comissao,
+      };
     });
     return {
       ...consignacao,
       itens,
+      totalEnviado: totalEnviadoP,
       totalVendido: totalVendidoP,
       totalComissao: totalComissaoP,
       totalLiquidoLoja: totalVendidoP - totalComissaoP,
@@ -1121,12 +1155,14 @@ function ModalDetalhe({
   }
 
   // prévia do acerto enquanto o operador digita as quantidades vendidas
+  let totalEnviadoPrevia = 0;
   let totalVendido = 0;
   let totalComissao = 0;
   let totalUnidadesVendidas = 0;
   for (const i of consignacao.itens) {
     const q = vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida);
-    const valor = q * i.precoUnitario;
+    const valor = q * precoDe(i);
+    totalEnviadoPrevia += i.quantidadeEnviada * precoDe(i);
     totalUnidadesVendidas += q;
     totalVendido += valor;
     totalComissao += (valor * i.percentualComissao) / 100;
@@ -1135,6 +1171,10 @@ function ModalDetalhe({
 
   async function fechar() {
     if (enviandoRef.current) return;
+    if (algumPrecoInvalido) {
+      setErro("Há um preço inválido na lista. Use um valor como 12,50 (pode ser 0,00).");
+      return;
+    }
     const msg =
       totalUnidadesVendidas > 0
         ? `Fechar a consignação e dar baixa de ${totalUnidadesVendidas} unidade(s) vendida(s) no estoque? Essa ação só pode ser desfeita por um administrador, excluindo a consignação.`
@@ -1148,6 +1188,7 @@ function ModalDetalhe({
         itens: consignacao.itens.map((i) => ({
           itemId: i.id,
           quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
+          precoUnitario: precoMudou(i) ? precoDe(i) : undefined,
         })),
       });
       apagarRascunhoConferencia(consignacao.id);
@@ -1163,11 +1204,13 @@ function ModalDetalhe({
   // cancelar só sai do modo conferência: o que foi digitado continua salvo e volta ao reabrir
   function cancelarConferencia() {
     setVendidas({});
+    setPrecosTexto({});
     setConferindo(false);
     setErro(null);
   }
 
   function iniciarEdicaoConferencia() {
+    setPrecosTexto({});
     setVendidas(lerRascunhoValido() ?? baseInicial());
     setEditandoConf(true);
     setErro(null);
@@ -1175,12 +1218,17 @@ function ModalDetalhe({
 
   function cancelarEdicaoConferencia() {
     setVendidas({});
+    setPrecosTexto({});
     setEditandoConf(false);
     setErro(null);
   }
 
   async function salvarConferencia() {
     if (enviandoRef.current) return;
+    if (algumPrecoInvalido) {
+      setErro("Há um preço inválido na lista. Use um valor como 12,50 (pode ser 0,00).");
+      return;
+    }
     if (!confirm("Salvar a conferência corrigida? O estoque será ajustado conforme a diferença nas quantidades vendidas.")) return;
     enviandoRef.current = true;
     setSalvando(true);
@@ -1190,10 +1238,12 @@ function ModalDetalhe({
         itens: consignacao.itens.map((i) => ({
           itemId: i.id,
           quantidadeVendida: vendidaDe(i.id, i.quantidadeEnviada, i.quantidadeVendida),
+          precoUnitario: precoMudou(i) ? precoDe(i) : undefined,
         })),
       });
       apagarRascunhoConferencia(consignacao.id);
       setVendidas({});
+      setPrecosTexto({});
       setEditandoConf(false);
       onAtualizada(data);
     } catch (e) {
@@ -1259,13 +1309,13 @@ function ModalDetalhe({
         <div className="flex-1 overflow-auto p-5">
           {editandoConf && (
             <p className="text-xs text-muted bg-background rounded-lg px-3 py-2 mb-3">
-              Corrija a quantidade <strong>vendida</strong> de cada item e salve. O estoque é ajustado pela diferença em
-              relação à conferência anterior. Suas alterações são salvas automaticamente neste navegador.
+              Corrija a quantidade <strong>vendida</strong> e, se precisar, o <strong>preço</strong> de cada item e salve.
+              O estoque é ajustado pela diferença nas quantidades; mudar o preço só altera os valores desta consignação. Suas alterações são salvas automaticamente neste navegador.
             </p>
           )}
           {aberta && conferindo && (
             <p className="text-xs text-muted bg-background rounded-lg px-3 py-2 mb-3">
-              Quando o consignatário prestar contas, informe quantas unidades de cada item foram <strong>vendidas</strong> e
+              Quando o consignatário prestar contas, informe quantas unidades de cada item foram <strong>vendidas</strong> (e corrija o <strong>preço</strong>, se precisar) e
               feche a consignação. Só a quantidade vendida dá baixa no estoque; o restante volta para a loja. Suas alterações são salvas automaticamente neste navegador.
             </p>
           )}
@@ -1298,7 +1348,25 @@ function ModalDetalhe({
                       <span className="block font-semibold text-muted">{i.categoriaNome ?? "Sem categoria"}</span>
                     </td>
                     <td className="py-2 px-2 text-right font-mono">{i.quantidadeEnviada}</td>
-                    <td className="py-2 px-2 text-right font-mono">{formatarMoeda(i.precoUnitario)}</td>
+                    <td className="py-2 px-2 text-right font-mono">
+                      {emConferencia ? (
+                        <input
+                          inputMode="decimal"
+                          title="Corrigir o preço deste item (vale só para esta consignação)"
+                          value={precosTexto[i.id] ?? i.precoUnitario.toFixed(2).replace(".", ",")}
+                          onChange={(e) => setPrecosTexto((prev) => ({ ...prev, [i.id]: e.target.value }))}
+                          className={`input w-20 text-right py-1 font-mono ${
+                            precosTexto[i.id] !== undefined && parsePreco(precosTexto[i.id]) === null
+                              ? "border-danger"
+                              : precoMudou(i)
+                              ? "border-accent"
+                              : ""
+                          }`}
+                        />
+                      ) : (
+                        formatarMoeda(i.precoUnitario)
+                      )}
+                    </td>
                     <td className="py-2 px-2 text-right font-mono">{i.percentualComissao}%</td>
                     <td className="py-2 px-2 text-right">
                       {(aberta && conferindo) || editandoConf ? (
@@ -1317,7 +1385,7 @@ function ModalDetalhe({
                       )}
                     </td>
                     <td className="py-2 px-2 text-right font-mono">{i.quantidadeEnviada - q}</td>
-                    <td className="py-2 pl-2 text-right font-mono">{formatarMoeda(q * i.precoUnitario)}</td>
+                    <td className="py-2 pl-2 text-right font-mono">{formatarMoeda(q * precoDe(i))}</td>
                   </tr>
                 );
                   })}
@@ -1329,7 +1397,7 @@ function ModalDetalhe({
           <div className="mt-4 ml-auto max-w-xs space-y-1 text-sm">
             <div className="flex justify-between text-muted">
               <span>Total enviado</span>
-              <span className="font-mono">{formatarMoeda(consignacao.totalEnviado)}</span>
+              <span className="font-mono">{formatarMoeda(emConferencia ? totalEnviadoPrevia : consignacao.totalEnviado)}</span>
             </div>
             <div className="flex justify-between">
               <span>Total vendido</span>
@@ -1418,7 +1486,7 @@ function ModalDetalhe({
                 className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium text-sm px-5 py-2.5 rounded-lg transition disabled:opacity-50"
               >
                 {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
-                Fechar e dar baixa no estoque
+                Salvar conferência corrigida
               </button>
             </div>
           )}
