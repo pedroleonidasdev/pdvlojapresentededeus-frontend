@@ -5,15 +5,20 @@ import Link from "next/link";
 import {
   AlertTriangle,
   ArrowRight,
+  Banknote,
   CheckCircle2,
   ChevronRight,
+  CreditCard,
   Handshake,
   Lock,
   Package,
+  QrCode,
   Receipt,
   ShoppingBag,
   TrendingUp,
   Unlock,
+  Zap,
+  type LucideIcon,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -31,18 +36,31 @@ import {
 
 // Cor de destaque de cada atalho — usa os mesmos tokens de cor do resto do
 // sistema (ver app/globals.css), só escolhendo qual delas cada área usa.
-const CORES: Record<string, { bg: string; borda: string }> = {
-  "/trocas": { bg: "bg-gradient-to-br from-info to-info-dark", borda: "hover:border-info" },
-  "/consignados": { bg: "bg-gradient-to-br from-primary to-primary-dark", borda: "hover:border-primary" },
-  "/vendas": { bg: "bg-gradient-to-br from-secondary to-secondary-dark", borda: "hover:border-secondary" },
-  "/fechar-caixa": { bg: "bg-gradient-to-br from-accent to-accent-dark", borda: "hover:border-accent" },
-  "/reabrir-caixa": { bg: "bg-gradient-to-br from-danger to-danger/75", borda: "hover:border-danger" },
-  "/estoque": { bg: "bg-gradient-to-br from-success to-success/75", borda: "hover:border-success" },
-  "/categorias": { bg: "bg-gradient-to-br from-secondary to-secondary-dark", borda: "hover:border-secondary" },
-  "/relatorios": { bg: "bg-gradient-to-br from-info to-info-dark", borda: "hover:border-info" },
-  "/financas": { bg: "bg-gradient-to-br from-accent to-accent-dark", borda: "hover:border-accent" },
-  "/usuarios": { bg: "bg-gradient-to-br from-primary to-primary-dark", borda: "hover:border-primary" },
+const CORES: Record<string, { bg: string; anel: string; brilho: string }> = {
+  "/trocas": { bg: "bg-gradient-to-br from-info to-info-dark", anel: "hover:ring-info/60", brilho: "shadow-info/40" },
+  "/consignados": { bg: "bg-gradient-to-br from-primary to-primary-dark", anel: "hover:ring-primary/60", brilho: "shadow-primary/40" },
+  "/vendas": { bg: "bg-gradient-to-br from-secondary to-secondary-dark", anel: "hover:ring-secondary/60", brilho: "shadow-secondary/40" },
+  "/fechar-caixa": { bg: "bg-gradient-to-br from-accent to-accent-dark", anel: "hover:ring-accent/60", brilho: "shadow-accent/40" },
+  "/reabrir-caixa": { bg: "bg-gradient-to-br from-danger to-danger/70", anel: "hover:ring-danger/60", brilho: "shadow-danger/40" },
+  "/estoque": { bg: "bg-gradient-to-br from-success to-success/70", anel: "hover:ring-success/60", brilho: "shadow-success/40" },
+  "/categorias": { bg: "bg-gradient-to-br from-secondary to-secondary-dark", anel: "hover:ring-secondary/60", brilho: "shadow-secondary/40" },
+  "/relatorios": { bg: "bg-gradient-to-br from-info to-info-dark", anel: "hover:ring-info/60", brilho: "shadow-info/40" },
+  "/financas": { bg: "bg-gradient-to-br from-accent to-accent-dark", anel: "hover:ring-accent/60", brilho: "shadow-accent/40" },
+  "/usuarios": { bg: "bg-gradient-to-br from-primary to-primary-dark", anel: "hover:ring-primary/60", brilho: "shadow-primary/40" },
 };
+
+// Ícone e cor de cada forma de pagamento na lista de últimas vendas
+const PAGAMENTO_VISUAL: Record<string, { icon: LucideIcon; classe: string }> = {
+  PIX: { icon: QrCode, classe: "bg-success-light text-success" },
+  DINHEIRO: { icon: Banknote, classe: "bg-accent-light text-accent-dark" },
+  CARTAO_CREDITO: { icon: CreditCard, classe: "bg-info-light text-info" },
+  CARTAO_DEBITO: { icon: CreditCard, classe: "bg-info-light text-info" },
+};
+const PAGAMENTO_PADRAO = { icon: Receipt, classe: "bg-primary-light text-primary" };
+
+// Vidro + sombra suave usados em todos os cartões da tela
+const CARTAO_VIDRO =
+  "bg-surface/90 backdrop-blur border border-white/70 ring-1 ring-border/40 shadow-[0_10px_30px_-14px_rgba(15,51,42,0.45)]";
 
 // Seção de cada atalho (as mesmas do menu lateral). Fica aqui na própria página,
 // sem depender de campo extra no NAV_ITEMS.
@@ -116,6 +134,25 @@ function CarregandoCartao({
   );
 }
 
+/** Relógio de Brasília (HH:mm). Começa vazio e só preenche no navegador, para não divergir do servidor. */
+function Relogio() {
+  const [agora, setAgora] = useState<string | null>(null);
+  useEffect(() => {
+    const atualizar = () =>
+      setAgora(
+        new Intl.DateTimeFormat("pt-BR", { hour: "2-digit", minute: "2-digit", timeZone: "America/Sao_Paulo" }).format(
+          new Date()
+        )
+      );
+    atualizar();
+    const intervalo = setInterval(atualizar, 15_000);
+    return () => clearInterval(intervalo);
+  }, []);
+  return (
+    <span className="font-mono text-3xl sm:text-4xl font-semibold tabular-nums tracking-tight">{agora ?? "--:--"}</span>
+  );
+}
+
 function CartaoResumo({
   icone,
   titulo,
@@ -127,19 +164,24 @@ function CartaoResumo({
   tom?: "neutro" | "sucesso" | "perigo" | "alerta";
   children: React.ReactNode;
 }) {
-  // faixa lateral + cor do "azulejo" do ícone, conforme o estado do cartão
+  // barra do topo + "azulejo" do ícone (degradê com brilho), conforme o estado do cartão
   const estilo = {
-    sucesso: { faixa: "border-l-success", icone: "bg-success-light text-success" },
-    perigo: { faixa: "border-l-danger", icone: "bg-danger-light text-danger" },
-    alerta: { faixa: "border-l-accent", icone: "bg-accent-light text-accent-dark" },
-    neutro: { faixa: "border-l-primary", icone: "bg-primary-light text-primary" },
+    sucesso: { barra: "from-success to-success/30", icone: "from-success to-success/70", brilho: "shadow-success/40" },
+    perigo: { barra: "from-danger to-danger/30", icone: "from-danger to-danger/70", brilho: "shadow-danger/40" },
+    alerta: { barra: "from-accent to-accent/30", icone: "from-accent to-accent-dark", brilho: "shadow-accent/40" },
+    neutro: { barra: "from-primary to-primary/30", icone: "from-primary to-primary-dark", brilho: "shadow-primary/40" },
   }[tom];
   return (
     <div
-      className={`rounded-2xl bg-surface border border-border border-l-4 ${estilo.faixa} p-4 flex flex-col gap-1.5 min-w-0 shadow-sm hover:shadow-md transition-shadow`}
+      className={`relative overflow-hidden rounded-2xl ${CARTAO_VIDRO} p-4 pt-5 flex flex-col gap-1.5 min-w-0 hover:-translate-y-0.5 transition`}
     >
-      <div className="flex items-center gap-2.5 text-xs font-semibold uppercase tracking-wider text-muted">
-        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${estilo.icone}`}>{icone}</span>
+      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${estilo.barra}`} />
+      <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+        <span
+          className={`w-10 h-10 rounded-xl bg-gradient-to-br ${estilo.icone} text-white flex items-center justify-center shrink-0 shadow-lg ${estilo.brilho} ring-1 ring-white/30`}
+        >
+          {icone}
+        </span>
         {titulo}
       </div>
       {children}
@@ -255,6 +297,24 @@ export default function InicioPage() {
     ? consignacoesAbertas.filter((c) => c.prazoDevolucao && c.prazoDevolucao < hoje).length
     : null;
 
+  // mini-gráfico: vendas por hora (8h às 20h, horário de Brasília); fora disso entra na ponta mais próxima
+  const HORA_INICIAL = 8;
+  const HORA_FINAL = 20;
+  const barrasHora = vendas
+    ? Array.from({ length: HORA_FINAL - HORA_INICIAL + 1 }, (_, i) => {
+        const h = HORA_INICIAL + i;
+        const total = vendas
+          .filter((v) => {
+            const hv = Math.min(HORA_FINAL, Math.max(HORA_INICIAL, Number(horaCurta(v.dataHora).slice(0, 2))));
+            return hv === h;
+          })
+          .reduce((soma, v) => soma + v.total, 0);
+        return { h, total };
+      })
+    : null;
+  const maiorBarra = barrasHora ? Math.max(...barrasHora.map((b) => b.total), 0) : 0;
+  const maiorVenda = vendas && vendas.length > 0 ? Math.max(...vendas.map((v) => v.total)) : null;
+
   const horasCaixa = caixa ? Math.floor(horasDesde(caixa.dataAbertura)) : 0;
   const caixaEsquecido = horasCaixa >= LIMITE_HORAS_CAIXA_ESQUECIDO;
 
@@ -282,28 +342,69 @@ export default function InicioPage() {
 
   return (
     <div className="min-h-full flex flex-col">
-      {/* Faixa de boas-vindas, no mesmo espírito visual do painel de login */}
-      <div className="shrink-0 relative overflow-hidden bg-primary text-white px-4 py-3 sm:px-8 sm:py-4">
-        <div className="absolute inset-0 bg-gradient-to-br from-primary via-primary to-primary-dark" />
-        <div className="absolute -right-14 -top-14 w-56 h-56 rounded-full bg-white/5" />
-        <div className="relative flex flex-wrap items-end justify-between gap-x-6 gap-y-1">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-[0.2em] text-white/60">
+      {/* ---------- Faixa de comando: saudação, status do caixa e relógio ---------- */}
+      <div className="shrink-0 relative overflow-hidden bg-primary-dark text-white px-4 py-4 sm:px-8 sm:py-5">
+        <div
+          aria-hidden
+          className="absolute inset-0 opacity-70"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
+            backgroundSize: "32px 32px",
+          }}
+        />
+        <div aria-hidden className="absolute -left-24 -top-28 w-80 h-80 rounded-full bg-accent/25 blur-3xl" />
+        <div aria-hidden className="absolute -right-16 -bottom-32 w-96 h-96 rounded-full bg-info/35 blur-3xl" />
+        <div className="relative max-w-7xl mx-auto flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
+          <div className="min-w-0">
+            <p className="font-mono text-xs uppercase tracking-[0.22em] text-white/60">
               {saudacao()}, {primeiroNome}
             </p>
-            <h1 className="mt-0.5 text-lg sm:text-xl font-semibold tracking-tight">O que você precisa fazer agora?</h1>
+            <h1 className="mt-1 text-xl sm:text-2xl font-bold tracking-tight">O que você precisa fazer agora?</h1>
+            <div
+              className={`mt-3 inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur ${
+                carregando || caixa === undefined
+                  ? "border-white/20 bg-white/10 text-white/80"
+                  : caixa
+                    ? "border-emerald-300/40 bg-emerald-400/15 text-emerald-100"
+                    : "border-red-300/40 bg-red-400/15 text-red-100"
+              }`}
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                {!carregando && caixa ? (
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+                ) : null}
+                <span
+                  className={`relative inline-flex h-2 w-2 rounded-full ${
+                    carregando || caixa === undefined ? "bg-white/60" : caixa ? "bg-emerald-300" : "bg-red-300"
+                  }`}
+                />
+              </span>
+              <span className="truncate">
+                {carregando
+                  ? "Consultando o caixa…"
+                  : caixa === undefined
+                    ? "Caixa indisponível no momento"
+                    : caixa
+                      ? `Caixa aberto · ${caixa.usuarioAberturaNome} desde ${horaCurta(caixa.dataAbertura)}`
+                      : "Caixa fechado"}
+              </span>
+            </div>
           </div>
-          <p className="text-xs sm:text-sm text-white/70">{dataPorExtenso()}</p>
+          <div className="text-right">
+            <Relogio />
+            <p className="text-xs sm:text-sm text-white/70">{dataPorExtenso()}</p>
+          </div>
         </div>
       </div>
 
-      <div className="flex-1 flex flex-col gap-3 px-4 py-3 sm:px-8 sm:py-4 max-w-7xl w-full mx-auto">
+      <div className="flex-1 flex flex-col gap-4 px-4 py-4 sm:px-8 sm:py-5 max-w-7xl w-full mx-auto">
         {/* ---------- Resumo de hoje ---------- */}
         <section aria-label="Resumo de hoje" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
           <CartaoResumo
             titulo="Caixa"
             tom={carregando || caixa === undefined ? "neutro" : caixa ? "sucesso" : "perigo"}
-            icone={caixa ? <Unlock className="w-3.5 h-3.5" /> : <Lock className="w-3.5 h-3.5" />}
+            icone={caixa ? <Unlock className="w-5 h-5" strokeWidth={1.75} /> : <Lock className="w-5 h-5" strokeWidth={1.75} />}
           >
             {carregando ? (
               <CarregandoCartao mensagem="Consultando o caixa…" progresso={progressoCarga} demorando={servidorDemorando} />
@@ -311,7 +412,7 @@ export default function InicioPage() {
               <p className="text-sm text-muted">Não foi possível consultar o caixa.</p>
             ) : caixa ? (
               <>
-                <p className="text-2xl font-bold tracking-tight tabular-nums text-success">Aberto</p>
+                <p className="text-2xl font-bold tracking-tight text-success">Aberto</p>
                 <p className="text-xs text-muted truncate">
                   {caixa.usuarioAberturaNome} · desde {horaCurta(caixa.dataAbertura)}
                 </p>
@@ -330,11 +431,11 @@ export default function InicioPage() {
               </>
             ) : (
               <>
-                <p className="text-2xl font-bold tracking-tight tabular-nums text-danger">Fechado</p>
+                <p className="text-2xl font-bold tracking-tight text-danger">Fechado</p>
                 <p className="text-xs text-muted">Abra o caixa para começar a vender.</p>
                 <Link
                   href="/pdv"
-                  className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
+                  className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-lg bg-gradient-to-r from-primary to-primary-dark px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-primary/30 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition"
                 >
                   Abrir caixa <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
@@ -342,7 +443,7 @@ export default function InicioPage() {
             )}
           </CartaoResumo>
 
-          <CartaoResumo titulo="Vendido hoje" icone={<ShoppingBag className="w-3.5 h-3.5" />}>
+          <CartaoResumo titulo="Vendido hoje" icone={<ShoppingBag className="w-5 h-5" strokeWidth={1.75} />}>
             {carregando ? (
               <CarregandoCartao mensagem="Somando as vendas de hoje…" progresso={progressoCarga} demorando={servidorDemorando} />
             ) : vendas ? (
@@ -353,13 +454,25 @@ export default function InicioPage() {
                     ? "Nenhuma venda ainda"
                     : `${vendas.length} ${vendas.length === 1 ? "venda" : "vendas"}`}
                 </p>
+                {barrasHora && vendas.length > 0 && (
+                  <div className="mt-1.5 flex h-9 items-end gap-[3px]" role="img" aria-label="Vendas por hora, de 8h às 20h">
+                    {barrasHora.map((b) => (
+                      <span
+                        key={b.h}
+                        title={`${String(b.h).padStart(2, "0")}h · ${formatarMoeda(b.total)}`}
+                        className={`flex-1 rounded-sm ${b.total > 0 ? "bg-gradient-to-t from-primary to-info" : "bg-border/40"}`}
+                        style={{ height: b.total > 0 && maiorBarra > 0 ? `${Math.max(16, (b.total / maiorBarra) * 100)}%` : "8%" }}
+                      />
+                    ))}
+                  </div>
+                )}
               </>
             ) : (
               <p className="text-sm text-muted">Não foi possível consultar as vendas.</p>
             )}
           </CartaoResumo>
 
-          <CartaoResumo titulo="Ticket médio" icone={<TrendingUp className="w-3.5 h-3.5" />}>
+          <CartaoResumo titulo="Ticket médio" icone={<TrendingUp className="w-5 h-5" strokeWidth={1.75} />}>
             {carregando ? (
               <CarregandoCartao mensagem="Calculando o ticket médio…" progresso={progressoCarga} demorando={servidorDemorando} />
             ) : vendas ? (
@@ -368,6 +481,12 @@ export default function InicioPage() {
                   {ticketMedio !== null ? formatarMoeda(ticketMedio) : "—"}
                 </p>
                 <p className="text-xs text-muted">Valor médio por venda hoje</p>
+                {maiorVenda !== null && (
+                  <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md bg-info-light px-2 py-1 text-xs font-medium text-info-dark">
+                    <Zap className="w-3.5 h-3.5" />
+                    Maior venda: <span className="tabular-nums font-semibold">{formatarMoeda(maiorVenda)}</span>
+                  </p>
+                )}
               </>
             ) : (
               <p className="text-sm text-muted">—</p>
@@ -379,23 +498,29 @@ export default function InicioPage() {
             tom={!carregando && temAlerta ? "alerta" : "sucesso"}
             icone={
               !carregando && temAlerta ? (
-                <AlertTriangle className="w-3.5 h-3.5" />
+                <AlertTriangle className="w-5 h-5" strokeWidth={1.75} />
               ) : (
-                <CheckCircle2 className="w-3.5 h-3.5" />
+                <CheckCircle2 className="w-5 h-5" strokeWidth={1.75} />
               )
             }
           >
             {carregando ? (
               <CarregandoCartao mensagem="Verificando pendências…" progresso={progressoCarga} demorando={servidorDemorando} />
             ) : !temAlerta ? (
-              <p className="text-sm text-muted">Tudo em ordem por aqui.</p>
+              <>
+                <p className="text-2xl font-bold tracking-tight text-success">Tudo certo</p>
+                <p className="text-xs text-muted">Nenhuma pendência por aqui.</p>
+              </>
             ) : (
               <ul className="flex flex-col gap-1.5">
                 {(estoqueBaixo ?? 0) > 0 && (
                   <li>
-                    <Link href="/estoque" className="flex items-center gap-2 text-sm hover:underline">
+                    <Link
+                      href="/estoque"
+                      className="flex items-center gap-2 rounded-lg bg-accent-light/70 px-2.5 py-1.5 text-sm hover:bg-accent-light transition-colors"
+                    >
                       <Package className="w-4 h-4 text-accent-dark shrink-0" />
-                      <span>
+                      <span className="min-w-0">
                         <strong>{estoqueBaixo}</strong> {estoqueBaixo === 1 ? "produto" : "produtos"} abaixo do mínimo
                       </span>
                     </Link>
@@ -403,9 +528,12 @@ export default function InicioPage() {
                 )}
                 {consignacoesAbertas && consignacoesAbertas.length > 0 && (
                   <li>
-                    <Link href="/consignados" className="flex items-center gap-2 text-sm hover:underline">
+                    <Link
+                      href="/consignados"
+                      className="flex items-center gap-2 rounded-lg bg-info-light/70 px-2.5 py-1.5 text-sm hover:bg-info-light transition-colors"
+                    >
                       <Handshake className="w-4 h-4 text-info shrink-0" />
-                      <span>
+                      <span className="min-w-0">
                         <strong>{consignacoesAbertas.length}</strong>{" "}
                         {consignacoesAbertas.length === 1 ? "consignação aberta" : "consignações abertas"}
                         {consignacoesVencidas ? (
@@ -420,29 +548,40 @@ export default function InicioPage() {
           </CartaoResumo>
         </section>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] gap-3 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start">
           {/* ---------- Atalhos ---------- */}
-          <div className="flex flex-col gap-3 min-w-0">
+          <div className="flex flex-col gap-4 min-w-0">
             {destaque && (
               <Link
                 href={destaque.href}
-                className="group relative overflow-hidden flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-primary via-primary to-primary-dark text-white p-4 sm:p-5 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition"
+                className="group relative overflow-hidden flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-primary via-primary to-primary-dark text-white p-4 sm:p-5 shadow-[0_14px_36px_-14px_rgba(15,51,42,0.7)] ring-1 ring-white/10 hover:-translate-y-0.5 hover:shadow-[0_18px_44px_-14px_rgba(15,51,42,0.85)] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition"
               >
-                <div className="absolute -right-10 -top-12 w-44 h-44 rounded-full bg-white/5" />
-                <div className="absolute right-24 -bottom-16 w-32 h-32 rounded-full bg-accent/10" />
-                <div className="relative flex items-center gap-3.5 sm:gap-4 min-w-0">
-                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-accent text-primary-dark flex items-center justify-center shrink-0 shadow-md">
-                    <destaque.icon className="w-6 h-6 sm:w-7 sm:h-7" />
+                <div
+                  aria-hidden
+                  className="absolute inset-0 opacity-60"
+                  style={{
+                    backgroundImage:
+                      "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
+                    backgroundSize: "28px 28px",
+                  }}
+                />
+                <div aria-hidden className="absolute -right-10 -top-14 w-52 h-52 rounded-full bg-accent/25 blur-2xl" />
+                <div className="relative flex items-center gap-4 min-w-0">
+                  <div className="relative w-14 h-14 sm:w-16 sm:h-16 rounded-2xl bg-gradient-to-br from-accent to-accent-dark text-primary-dark flex items-center justify-center shrink-0 shadow-lg shadow-accent/40 ring-1 ring-white/40">
+                    <span aria-hidden className="absolute inset-x-1.5 top-1 h-1/3 rounded-full bg-white/30 blur-[2px]" />
+                    <destaque.icon className="relative w-7 h-7 sm:w-8 sm:h-8" strokeWidth={1.75} />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Atalho principal</p>
-                    <p className="font-bold text-lg sm:text-xl leading-tight">{destaque.label}</p>
+                    <p className="inline-flex items-center gap-1.5 font-mono text-[10px] uppercase tracking-[0.22em] text-accent">
+                      <Zap className="w-3 h-3" /> Atalho principal
+                    </p>
+                    <p className="font-bold text-xl sm:text-2xl leading-tight tracking-tight">{destaque.label}</p>
                     <p className="text-xs sm:text-sm text-white/75 truncate">
                       {caixa === null ? "Abra o caixa e comece a vender" : destaque.descricao}
                     </p>
                   </div>
                 </div>
-                <span className="relative w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0 group-hover:bg-white/25 transition">
+                <span className="relative w-11 h-11 rounded-full bg-white/15 ring-1 ring-white/20 flex items-center justify-center shrink-0 group-hover:bg-accent group-hover:text-primary-dark transition">
                   <ArrowRight className="w-5 h-5 group-hover:translate-x-0.5 transition" />
                 </span>
               </Link>
@@ -450,39 +589,45 @@ export default function InicioPage() {
 
             {grupos.map((grupo) => (
               <section key={grupo.titulo} aria-label={grupo.titulo}>
-                <h2 className="flex items-center gap-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-muted mb-2 px-0.5">
+                <h2 className="flex items-center gap-2.5 font-mono text-[11px] font-semibold uppercase tracking-[0.2em] text-muted mb-2.5 px-0.5">
+                  <span aria-hidden className="w-2 h-2 rounded-sm bg-accent rotate-45" />
                   {grupo.titulo}
-                  <span aria-hidden className="h-px flex-1 bg-border/70" />
+                  <span aria-hidden className="h-px flex-1 bg-gradient-to-r from-border to-transparent" />
                 </h2>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2.5">
                   {grupo.itens.map((item) => {
-                    const cor = CORES[item.href] ?? { bg: "bg-gradient-to-br from-primary to-primary-dark", borda: "hover:border-primary" };
+                    const cor = CORES[item.href] ?? {
+                      bg: "bg-gradient-to-br from-primary to-primary-dark",
+                      anel: "hover:ring-primary/60",
+                      brilho: "shadow-primary/40",
+                    };
                     const Icon = item.icon;
                     const selo = selos[item.href];
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`group flex items-center gap-3 rounded-2xl bg-surface border border-border px-3.5 py-3 shadow-sm hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition ${cor.borda}`}
+                        className={`group relative flex items-center gap-3.5 rounded-2xl ${CARTAO_VIDRO} px-3.5 py-3 hover:-translate-y-0.5 hover:ring-2 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition ${cor.anel}`}
                       >
                         <div
-                          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${cor.bg} flex items-center justify-center text-white shrink-0 shadow-sm group-hover:scale-105 transition-transform`}
+                          className={`relative w-12 h-12 rounded-2xl ${cor.bg} flex items-center justify-center text-white shrink-0 shadow-lg ${cor.brilho} ring-1 ring-white/30 group-hover:scale-105 transition-transform`}
                         >
-                          <Icon className="w-5 h-5" />
+                          <span aria-hidden className="absolute inset-x-1.5 top-1 h-1/3 rounded-full bg-white/25 blur-[2px]" />
+                          <Icon className="relative w-6 h-6" strokeWidth={1.75} />
                         </div>
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <p className="font-semibold text-sm text-foreground truncate">{item.label}</p>
-                            {selo && (
-                              <span
-                                className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${selo.classe}`}
-                              >
-                                {selo.texto}
-                              </span>
-                            )}
-                          </div>
+                          <p className="font-semibold text-sm leading-tight text-foreground line-clamp-2">{item.label}</p>
+                          {selo && (
+                            <span
+                              className={`mt-1 inline-block text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${selo.classe}`}
+                            >
+                              {selo.texto}
+                            </span>
+                          )}
                           {item.descricao && (
-                            <p className="text-xs text-muted truncate [@media(max-height:760px)]:hidden">{item.descricao}</p>
+                            <p className="mt-0.5 text-xs text-muted line-clamp-1 [@media(max-height:760px)]:hidden">
+                              {item.descricao}
+                            </p>
                           )}
                         </div>
                         <ChevronRight className="w-4 h-4 shrink-0 text-muted opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition" />
@@ -495,17 +640,20 @@ export default function InicioPage() {
           </div>
 
           {/* ---------- Últimas vendas de hoje ---------- */}
-          <aside className="rounded-2xl bg-surface border border-border overflow-hidden min-w-0 shadow-sm">
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-primary-soft">
+          <aside className={`rounded-2xl ${CARTAO_VIDRO} overflow-hidden min-w-0 lg:sticky lg:top-3`}>
+            <div className="flex items-center justify-between gap-2 px-4 py-3 bg-gradient-to-r from-primary-dark to-primary text-white">
               <h2 className="text-sm font-semibold flex items-center gap-2.5">
-                <span className="w-7 h-7 rounded-lg bg-secondary-light text-secondary flex items-center justify-center shrink-0">
-                  <Receipt className="w-4 h-4" />
+                <span className="w-8 h-8 rounded-lg bg-white/15 ring-1 ring-white/20 flex items-center justify-center shrink-0">
+                  <Receipt className="w-4 h-4" strokeWidth={1.75} />
                 </span>
-                Últimas vendas de hoje
+                Últimas vendas
+                <span className="inline-flex items-center gap-1 rounded-full bg-white/15 px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider text-white/90">
+                  <span className="h-1.5 w-1.5 rounded-full bg-emerald-300" /> hoje
+                </span>
               </h2>
               <Link
                 href="/vendas"
-                className="inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:underline shrink-0"
+                className="inline-flex items-center gap-0.5 text-xs font-semibold text-white/90 hover:text-white hover:underline shrink-0"
               >
                 Ver todas <ChevronRight className="w-3.5 h-3.5" />
               </Link>
@@ -524,23 +672,28 @@ export default function InicioPage() {
                 </Link>
               </div>
             ) : (
-              <ul className="divide-y divide-border/60">
-                {ultimasVendas.map((v) => (
-                  <li key={v.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-alt/60 transition-colors">
-                    <span className="shrink-0 rounded-md bg-primary-light px-1.5 py-1 font-mono text-xs font-semibold text-primary tabular-nums">
-                      {horaCurta(v.dataHora)}
-                    </span>
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium truncate">
-                        {LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento}
-                      </p>
-                      <p className="text-xs text-muted truncate">
-                        {v.itens.length} {v.itens.length === 1 ? "item" : "itens"} · {v.usuarioNome}
-                      </p>
-                    </div>
-                    <p className="text-sm font-bold shrink-0 tabular-nums">{formatarMoeda(v.total)}</p>
-                  </li>
-                ))}
+              <ul className="divide-y divide-border/40">
+                {ultimasVendas.map((v) => {
+                  const visual = PAGAMENTO_VISUAL[v.formaPagamento] ?? PAGAMENTO_PADRAO;
+                  const IconePagamento = visual.icon;
+                  return (
+                    <li key={v.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-primary-soft/70 transition-colors">
+                      <span className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${visual.classe}`}>
+                        <IconePagamento className="w-[18px] h-[18px]" strokeWidth={1.75} />
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="text-sm font-semibold truncate">
+                          {LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento}
+                        </p>
+                        <p className="text-xs text-muted truncate">
+                          <span className="font-mono tabular-nums">{horaCurta(v.dataHora)}</span> · {v.itens.length}{" "}
+                          {v.itens.length === 1 ? "item" : "itens"} · {v.usuarioNome}
+                        </p>
+                      </div>
+                      <p className="text-sm font-bold shrink-0 tabular-nums">{formatarMoeda(v.total)}</p>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </aside>
