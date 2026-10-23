@@ -6,6 +6,7 @@ import {
   AlertTriangle,
   ArrowRight,
   CheckCircle2,
+  ChevronRight,
   Handshake,
   Lock,
   Package,
@@ -30,17 +31,17 @@ import {
 
 // Cor de destaque de cada atalho — usa os mesmos tokens de cor do resto do
 // sistema (ver app/globals.css), só escolhendo qual delas cada área usa.
-const CORES: Record<string, { bg: string; ring: string }> = {
-  "/trocas": { bg: "bg-info", ring: "hover:ring-info/30" },
-  "/consignados": { bg: "bg-primary", ring: "hover:ring-primary/30" },
-  "/vendas": { bg: "bg-secondary", ring: "hover:ring-secondary/30" },
-  "/fechar-caixa": { bg: "bg-accent", ring: "hover:ring-accent/30" },
-  "/reabrir-caixa": { bg: "bg-danger", ring: "hover:ring-danger/30" },
-  "/estoque": { bg: "bg-success", ring: "hover:ring-success/30" },
-  "/categorias": { bg: "bg-secondary", ring: "hover:ring-secondary/30" },
-  "/relatorios": { bg: "bg-info", ring: "hover:ring-info/30" },
-  "/financas": { bg: "bg-accent", ring: "hover:ring-accent/30" },
-  "/usuarios": { bg: "bg-primary-dark", ring: "hover:ring-primary/30" },
+const CORES: Record<string, { bg: string; borda: string }> = {
+  "/trocas": { bg: "bg-gradient-to-br from-info to-info-dark", borda: "hover:border-info" },
+  "/consignados": { bg: "bg-gradient-to-br from-primary to-primary-dark", borda: "hover:border-primary" },
+  "/vendas": { bg: "bg-gradient-to-br from-secondary to-secondary-dark", borda: "hover:border-secondary" },
+  "/fechar-caixa": { bg: "bg-gradient-to-br from-accent to-accent-dark", borda: "hover:border-accent" },
+  "/reabrir-caixa": { bg: "bg-gradient-to-br from-danger to-danger/75", borda: "hover:border-danger" },
+  "/estoque": { bg: "bg-gradient-to-br from-success to-success/75", borda: "hover:border-success" },
+  "/categorias": { bg: "bg-gradient-to-br from-secondary to-secondary-dark", borda: "hover:border-secondary" },
+  "/relatorios": { bg: "bg-gradient-to-br from-info to-info-dark", borda: "hover:border-info" },
+  "/financas": { bg: "bg-gradient-to-br from-accent to-accent-dark", borda: "hover:border-accent" },
+  "/usuarios": { bg: "bg-gradient-to-br from-primary to-primary-dark", borda: "hover:border-primary" },
 };
 
 // Seção de cada atalho (as mesmas do menu lateral). Fica aqui na própria página,
@@ -126,18 +127,19 @@ function CartaoResumo({
   tom?: "neutro" | "sucesso" | "perigo" | "alerta";
   children: React.ReactNode;
 }) {
-  const faixa =
-    tom === "sucesso"
-      ? "border-l-success"
-      : tom === "perigo"
-        ? "border-l-danger"
-        : tom === "alerta"
-          ? "border-l-accent"
-          : "border-l-primary";
+  // faixa lateral + cor do "azulejo" do ícone, conforme o estado do cartão
+  const estilo = {
+    sucesso: { faixa: "border-l-success", icone: "bg-success-light text-success" },
+    perigo: { faixa: "border-l-danger", icone: "bg-danger-light text-danger" },
+    alerta: { faixa: "border-l-accent", icone: "bg-accent-light text-accent-dark" },
+    neutro: { faixa: "border-l-primary", icone: "bg-primary-light text-primary" },
+  }[tom];
   return (
-    <div className={`rounded-xl bg-surface border border-border border-l-4 ${faixa} p-3.5 flex flex-col gap-1 min-w-0 shadow-sm`}>
-      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted">
-        {icone}
+    <div
+      className={`rounded-2xl bg-surface border border-border border-l-4 ${estilo.faixa} p-4 flex flex-col gap-1.5 min-w-0 shadow-sm hover:shadow-md transition-shadow`}
+    >
+      <div className="flex items-center gap-2.5 text-xs font-semibold uppercase tracking-wider text-muted">
+        <span className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${estilo.icone}`}>{icone}</span>
         {titulo}
       </div>
       {children}
@@ -309,7 +311,7 @@ export default function InicioPage() {
               <p className="text-sm text-muted">Não foi possível consultar o caixa.</p>
             ) : caixa ? (
               <>
-                <p className="text-xl font-semibold text-success">Aberto</p>
+                <p className="text-2xl font-bold tracking-tight tabular-nums text-success">Aberto</p>
                 <p className="text-xs text-muted truncate">
                   {caixa.usuarioAberturaNome} · desde {horaCurta(caixa.dataAbertura)}
                 </p>
@@ -321,20 +323,20 @@ export default function InicioPage() {
                 )}
                 <Link
                   href="/fechar-caixa"
-                  className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-lg border border-primary/40 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
                 >
-                  Fechar caixa <ArrowRight className="w-3 h-3" />
+                  Fechar caixa <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </>
             ) : (
               <>
-                <p className="text-xl font-semibold text-danger">Fechado</p>
+                <p className="text-2xl font-bold tracking-tight tabular-nums text-danger">Fechado</p>
                 <p className="text-xs text-muted">Abra o caixa para começar a vender.</p>
                 <Link
                   href="/pdv"
-                  className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                  className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-lg bg-primary px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-primary-dark focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
                 >
-                  Abrir caixa <ArrowRight className="w-3 h-3" />
+                  Abrir caixa <ArrowRight className="w-3.5 h-3.5" />
                 </Link>
               </>
             )}
@@ -345,7 +347,7 @@ export default function InicioPage() {
               <CarregandoCartao mensagem="Somando as vendas de hoje…" progresso={progressoCarga} demorando={servidorDemorando} />
             ) : vendas ? (
               <>
-                <p className="text-xl font-semibold text-foreground">{formatarMoeda(totalHoje)}</p>
+                <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground">{formatarMoeda(totalHoje)}</p>
                 <p className="text-xs text-muted">
                   {vendas.length === 0
                     ? "Nenhuma venda ainda"
@@ -362,7 +364,7 @@ export default function InicioPage() {
               <CarregandoCartao mensagem="Calculando o ticket médio…" progresso={progressoCarga} demorando={servidorDemorando} />
             ) : vendas ? (
               <>
-                <p className="text-xl font-semibold text-foreground">
+                <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground">
                   {ticketMedio !== null ? formatarMoeda(ticketMedio) : "—"}
                 </p>
                 <p className="text-xs text-muted">Valor médio por venda hoje</p>
@@ -424,45 +426,53 @@ export default function InicioPage() {
             {destaque && (
               <Link
                 href={destaque.href}
-                className="group flex items-center justify-between gap-4 rounded-xl bg-primary text-white p-3 sm:p-3.5 shadow-sm hover:bg-primary-dark hover:shadow-md transition"
+                className="group relative overflow-hidden flex items-center justify-between gap-4 rounded-2xl bg-gradient-to-br from-primary via-primary to-primary-dark text-white p-4 sm:p-5 shadow-md shadow-primary/20 hover:shadow-lg hover:-translate-y-0.5 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition"
               >
-                <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-                  <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-lg bg-white/15 flex items-center justify-center shrink-0">
-                    <destaque.icon className="w-5 h-5 sm:w-6 sm:h-6" />
+                <div className="absolute -right-10 -top-12 w-44 h-44 rounded-full bg-white/5" />
+                <div className="absolute right-24 -bottom-16 w-32 h-32 rounded-full bg-accent/10" />
+                <div className="relative flex items-center gap-3.5 sm:gap-4 min-w-0">
+                  <div className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl bg-accent text-primary-dark flex items-center justify-center shrink-0 shadow-md">
+                    <destaque.icon className="w-6 h-6 sm:w-7 sm:h-7" />
                   </div>
                   <div className="min-w-0">
-                    <p className="font-semibold text-base sm:text-lg leading-tight">{destaque.label}</p>
-                    <p className="text-xs sm:text-sm text-white/70 truncate">{destaque.descricao}</p>
+                    <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-white/60">Atalho principal</p>
+                    <p className="font-bold text-lg sm:text-xl leading-tight">{destaque.label}</p>
+                    <p className="text-xs sm:text-sm text-white/75 truncate">
+                      {caixa === null ? "Abra o caixa e comece a vender" : destaque.descricao}
+                    </p>
                   </div>
                 </div>
-                <ArrowRight className="w-5 h-5 shrink-0 opacity-70 group-hover:translate-x-1 transition" />
+                <span className="relative w-10 h-10 rounded-full bg-white/15 flex items-center justify-center shrink-0 group-hover:bg-white/25 transition">
+                  <ArrowRight className="w-5 h-5 group-hover:translate-x-0.5 transition" />
+                </span>
               </Link>
             )}
 
             {grupos.map((grupo) => (
               <section key={grupo.titulo} aria-label={grupo.titulo}>
-                <h2 className="font-mono text-[11px] uppercase tracking-[0.18em] text-muted mb-1.5 px-0.5">
+                <h2 className="flex items-center gap-3 font-mono text-[11px] font-semibold uppercase tracking-[0.18em] text-muted mb-2 px-0.5">
                   {grupo.titulo}
+                  <span aria-hidden className="h-px flex-1 bg-border/70" />
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-2">
                   {grupo.itens.map((item) => {
-                    const cor = CORES[item.href] ?? { bg: "bg-primary", ring: "hover:ring-primary/30" };
+                    const cor = CORES[item.href] ?? { bg: "bg-gradient-to-br from-primary to-primary-dark", borda: "hover:border-primary" };
                     const Icon = item.icon;
                     const selo = selos[item.href];
                     return (
                       <Link
                         key={item.href}
                         href={item.href}
-                        className={`group flex items-center gap-3 rounded-xl bg-surface border border-border px-3 py-2.5 hover:-translate-y-0.5 hover:ring-2 hover:shadow-sm transition ${cor.ring}`}
+                        className={`group flex items-center gap-3 rounded-2xl bg-surface border border-border px-3.5 py-3 shadow-sm hover:-translate-y-0.5 hover:shadow-md focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition ${cor.borda}`}
                       >
                         <div
-                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-lg ${cor.bg} flex items-center justify-center text-white shrink-0 shadow-sm`}
+                          className={`w-10 h-10 sm:w-11 sm:h-11 rounded-xl ${cor.bg} flex items-center justify-center text-white shrink-0 shadow-sm group-hover:scale-105 transition-transform`}
                         >
                           <Icon className="w-5 h-5" />
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="flex items-center gap-2 min-w-0">
-                            <p className="font-medium text-sm text-foreground truncate">{item.label}</p>
+                            <p className="font-semibold text-sm text-foreground truncate">{item.label}</p>
                             {selo && (
                               <span
                                 className={`shrink-0 text-[10px] font-semibold px-1.5 py-0.5 rounded-full ${selo.classe}`}
@@ -475,6 +485,7 @@ export default function InicioPage() {
                             <p className="text-xs text-muted truncate [@media(max-height:760px)]:hidden">{item.descricao}</p>
                           )}
                         </div>
+                        <ChevronRight className="w-4 h-4 shrink-0 text-muted opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition" />
                       </Link>
                     );
                   })}
@@ -484,14 +495,19 @@ export default function InicioPage() {
           </div>
 
           {/* ---------- Últimas vendas de hoje ---------- */}
-          <aside className="rounded-xl bg-surface border border-border overflow-hidden min-w-0 shadow-sm">
-            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border">
-              <h2 className="text-sm font-semibold flex items-center gap-2">
-                <Receipt className="w-4 h-4 text-secondary" />
+          <aside className="rounded-2xl bg-surface border border-border overflow-hidden min-w-0 shadow-sm">
+            <div className="flex items-center justify-between gap-2 px-4 py-3 border-b border-border bg-primary-soft">
+              <h2 className="text-sm font-semibold flex items-center gap-2.5">
+                <span className="w-7 h-7 rounded-lg bg-secondary-light text-secondary flex items-center justify-center shrink-0">
+                  <Receipt className="w-4 h-4" />
+                </span>
                 Últimas vendas de hoje
               </h2>
-              <Link href="/vendas" className="text-xs font-medium text-primary hover:underline shrink-0">
-                Ver todas
+              <Link
+                href="/vendas"
+                className="inline-flex items-center gap-0.5 text-xs font-semibold text-primary hover:underline shrink-0"
+              >
+                Ver todas <ChevronRight className="w-3.5 h-3.5" />
               </Link>
             </div>
             {carregando ? (
@@ -510,16 +526,19 @@ export default function InicioPage() {
             ) : (
               <ul className="divide-y divide-border/60">
                 {ultimasVendas.map((v) => (
-                  <li key={v.id} className="flex items-center justify-between gap-3 px-4 py-2">
-                    <div className="min-w-0">
+                  <li key={v.id} className="flex items-center gap-3 px-4 py-2.5 hover:bg-surface-alt/60 transition-colors">
+                    <span className="shrink-0 rounded-md bg-primary-light px-1.5 py-1 font-mono text-xs font-semibold text-primary tabular-nums">
+                      {horaCurta(v.dataHora)}
+                    </span>
+                    <div className="min-w-0 flex-1">
                       <p className="text-sm font-medium truncate">
-                        {horaCurta(v.dataHora)} · {LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento}
+                        {LABEL_FORMA_PAGAMENTO[v.formaPagamento] ?? v.formaPagamento}
                       </p>
                       <p className="text-xs text-muted truncate">
                         {v.itens.length} {v.itens.length === 1 ? "item" : "itens"} · {v.usuarioNome}
                       </p>
                     </div>
-                    <p className="text-sm font-semibold shrink-0">{formatarMoeda(v.total)}</p>
+                    <p className="text-sm font-bold shrink-0 tabular-nums">{formatarMoeda(v.total)}</p>
                   </li>
                 ))}
               </ul>
