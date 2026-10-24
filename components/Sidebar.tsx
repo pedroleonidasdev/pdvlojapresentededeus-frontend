@@ -4,12 +4,30 @@ import { Fragment, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { LogOut, Sparkles, UserCog, X } from "lucide-react";
+import { ChevronRight, LogOut, Sparkles, UserCog, X } from "lucide-react";
 import { NAV_ITEMS, LayoutGrid } from "@/lib/nav-items";
 import TrocarUsuarioModal from "./TrocarUsuarioModal";
 import CaixaStatusBadge from "./CaixaStatusBadge";
 import NotificacoesPushButton from "./NotificacoesPushButton";
+import {
+  BRILHO_ICONE,
+  ICONE_ATIVO,
+  ICONE_INATIVO,
+  ICONE_PERIGO,
+  LINHA_ATIVA,
+  LINHA_INATIVA,
+  LINHA_PERIGO,
+} from "@/lib/sidebar-estilos";
 import { EVENTO_ABRIR_NOVIDADES, EVENTO_NOVIDADES_VISTAS, temNovidadeNaoVista } from "@/lib/novidades";
+
+// Tamanhos COMPACTOS do menu (definidos aqui para o menu caber na tela sem barra de
+// rolagem). As cores/brilhos continuam vindo de @/lib/sidebar-estilos.
+//  - linha do menu: ícone de 28px (era ~40px) e pouco espaço vertical
+//  - ação do rodapé: ícone em cima, rótulo minúsculo embaixo, três lado a lado
+const LINHA = "group relative flex w-full items-center gap-2.5 rounded-xl px-2 py-1 text-left text-[13px] font-medium transition";
+const ICONE = "relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg transition";
+const ACAO_RODAPE =
+  "group relative flex min-w-0 flex-col items-center gap-0.5 rounded-xl px-1 py-1.5 text-[10px] font-medium leading-none transition";
 
 // Seção de cada item no menu. Fica aqui no próprio componente (sem depender de
 // campo extra no NAV_ITEMS). O "Início" fica solto, no topo, sem título.
@@ -38,14 +56,6 @@ function iniciais(nome: string): string {
 // barra de rolagem fina e discreta (a padrão do Windows fica clara e grossa em cima do verde escuro)
 const ROLAGEM_FINA =
   "[scrollbar-width:thin] [scrollbar-color:rgba(255,255,255,0.22)_transparent] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:rounded-full [&::-webkit-scrollbar-thumb]:bg-white/20";
-
-const LINHA_BASE =
-  "group relative w-full flex items-center gap-3 pl-3 pr-2.5 py-1.5 rounded-xl text-[13.5px] leading-tight text-left transition-all duration-200";
-const LINHA_INATIVA = "text-white/70 hover:bg-white/10 hover:text-white";
-const ICONE_BASE =
-  "flex items-center justify-center w-8 h-8 rounded-lg shrink-0 transition-all duration-300 ease-out";
-const ICONE_INATIVO =
-  "bg-white/5 text-white/70 group-hover:bg-white/15 group-hover:text-white group-hover:scale-110 group-hover:-rotate-3";
 
 function assinarNovidades(aoMudar: () => void) {
   window.addEventListener(EVENTO_NOVIDADES_VISTAS, aoMudar);
@@ -80,16 +90,28 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
           aberta ? "translate-x-0" : "-translate-x-full"
         } md:translate-x-0`}
       >
+        {/* fundo tech: grade fina e brilhos (atrás de todo o conteúdo) */}
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute inset-0 z-0 opacity-60"
+          style={{
+            backgroundImage:
+              "linear-gradient(rgba(255,255,255,0.04) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px)",
+            backgroundSize: "28px 28px",
+          }}
+        />
+        <div aria-hidden="true" className="pointer-events-none absolute -bottom-24 -right-20 z-0 w-64 h-64 rounded-full bg-info/25 blur-3xl" />
+
         {/* ---------- Cabeçalho: logo, nome e status do caixa ---------- */}
-        <div className="relative px-4 pt-5 pb-4 border-b border-white/10 shrink-0 overflow-hidden">
-          <div className="pointer-events-none absolute -top-12 -left-10 w-36 h-36 rounded-full bg-accent/15 blur-2xl" />
-          <div className="relative flex items-center gap-3">
-            <div className="w-11 h-11 rounded-xl overflow-hidden ring-2 ring-accent/50 shadow-lg shadow-black/30 shrink-0">
+        <div className="relative z-10 px-3 pt-3 pb-2.5 border-b border-white/10 shrink-0 overflow-hidden">
+          <div className="pointer-events-none absolute -top-12 -left-10 w-40 h-40 rounded-full bg-accent/25 blur-2xl" />
+          <div className="relative flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl overflow-hidden ring-2 ring-accent/60 shadow-[0_0_14px_-2px_rgba(224,151,47,0.6)] shrink-0">
               <img src="/icon-192.png" alt="" className="w-full h-full object-cover" />
             </div>
             <div className="min-w-0 flex-1">
-              <p className="font-semibold leading-tight text-[15px] tracking-tight">Sistema de Gestão</p>
-              <p className="text-[11px] text-accent-light/80 mt-0.5 flex items-center gap-1">
+              <p className="font-semibold leading-tight text-sm tracking-tight">Sistema de Gestão</p>
+              <p className="text-[10px] font-mono uppercase tracking-wider text-accent-light/80 mt-0.5 flex items-center gap-1">
                 <LayoutGrid className="w-3 h-3" /> Painel de controle
               </p>
             </div>
@@ -101,11 +123,11 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
               <X className="w-5 h-5" />
             </button>
           </div>
-          <CaixaStatusBadge variant="dark" className="relative mt-3" />
+          <CaixaStatusBadge variant="dark" className="relative mt-2" />
         </div>
 
         {/* ---------- Menu, com seções ---------- */}
-        <nav className={`flex-1 min-h-0 overflow-y-auto px-3 py-2 space-y-0.5 ${ROLAGEM_FINA}`}>
+        <nav className={`relative z-10 flex-1 min-h-0 overflow-y-auto px-3 py-1 space-y-0 ${ROLAGEM_FINA}`}>
           {itens.map((item) => {
             const ativo = pathname?.startsWith(item.href);
             const Icon = item.icon;
@@ -115,31 +137,32 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
             return (
               <Fragment key={item.href}>
                 {mostrarTitulo && (
-                  <div className="flex items-center gap-2 px-3 pt-4 pb-1.5" aria-hidden="true">
-                    <span className="text-[10px] font-semibold uppercase tracking-[0.18em] text-white/40">{grupo}</span>
-                    <span className="h-px flex-1 bg-white/10" />
+                  <div className="flex items-center gap-2 px-2 pt-2.5 pb-1" aria-hidden="true">
+                    <span className="w-1.5 h-1.5 rotate-45 rounded-[1px] bg-accent/80" />
+                    <span className="font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-white/50">{grupo}</span>
+                    <span className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent" />
                   </div>
                 )}
                 <Link
                   href={item.href}
                   onClick={onFechar}
                   aria-current={ativo ? "page" : undefined}
-                  className={`${LINHA_BASE} ${
-                    ativo ? "bg-gradient-to-r from-white/20 to-white/5 text-white font-semibold ring-1 ring-white/10 shadow-sm" : LINHA_INATIVA
-                  }`}
+                  className={`${LINHA} ${ativo ? LINHA_ATIVA : LINHA_INATIVA}`}
                 >
-                  {/* barrinha de destaque do item atual */}
+                  {/* barrinha de destaque do item atual (com brilho neon) */}
                   {ativo && (
-                    <span className="absolute left-0 top-1/2 -translate-y-1/2 h-6 w-1 rounded-r-full bg-accent shadow-[0_0_8px_rgba(224,151,47,0.7)]" />
+                    <span className="absolute -left-3 top-1/2 -translate-y-1/2 h-5 w-1 rounded-r-full bg-accent shadow-[0_0_10px_rgba(224,151,47,0.9)]" />
                   )}
-                  <span
-                    className={`${ICONE_BASE} ${
-                      ativo ? "bg-accent text-primary-dark shadow-md shadow-black/25" : ICONE_INATIVO
-                    }`}
-                  >
-                    <Icon className="w-[18px] h-[18px]" strokeWidth={ativo ? 2.4 : 2} />
+                  <span className={`${ICONE} ${ativo ? ICONE_ATIVO : ICONE_INATIVO}`}>
+                    <span aria-hidden="true" className={BRILHO_ICONE} />
+                    <Icon className="relative w-4 h-4" strokeWidth={ativo ? 2.1 : 1.75} />
                   </span>
-                  {item.label}
+                  <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                  {ativo ? (
+                    <span className="w-1.5 h-1.5 rounded-full bg-accent shadow-[0_0_8px_rgba(224,151,47,0.9)] shrink-0" />
+                  ) : (
+                    <ChevronRight className="w-3.5 h-3.5 shrink-0 text-white/50 opacity-0 -translate-x-1 group-hover:opacity-100 group-hover:translate-x-0 transition" />
+                  )}
                 </Link>
               </Fragment>
             );
@@ -148,16 +171,22 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
 
         {/* ---------- Usuário e ações ---------- */}
         <div
-          className="px-3 pt-3 border-t border-white/10 shrink-0 space-y-1"
-          style={{ paddingBottom: "max(0.75rem, env(safe-area-inset-bottom))" }}
+          className="relative z-10 px-3 pt-2 border-t border-white/10 shrink-0 space-y-1 bg-black/10 backdrop-blur-sm"
+          style={{ paddingBottom: "max(0.5rem, env(safe-area-inset-bottom))" }}
         >
-          <div className="flex items-center gap-3 rounded-xl bg-black/20 ring-1 ring-white/10 px-3 py-2.5 mb-1.5">
-            <div className="w-9 h-9 rounded-full bg-accent text-primary-dark font-bold text-sm flex items-center justify-center shrink-0 shadow-md shadow-black/25">
-              {iniciais(usuario.nome)}
+          <div className="flex items-center gap-2.5 rounded-xl bg-gradient-to-br from-white/[0.12] to-black/20 ring-1 ring-white/15 px-2.5 py-1.5 shadow-[0_8px_24px_-12px_rgba(0,0,0,0.7)]">
+            <div className="relative shrink-0">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-accent to-accent-dark text-primary-dark font-bold text-xs flex items-center justify-center ring-2 ring-white/30 shadow-[0_0_12px_-2px_rgba(224,151,47,0.7)]">
+                {iniciais(usuario.nome)}
+              </div>
+              <span className="absolute -bottom-0.5 -right-0.5 flex h-2.5 w-2.5">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-60" />
+                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 ring-2 ring-primary-dark" />
+              </span>
             </div>
             <div className="min-w-0">
-              <p className="text-sm font-semibold leading-tight truncate">{usuario.nome}</p>
-              <p className="text-[10px] text-white/50 mt-0.5 font-mono uppercase tracking-wider">
+              <p className="text-[13px] font-semibold leading-tight truncate">{usuario.nome}</p>
+              <p className="mt-0.5 inline-block rounded-md bg-white/10 px-1.5 py-px text-[9px] text-accent-light font-mono uppercase tracking-wider">
                 {usuario.perfil === "ADMIN" ? "Administrador" : "Operador de caixa"}
               </p>
             </div>
@@ -165,40 +194,46 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
 
           {usuario.perfil === "ADMIN" && <NotificacoesPushButton />}
 
-          <button
-            onClick={() => {
-              window.dispatchEvent(new Event(EVENTO_ABRIR_NOVIDADES));
-              onFechar();
-            }}
-            className={`${LINHA_BASE} ${LINHA_INATIVA}`}
-          >
-            <span className={`${ICONE_BASE} ${ICONE_INATIVO}`}>
-              <Sparkles className="w-[17px] h-[17px]" />
-            </span>
-            Novidades
-            {novidadeNova && (
-              <span className="ml-auto rounded-full bg-accent px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-primary-dark animate-pulse">
-                Novo
-              </span>
-            )}
-          </button>
-          <button onClick={() => setTrocandoUsuario(true)} className={`${LINHA_BASE} ${LINHA_INATIVA}`}>
-            <span className={`${ICONE_BASE} ${ICONE_INATIVO}`}>
-              <UserCog className="w-[17px] h-[17px]" />
-            </span>
-            Trocar usuário
-          </button>
-          <button
-            onClick={logout}
-            className={`${LINHA_BASE} text-white/70 hover:bg-red-500/15 hover:text-red-100`}
-          >
-            <span
-              className={`${ICONE_BASE} bg-white/5 text-white/70 group-hover:bg-red-500/25 group-hover:text-red-100 group-hover:scale-110 group-hover:-rotate-3`}
+          {/* Novidades, Trocar usuário e Sair: três ações lado a lado numa única fileira */}
+          <div className="grid grid-cols-3 gap-1">
+            <button
+              onClick={() => {
+                window.dispatchEvent(new Event(EVENTO_ABRIR_NOVIDADES));
+                onFechar();
+              }}
+              title={novidadeNova ? "Novidades (há novidade nova)" : "Novidades"}
+              className={`${ACAO_RODAPE} ${LINHA_INATIVA}`}
             >
-              <LogOut className="w-[17px] h-[17px]" />
-            </span>
-            Sair
-          </button>
+              <span className={`${ICONE} ${ICONE_INATIVO}`}>
+                <span aria-hidden="true" className={BRILHO_ICONE} />
+                <Sparkles className="relative w-4 h-4" strokeWidth={1.75} />
+              </span>
+              Novidades
+              {novidadeNova && (
+                <span className="absolute right-2 top-1 h-2 w-2 rounded-full bg-accent shadow-[0_0_8px_rgba(224,151,47,0.9)] animate-pulse">
+                  <span className="sr-only">Novo</span>
+                </span>
+              )}
+            </button>
+            <button
+              onClick={() => setTrocandoUsuario(true)}
+              title="Trocar usuário"
+              className={`${ACAO_RODAPE} ${LINHA_INATIVA}`}
+            >
+              <span className={`${ICONE} ${ICONE_INATIVO}`}>
+                <span aria-hidden="true" className={BRILHO_ICONE} />
+                <UserCog className="relative w-4 h-4" strokeWidth={1.75} />
+              </span>
+              Trocar
+            </button>
+            <button onClick={logout} title="Sair" className={`${ACAO_RODAPE} ${LINHA_PERIGO}`}>
+              <span className={`${ICONE} ${ICONE_PERIGO}`}>
+                <span aria-hidden="true" className={BRILHO_ICONE} />
+                <LogOut className="relative w-4 h-4" strokeWidth={1.75} />
+              </span>
+              Sair
+            </button>
+          </div>
         </div>
 
         {trocandoUsuario && <TrocarUsuarioModal onFechar={() => setTrocandoUsuario(false)} />}

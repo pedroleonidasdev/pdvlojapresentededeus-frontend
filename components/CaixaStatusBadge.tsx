@@ -47,7 +47,8 @@ export default function CaixaStatusBadge({
       ativo = false;
       clearInterval(intervalo);
     };
-  }, []);
+    // também reconsulta quando o usuário logado muda ("Trocar usuário" / sessão corrigida)
+  }, [usuario?.login]);
 
   if (caixa === undefined) return null;
 
@@ -72,6 +73,10 @@ export default function CaixaStatusBadge({
     operadores.sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
   }
 
+  // quem abriu é a mesma pessoa que está logada agora neste aparelho?
+  const abertoPorMim =
+    !!caixa?.usuarioAberturaLogin && !!usuario && normalizar(caixa.usuarioAberturaLogin) === normalizar(usuario.login);
+
   // "14/10/2026 às 08:13" (data completa, sem "hoje", para ficar explícito)
   const dataExplicita = (iso: string) => formatarDataHora(iso).replace(", ", " às ");
 
@@ -92,8 +97,8 @@ export default function CaixaStatusBadge({
     return (
       <div className={className}>
         <div
-          className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
-            aberto ? "text-success-light" : "text-red-200"
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur shadow-sm ${
+            aberto ? "border-emerald-300/40 bg-emerald-400/15 text-emerald-100" : "border-red-300/40 bg-red-400/15 text-red-100"
           }`}
           title={aberto ? "Caixa aberto" : "Caixa fechado"}
         >
@@ -101,55 +106,55 @@ export default function CaixaStatusBadge({
           {aberto ? "Caixa aberto" : "Caixa fechado"}
         </div>
         {aberto && caixa && (
-          <div className="mt-2 space-y-2.5 pl-4 leading-tight">
+          <div className="mt-1.5 space-y-1.5 pl-1 leading-tight">
             {/* quem abriu e quando */}
             <div title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}>
-              <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Aberto por</p>
-              <p className="truncate text-sm font-semibold text-white">{caixa.usuarioAberturaNome}</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-white/55">Aberto por</p>
+              <p className="truncate text-sm font-semibold text-white">
+                {caixa.usuarioAberturaNome}
+                {abertoPorMim && <span className="ml-1 text-xs font-normal text-white/70">(você)</span>}
+              </p>
               <p className="text-xs text-white/75">em {dataExplicita(caixa.dataAbertura)}</p>
             </div>
 
             {/* quem reabriu (só aparece se o caixa foi reaberto) */}
             {caixa.usuarioReaberturaNome && caixa.dataReabertura && (
               <div title={`Reaberto por ${caixa.usuarioReaberturaNome} em ${formatarDataHora(caixa.dataReabertura)}`}>
-                <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Reaberto por</p>
+                <p className="text-[10px] font-medium uppercase tracking-wide text-white/55">Reaberto por</p>
                 <p className="truncate text-sm font-semibold text-white">{caixa.usuarioReaberturaNome}</p>
                 <p className="text-xs text-white/75">em {dataExplicita(caixa.dataReabertura)}</p>
               </div>
             )}
 
-            {/* quem está operando agora (online) */}
+            {/* quem está operando agora (online), numa linha só */}
             {operadores.length > 0 && (
               <div
-                className="flex items-start gap-2 rounded-lg bg-white/10 px-2.5 py-1.5 ring-1 ring-accent/40"
-                title={`Online agora: ${operadores.map((o) => o.nome).join(", ")}`}
+                className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 ring-1 ring-accent/40"
+                title={`Operando agora: ${operadores.map((o) => o.nome).join(", ")}`}
               >
-                <UserRound className="mt-0.5 h-4 w-4 shrink-0 text-accent-light" />
-                <div className="min-w-0">
-                  <p className="text-[11px] font-medium uppercase tracking-wide text-accent-light">Operando agora</p>
-                  {operadores.map((o) => (
-                    <p key={o.login} className="truncate text-sm font-bold text-white">
-                      {o.nome}
-                    </p>
-                  ))}
-                </div>
+                <UserRound className="h-3.5 w-3.5 shrink-0 text-accent-light" />
+                <span className="text-[10px] font-medium uppercase tracking-wide text-accent-light">Operando</span>
+                <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">
+                  {operadores.map((o) => o.nome).join(", ")}
+                </span>
               </div>
             )}
 
-            {/* valor de abertura (editável) */}
+            {/* valor de abertura (editável), numa linha só */}
             <div
+              className="flex items-center justify-between gap-2"
               title={
                 caixa.valorInicialOriginal !== null
                   ? `Valor corrigido por ${caixa.usuarioEdicaoAberturaNome ?? "—"} (era ${formatarMoeda(caixa.valorInicialOriginal)})`
                   : "Valor de abertura do caixa"
               }
             >
-              <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Valor de abertura</p>
+              <p className="text-[10px] font-medium uppercase tracking-wide text-white/55">Abertura</p>
               <p className="flex items-center gap-1 text-sm font-semibold text-white">
-                <span>
+                <span className="font-mono">
                   {formatarMoeda(caixa.valorInicial)}
                   {caixa.valorInicialOriginal !== null && (
-                    <span className="ml-1 text-xs font-normal text-white/70">(corrigido)</span>
+                    <span className="ml-1 font-sans text-[10px] font-normal text-white/70">(corrigido)</span>
                   )}
                 </span>
                 <EditarAberturaCaixa caixa={caixa} onAtualizado={setCaixa} className="text-white/70 hover:bg-white/10" />
