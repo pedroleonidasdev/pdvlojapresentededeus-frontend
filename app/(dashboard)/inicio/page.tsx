@@ -11,12 +11,16 @@ import {
   CreditCard,
   Handshake,
   Lock,
+  Moon,
   Package,
   QrCode,
   Receipt,
   ShoppingBag,
+  Sun,
+  Sunrise,
   TrendingUp,
   Unlock,
+  UserRound,
   Zap,
   type LucideIcon,
 } from "lucide-react";
@@ -148,8 +152,81 @@ function Relogio() {
     const intervalo = setInterval(atualizar, 15_000);
     return () => clearInterval(intervalo);
   }, []);
+  const [hora, minuto] = (agora ?? "--:--").split(":");
   return (
-    <span className="font-mono text-3xl sm:text-4xl font-semibold tabular-nums tracking-tight">{agora ?? "--:--"}</span>
+    <span className="font-mono text-3xl sm:text-5xl font-semibold tabular-nums tracking-tight" aria-label={agora ?? undefined}>
+      {hora}
+      <span className="animate-pulse text-accent-light/80">:</span>
+      {minuto}
+    </span>
+  );
+}
+
+/** Ícone do período do dia, acompanhando a saudação (madrugada/noite = lua, manhã = nascer do sol, tarde = sol). */
+function PeriodoIcon({ className }: { className?: string }) {
+  const hora = new Date().getHours();
+  const Icone = hora < 5 || hora >= 18 ? Moon : hora < 12 ? Sunrise : Sun;
+  return <Icone aria-hidden className={className} />;
+}
+
+/**
+ * Indicador da faixa de comando: título pequeno, valor em destaque e uma linha de detalhe.
+ * Todos têm a mesma altura e o mesmo formato, então a faixa se lê da esquerda para a direita.
+ */
+function IndicadorHero({
+  icone,
+  titulo,
+  valor,
+  detalhe,
+  tom = "neutro",
+  pulsar = false,
+  href,
+}: {
+  icone: React.ReactNode;
+  titulo: string;
+  valor: string;
+  detalhe: string;
+  tom?: "neutro" | "sucesso" | "perigo" | "alerta";
+  pulsar?: boolean;
+  href?: string;
+}) {
+  const estilo = {
+    neutro: { caixa: "border-white/15 bg-white/10", icone: "bg-white/15 text-white", valor: "text-white" },
+    sucesso: { caixa: "border-emerald-300/40 bg-emerald-400/15", icone: "bg-emerald-400/25 text-emerald-100", valor: "text-emerald-50" },
+    perigo: { caixa: "border-red-300/40 bg-red-400/15", icone: "bg-red-400/25 text-red-100", valor: "text-red-50" },
+    alerta: { caixa: "border-amber-300/50 bg-amber-400/15", icone: "bg-amber-400/25 text-amber-100", valor: "text-amber-50" },
+  }[tom];
+  const classe = `group relative flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 backdrop-blur ${estilo.caixa} ${
+    href ? "hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white transition-colors" : ""
+  }`;
+  const conteudo = (
+    <>
+      <span className={`relative hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex ${estilo.icone}`}>
+        {icone}
+        {pulsar && (
+          <span aria-hidden className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
+            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-300" />
+          </span>
+        )}
+      </span>
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">
+          {pulsar && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-300 sm:hidden" />}
+          {titulo}
+        </span>
+        <span className={`block break-words text-sm sm:truncate sm:text-base font-bold tabular-nums ${estilo.valor}`}>{valor}</span>
+        <span className="block break-words text-[11px] text-white/65 sm:truncate">{detalhe}</span>
+      </span>
+      {href && <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-white/40 group-hover:text-white/80 transition-colors" />}
+    </>
+  );
+  return href ? (
+    <Link href={href} className={classe}>
+      {conteudo}
+    </Link>
+  ) : (
+    <div className={classe}>{conteudo}</div>
   );
 }
 
@@ -319,6 +396,21 @@ export default function InicioPage() {
   const caixaEsquecido = horasCaixa >= LIMITE_HORAS_CAIXA_ESQUECIDO;
 
   const temAlerta = (estoqueBaixo ?? 0) > 0 || (consignacoesAbertas?.length ?? 0) > 0;
+  const alertasTotal = (estoqueBaixo ?? 0) + (consignacoesAbertas?.length ?? 0);
+
+  // quem está operando agora (online no caixa aberto). O usuário técnico "admin" nunca entra na lista,
+  // igual ao menu lateral; o usuário deste aparelho é somado para não depender do próximo ciclo de presença.
+  const operadoresAgora: string[] = [];
+  if (caixa) {
+    const vistos = new Set<string>();
+    for (const o of [...(caixa.operadoresOnline ?? []), usuario]) {
+      const login = o.login.trim().toLowerCase();
+      if (login === "admin" || vistos.has(login)) continue;
+      vistos.add(login);
+      operadoresAgora.push(o.nome.split(" ")[0]);
+    }
+    operadoresAgora.sort((a, b) => a.localeCompare(b, "pt-BR"));
+  }
 
   // selos nos cards de atalho (ex: "3 abaixo do mínimo" no Estoque)
   const selos: Record<string, { texto: string; classe: string } | undefined> = {
@@ -342,7 +434,7 @@ export default function InicioPage() {
 
   return (
     <div className="min-h-full flex flex-col">
-      {/* ---------- Faixa de comando: saudação, status do caixa e relógio ---------- */}
+      {/* ---------- Faixa de comando: saudação, relógio e situação do dia num relance ---------- */}
       <div className="shrink-0 relative overflow-hidden bg-primary-dark text-white px-4 py-4 sm:px-8 sm:py-5">
         <div
           aria-hidden
@@ -355,46 +447,86 @@ export default function InicioPage() {
         />
         <div aria-hidden className="absolute -left-24 -top-28 w-80 h-80 rounded-full bg-accent/25 blur-3xl" />
         <div aria-hidden className="absolute -right-16 -bottom-32 w-96 h-96 rounded-full bg-info/35 blur-3xl" />
-        <div className="relative max-w-7xl mx-auto flex flex-wrap items-end justify-between gap-x-6 gap-y-3">
-          <div className="min-w-0">
-            <p className="font-mono text-xs uppercase tracking-[0.22em] text-white/60">
-              {saudacao()}, {primeiroNome}
-            </p>
-            <h1 className="mt-1 text-xl sm:text-2xl font-bold tracking-tight">O que você precisa fazer agora?</h1>
-            <div
-              className={`mt-3 inline-flex max-w-full items-center gap-2 rounded-full border px-3 py-1 text-xs font-medium backdrop-blur ${
-                carregando || caixa === undefined
-                  ? "border-white/20 bg-white/10 text-white/80"
-                  : caixa
-                    ? "border-emerald-300/40 bg-emerald-400/15 text-emerald-100"
-                    : "border-red-300/40 bg-red-400/15 text-red-100"
-              }`}
-            >
-              <span className="relative flex h-2 w-2 shrink-0">
-                {!carregando && caixa ? (
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
-                ) : null}
-                <span
-                  className={`relative inline-flex h-2 w-2 rounded-full ${
-                    carregando || caixa === undefined ? "bg-white/60" : caixa ? "bg-emerald-300" : "bg-red-300"
-                  }`}
-                />
-              </span>
-              <span className="truncate">
-                {carregando
-                  ? "Consultando o caixa…"
-                  : caixa === undefined
-                    ? "Caixa indisponível no momento"
-                    : caixa
-                      ? `Caixa aberto · ${caixa.usuarioAberturaNome} desde ${horaCurta(caixa.dataAbertura)}`
-                      : "Caixa fechado"}
-              </span>
+        <div className="relative max-w-7xl mx-auto flex flex-col gap-4">
+          {/* linha 1: quem é + pergunta | relógio e data */}
+          <div className="flex items-start justify-between gap-x-6 gap-y-2">
+            <div className="min-w-0">
+              <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.22em] text-white/60">
+                <PeriodoIcon className="w-4 h-4 shrink-0 text-accent-light" />
+                <span className="truncate">
+                  {saudacao()}, {primeiroNome}
+                </span>
+              </p>
+              <h1 className="mt-1 text-xl sm:text-3xl font-bold tracking-tight">O que você precisa fazer agora?</h1>
+            </div>
+            <div className="shrink-0 text-right leading-none">
+              <Relogio />
+              <p className="mt-1.5 text-xs sm:text-sm text-white/70">{dataPorExtenso()}</p>
             </div>
           </div>
-          <div className="text-right">
-            <Relogio />
-            <p className="text-xs sm:text-sm text-white/70">{dataPorExtenso()}</p>
-          </div>
+
+          {/* linha 2: situação do dia — 4 indicadores do mesmo tamanho, cada um com título, valor e detalhe */}
+          <section aria-label="Situação agora" className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+            <IndicadorHero
+              icone={caixa ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
+              titulo="Caixa"
+              tom={carregando || caixa === undefined ? "neutro" : caixa ? "sucesso" : "perigo"}
+              pulsar={!carregando && !!caixa}
+              valor={carregando ? "Consultando…" : caixa === undefined ? "Indisponível" : caixa ? "Aberto" : "Fechado"}
+              detalhe={
+                carregando || caixa === undefined
+                  ? "Tentando falar com o servidor"
+                  : caixa
+                    ? `${caixa.usuarioAberturaNome} · desde ${horaCurta(caixa.dataAbertura)}${horasCaixa >= 1 ? ` (${horasCaixa}h)` : ""}`
+                    : "Abra o caixa para vender"
+              }
+              href={!carregando && caixa === null ? "/pdv" : undefined}
+            />
+            <IndicadorHero
+              icone={<UserRound className="w-4 h-4" />}
+              titulo="Operando agora"
+              valor={carregando ? "—" : operadoresAgora.length > 0 ? operadoresAgora.join(", ") : "Ninguém online"}
+              detalhe={
+                carregando || !caixa
+                  ? "Aparece com o caixa aberto"
+                  : `${operadoresAgora.length} ${operadoresAgora.length === 1 ? "pessoa" : "pessoas"} no sistema`
+              }
+            />
+            <IndicadorHero
+              icone={<ShoppingBag className="w-4 h-4" />}
+              titulo="Vendido hoje"
+              valor={carregando ? "—" : vendas ? formatarMoeda(totalHoje) : "Indisponível"}
+              detalhe={
+                carregando || !vendas
+                  ? "Somando as vendas…"
+                  : vendas.length === 0
+                    ? "Nenhuma venda ainda"
+                    : `${vendas.length} ${vendas.length === 1 ? "venda" : "vendas"}${ticketMedio !== null ? ` · médio ${formatarMoeda(ticketMedio)}` : ""}`
+              }
+              href="/vendas"
+            />
+            <IndicadorHero
+              icone={temAlerta ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+              titulo="Atenção"
+              tom={carregando ? "neutro" : temAlerta ? "alerta" : "sucesso"}
+              valor={carregando ? "—" : temAlerta ? `${alertasTotal} ${alertasTotal === 1 ? "pendência" : "pendências"}` : "Tudo em ordem"}
+              detalhe={
+                carregando
+                  ? "Verificando…"
+                  : temAlerta
+                    ? [
+                        (estoqueBaixo ?? 0) > 0 ? `${estoqueBaixo} estoque` : null,
+                        (consignacoesAbertas?.length ?? 0) > 0
+                          ? `${consignacoesAbertas!.length} ${consignacoesAbertas!.length === 1 ? "consignação" : "consignações"}`
+                          : null,
+                      ]
+                        .filter(Boolean)
+                        .join(" · ")
+                    : "Estoque e consignações ok"
+              }
+              href={(estoqueBaixo ?? 0) > 0 ? "/estoque" : (consignacoesAbertas?.length ?? 0) > 0 ? "/consignados" : undefined}
+            />
+          </section>
         </div>
       </div>
 
