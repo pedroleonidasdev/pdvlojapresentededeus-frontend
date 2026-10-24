@@ -294,3 +294,40 @@ body {
     opacity: 0.6;
   }
 }
+
+/* ---------- Pop-up de nova mensagem do chat ----------
+   Ver components/AvisosMensagem.tsx. Entra deslizando da direita e a barrinha
+   de baixo é o cronômetro de 8 s até o aviso sumir sozinho. */
+@keyframes aviso-chat-entra {
+  from {
+    opacity: 0;
+    transform: translateX(1.5rem) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes aviso-chat-barra {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+
+.aviso-chat {
+  animation: aviso-chat-entra 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.15) both;
+}
+
+.aviso-chat-barra {
+  animation: aviso-chat-barra 8s linear forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aviso-chat {
+    animation: none;
+  }
+}

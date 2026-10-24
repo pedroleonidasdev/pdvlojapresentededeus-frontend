@@ -9,6 +9,7 @@ import SeletorEmoji from "@/components/SeletorEmoji";
 import GravadorAudio from "@/components/GravadorAudio";
 import MensagemAudio from "@/components/MensagemAudio";
 import MensagemArquivo from "@/components/MensagemArquivo";
+import AvisosMensagem, { AvisoChat } from "@/components/AvisosMensagem";
 import { MAX_ANEXO_BYTES, MAX_ANEXO_MB, formatarTamanho } from "@/lib/anexos";
 import { figurinhaTemTexto, soEmojis } from "@/lib/figurinhas";
 import { useChamada } from "@/components/ChamadaProvider";
@@ -67,6 +68,23 @@ function apitar() {
   }
 }
 
+/** Texto curto para o pop-up, conforme o tipo da mensagem. */
+function previaDaMensagem(m: Mensagem | undefined): string {
+  if (!m) return "Você recebeu uma nova mensagem.";
+  switch (m.tipo) {
+    case "AUDIO":
+      return "🎤 Mensagem de áudio";
+    case "ARQUIVO":
+      return "📎 Enviou um arquivo";
+    case "CHAMADA":
+      return "📞 Chamada";
+    default: {
+      const t = m.texto.trim().replace(/\s+/g, " ");
+      return t.length > 140 ? `${t.slice(0, 140)}…` : t || "Você recebeu uma nova mensagem.";
+    }
+  }
+}
+
 function formatarHora(iso: string): string {
   const d = new Date(iso);
   const hora = d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
@@ -92,6 +110,8 @@ export default function ChatSuporte() {
   // envio de arquivos: nome do que está subindo e o andamento (0-100)
   const [anexoEnviando, setAnexoEnviando] = useState<{ nome: string; progresso: number } | null>(null);
   const [arrastando, setArrastando] = useState(false);
+  // pop-ups de "nova mensagem" (um por contato, no máximo 3 na tela)
+  const [avisos, setAvisos] = useState<AvisoChat[]>([]);
 
   const abertoRef = useRef(false);
   const conversaIdRef = useRef<number | null>(null);
@@ -111,6 +131,37 @@ export default function ChatSuporte() {
     conversaIdRef.current = conversaId;
   }, [conversaId]);
 
+  /** Mostra o pop-up (e a notificação do navegador, se a aba estiver escondida) com o começo da mensagem. */
+  const anunciarNovas = useCallback(async (novos: Contato[]) => {
+    const lista = novos.slice(0, 3);
+    const previas = await Promise.all(
+      lista.map(async (c) => {
+        try {
+          const { data } = await api.get<Mensagem[]>(`/suporte/conversas/${c.id}/mensagens`);
+          return previaDaMensagem([...data].reverse().find((m) => m.remetenteId === c.id));
+        } catch {
+          return previaDaMensagem(undefined);
+        }
+      })
+    );
+    const hora = formatarHora(new Date().toISOString());
+    setAvisos((atuais) => {
+      const restantes = atuais.filter((a) => !lista.some((c) => a.contatoId === c.id));
+      const novosAvisos = lista.map((c, i) => ({
+        chave: `${c.id}-${Date.now()}-${i}`,
+        contatoId: c.id,
+        nome: c.nome,
+        previa: previas[i],
+        hora,
+        online: c.online,
+      }));
+      return [...novosAvisos, ...restantes].slice(0, 3);
+    });
+    if (document.hidden && "Notification" in window && Notification.permission === "granted") {
+      new Notification(`Mensagem de ${lista[0].nome}`, { body: previas[0], tag: "chat-suporte" });
+    }
+  }, []);
+
   const buscarContatos = useCallback(async () => {
     if (buscandoContatosRef.current) return;
     buscandoContatosRef.current = true;
@@ -129,16 +180,14 @@ export default function ChatSuporte() {
       });
       if (novos.length > 0) {
         apitar();
-        if (document.hidden && "Notification" in window && Notification.permission === "granted") {
-          new Notification(`Mensagem de ${novos[0].nome}`, { body: "Abra o sistema para responder.", tag: "chat-suporte" });
-        }
+        void anunciarNovas(novos);
       }
     } catch {
       // sem rede ou servidor acordando: tenta de novo no próximo ciclo
     } finally {
       buscandoContatosRef.current = false;
     }
-  }, []);
+  }, [anunciarNovas]);
 
   const buscarMensagens = useCallback(async () => {
     const id = conversaIdRef.current;
@@ -229,6 +278,7 @@ export default function ChatSuporte() {
   });
 
   function abrirConversa(id: number) {
+    setAvisos((atuais) => atuais.filter((a) => a.contatoId !== id));
     ultimoIdRef.current = null;
     conversaIdRef.current = id;
     setMensagens([]);
@@ -239,6 +289,12 @@ export default function ChatSuporte() {
     setGravando(false);
     setArrastando(false);
     setConversaId(id);
+  }
+
+  /** Clique no pop-up: abre o chat direto na conversa de quem mandou. */
+  function abrirPeloAviso(id: number) {
+    abrirChat();
+    abrirConversa(id);
   }
 
   function voltarParaLista() {
@@ -389,6 +445,11 @@ export default function ChatSuporte() {
 
   return (
     <>
+      <AvisosMensagem
+        avisos={avisos}
+        onAbrir={abrirPeloAviso}
+        onFechar={(chave) => setAvisos((atuais) => atuais.filter((a) => a.chave !== chave))}
+      />
       {aberto && (
         <div
           className="fixed right-4 md:right-auto md:left-[15.75rem] z-40 flex h-[min(34rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
