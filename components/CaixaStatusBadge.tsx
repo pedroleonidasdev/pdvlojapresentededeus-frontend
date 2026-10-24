@@ -92,8 +92,8 @@ export default function CaixaStatusBadge({
     return (
       <div className={className}>
         <div
-          className={`inline-flex items-center gap-1.5 text-xs font-semibold ${
-            aberto ? "text-success-light" : "text-red-200"
+          className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-xs font-semibold backdrop-blur shadow-sm ${
+            aberto ? "border-emerald-300/40 bg-emerald-400/15 text-emerald-100" : "border-red-300/40 bg-red-400/15 text-red-100"
           }`}
           title={aberto ? "Caixa aberto" : "Caixa fechado"}
         >
