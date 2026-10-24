@@ -47,7 +47,8 @@ export default function CaixaStatusBadge({
       ativo = false;
       clearInterval(intervalo);
     };
-  }, []);
+    // também reconsulta quando o usuário logado muda ("Trocar usuário" / sessão corrigida)
+  }, [usuario?.login]);
 
   if (caixa === undefined) return null;
 
@@ -71,6 +72,10 @@ export default function CaixaStatusBadge({
     }
     operadores.sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
   }
+
+  // quem abriu é a mesma pessoa que está logada agora neste aparelho?
+  const abertoPorMim =
+    !!caixa?.usuarioAberturaLogin && !!usuario && normalizar(caixa.usuarioAberturaLogin) === normalizar(usuario.login);
 
   // "14/10/2026 às 08:13" (data completa, sem "hoje", para ficar explícito)
   const dataExplicita = (iso: string) => formatarDataHora(iso).replace(", ", " às ");
@@ -105,7 +110,10 @@ export default function CaixaStatusBadge({
             {/* quem abriu e quando */}
             <div title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}>
               <p className="text-[11px] font-medium uppercase tracking-wide text-white/55">Aberto por</p>
-              <p className="truncate text-sm font-semibold text-white">{caixa.usuarioAberturaNome}</p>
+              <p className="truncate text-sm font-semibold text-white">
+                {caixa.usuarioAberturaNome}
+                {abertoPorMim && <span className="ml-1 text-xs font-normal text-white/70">(você)</span>}
+              </p>
               <p className="text-xs text-white/75">em {dataExplicita(caixa.dataAbertura)}</p>
             </div>
 

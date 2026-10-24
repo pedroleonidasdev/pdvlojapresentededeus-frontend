@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
+import { useAuth } from "@/lib/auth-context";
 import { avisarCaixaMudou } from "@/lib/caixa-eventos";
 import { Produto, FormaPagamento, Venda, Caixa } from "@/lib/types";
 import { imprimirCupom } from "@/lib/impressora";
@@ -40,6 +41,8 @@ const ETAPA_FINALIZACAO: Record<"processando" | "finalizando" | "sucesso", { tex
 };
 
 export default function PdvPage() {
+  const { usuario, revalidar } = useAuth();
+  const loginLogado = usuario?.login;
   const [busca, setBusca] = useState("");
   const [resultados, setResultados] = useState<Produto[]>([]);
   const [carrinho, setCarrinho] = useState<ItemCarrinho[]>([]);
@@ -79,7 +82,7 @@ export default function PdvPage() {
       }
     }
     verificarCaixa();
-  }, []);
+  }, [loginLogado]);
 
   // quando o caixa passa a estar aberto (acabou de abrir, ou já estava aberto ao
   // carregar a tela), devolve o foco ao campo de busca — o leitor de código de
@@ -92,8 +95,26 @@ export default function PdvPage() {
     setAbrindoCaixa(true);
     setErroCaixa(null);
     try {
+      // Quem abre o caixa tem que ser quem está logado. Antes de abrir, confere com o
+      // servidor quem é o dono do token desta aba: se for outra pessoa da que a tela
+      // mostra, a tela é corrigida e a abertura NÃO acontece (para não gravar o nome errado).
+      const exibido = usuario?.login;
+      const confirmado = await revalidar();
+      if (!confirmado) {
+        setErroCaixa("Não foi possível confirmar o usuário logado. Verifique a conexão e tente novamente.");
+        return;
+      }
+      if (exibido && exibido.toLowerCase() !== confirmado.login.toLowerCase()) {
+        setErroCaixa(
+          `A sessão desta tela estava desatualizada: quem está logado agora é ${confirmado.nome} (${confirmado.login}). ` +
+            "Confira o usuário no menu lateral e clique em abrir de novo."
+        );
+        return;
+      }
+
       const { data } = await api.post<Caixa>("/caixa/abrir", {
         valorInicial: Number(valorInicialCaixa.replace(",", ".")) || 0,
+        loginLogado: confirmado.login,
       });
       setCaixa(data);
       avisarCaixaMudou();
