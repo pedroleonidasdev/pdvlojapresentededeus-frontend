@@ -3,10 +3,8 @@
 import { useEffect, useState } from "react";
 import api from "@/lib/api";
 import { Caixa } from "@/lib/types";
-import { formatarDataHora, formatarMoeda, horasDesde } from "@/lib/format";
+import { horasDesde } from "@/lib/format";
 import { useAuth } from "@/lib/auth-context";
-import { UserRound } from "lucide-react";
-import EditarAberturaCaixa from "./EditarAberturaCaixa";
 
 /**
  * Bolinha de status do caixa: verde = aberto, vermelha = fechado.
@@ -59,27 +57,6 @@ export default function CaixaStatusBadge({
   const horasAberto = aberto && caixa ? Math.floor(horasDesde(caixa.dataAbertura)) : 0;
   const caixaEsquecido = horasAberto >= LIMITE_HORAS_ESQUECIDO;
 
-  // Quem está operando agora = quem está online (vem do backend, então aparece para
-  // qualquer pessoa que olhe a sidebar). O usuário técnico "admin" nunca entra na lista.
-  // O usuário logado neste aparelho é somado, para não depender do próximo ciclo de presença.
-  const normalizar = (n: string) => n.trim().toLowerCase();
-  const operadores: { nome: string; login: string }[] = [];
-  if (aberto && caixa) {
-    for (const o of [...(caixa.operadoresOnline ?? []), ...(usuario ? [usuario] : [])]) {
-      if (normalizar(o.login) === "admin") continue;
-      if (operadores.some((x) => normalizar(x.login) === normalizar(o.login))) continue;
-      operadores.push({ nome: o.nome, login: o.login });
-    }
-    operadores.sort((x, y) => x.nome.localeCompare(y.nome, "pt-BR"));
-  }
-
-  // quem abriu é a mesma pessoa que está logada agora neste aparelho?
-  const abertoPorMim =
-    !!caixa?.usuarioAberturaLogin && !!usuario && normalizar(caixa.usuarioAberturaLogin) === normalizar(usuario.login);
-
-  // "14/10/2026 às 08:13" (data completa, sem "hoje", para ficar explícito)
-  const dataExplicita = (iso: string) => formatarDataHora(iso).replace(", ", " às ");
-
   const dot = (
     <span className="relative flex h-2.5 w-2.5 shrink-0">
       {aberto && (
@@ -105,63 +82,6 @@ export default function CaixaStatusBadge({
           {dot}
           {aberto ? "Caixa aberto" : "Caixa fechado"}
         </div>
-        {aberto && caixa && (
-          <div className="mt-1.5 space-y-1.5 pl-1 leading-tight">
-            {/* quem abriu e quando */}
-            <div title={`Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura)}`}>
-              <p className="text-[10px] font-medium uppercase tracking-wide text-white/55">Aberto por</p>
-              <p className="truncate text-sm font-semibold text-white">
-                {caixa.usuarioAberturaNome}
-                {abertoPorMim && <span className="ml-1 text-xs font-normal text-white/70">(você)</span>}
-              </p>
-              <p className="text-xs text-white/75">em {dataExplicita(caixa.dataAbertura)}</p>
-            </div>
-
-            {/* quem reabriu (só aparece se o caixa foi reaberto) */}
-            {caixa.usuarioReaberturaNome && caixa.dataReabertura && (
-              <div title={`Reaberto por ${caixa.usuarioReaberturaNome} em ${formatarDataHora(caixa.dataReabertura)}`}>
-                <p className="text-[10px] font-medium uppercase tracking-wide text-white/55">Reaberto por</p>
-                <p className="truncate text-sm font-semibold text-white">{caixa.usuarioReaberturaNome}</p>
-                <p className="text-xs text-white/75">em {dataExplicita(caixa.dataReabertura)}</p>
-              </div>
-            )}
-
-            {/* quem está operando agora (online), numa linha só */}
-            {operadores.length > 0 && (
-              <div
-                className="flex items-center gap-1.5 rounded-lg bg-white/10 px-2 py-1 ring-1 ring-accent/40"
-                title={`Operando agora: ${operadores.map((o) => o.nome).join(", ")}`}
-              >
-                <UserRound className="h-3.5 w-3.5 shrink-0 text-accent-light" />
-                <span className="text-[10px] font-medium uppercase tracking-wide text-accent-light">Operando</span>
-                <span className="min-w-0 flex-1 truncate text-xs font-bold text-white">
-                  {operadores.map((o) => o.nome).join(", ")}
-                </span>
-              </div>
-            )}
-
-            {/* valor de abertura (editável), numa linha só */}
-            <div
-              className="flex items-center justify-between gap-2"
-              title={
-                caixa.valorInicialOriginal !== null
-                  ? `Valor corrigido por ${caixa.usuarioEdicaoAberturaNome ?? "—"} (era ${formatarMoeda(caixa.valorInicialOriginal)})`
-                  : "Valor de abertura do caixa"
-              }
-            >
-              <p className="text-[10px] font-medium uppercase tracking-wide text-white/55">Abertura</p>
-              <p className="flex items-center gap-1 text-sm font-semibold text-white">
-                <span className="font-mono">
-                  {formatarMoeda(caixa.valorInicial)}
-                  {caixa.valorInicialOriginal !== null && (
-                    <span className="ml-1 font-sans text-[10px] font-normal text-white/70">(corrigido)</span>
-                  )}
-                </span>
-                <EditarAberturaCaixa caixa={caixa} onAtualizado={setCaixa} className="text-white/70 hover:bg-white/10" />
-              </p>
-            </div>
-          </div>
-        )}
         {caixaEsquecido && (
           <p
             className="mt-2 pl-4 text-xs leading-tight font-medium text-amber-300"

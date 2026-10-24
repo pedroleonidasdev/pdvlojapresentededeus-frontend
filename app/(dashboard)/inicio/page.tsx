@@ -21,12 +21,14 @@ import {
   TrendingUp,
   Unlock,
   UserRound,
+  Wallet,
   Zap,
   type LucideIcon,
 } from "lucide-react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { BarraCarregamento } from "@/components/CarregamentoCatolico";
+import EditarAberturaCaixa from "@/components/EditarAberturaCaixa";
 import { NAV_ITEMS } from "@/lib/nav-items";
 import { Caixa, Consignacao, Produto, Venda } from "@/lib/types";
 import {
@@ -154,7 +156,7 @@ function Relogio() {
   }, []);
   const [hora, minuto] = (agora ?? "--:--").split(":");
   return (
-    <span className="font-mono text-3xl sm:text-5xl font-semibold tabular-nums tracking-tight" aria-label={agora ?? undefined}>
+    <span className="font-mono text-3xl sm:text-4xl font-semibold tabular-nums tracking-tight" aria-label={agora ?? undefined}>
       {hora}
       <span className="animate-pulse text-accent-light/80">:</span>
       {minuto}
@@ -181,6 +183,9 @@ function IndicadorHero({
   tom = "neutro",
   pulsar = false,
   href,
+  acao,
+  dica,
+  className = "",
 }: {
   icone: React.ReactNode;
   titulo: string;
@@ -189,44 +194,72 @@ function IndicadorHero({
   tom?: "neutro" | "sucesso" | "perigo" | "alerta";
   pulsar?: boolean;
   href?: string;
+  /** Botão extra à direita (ex.: lápis para corrigir o valor). Só em indicador sem link. */
+  acao?: React.ReactNode;
+  /** Texto completo ao passar o mouse. */
+  dica?: string;
+  className?: string;
 }) {
   const estilo = {
-    neutro: { caixa: "border-white/15 bg-white/10", icone: "bg-white/15 text-white", valor: "text-white" },
-    sucesso: { caixa: "border-emerald-300/40 bg-emerald-400/15", icone: "bg-emerald-400/25 text-emerald-100", valor: "text-emerald-50" },
-    perigo: { caixa: "border-red-300/40 bg-red-400/15", icone: "bg-red-400/25 text-red-100", valor: "text-red-50" },
-    alerta: { caixa: "border-amber-300/50 bg-amber-400/15", icone: "bg-amber-400/25 text-amber-100", valor: "text-amber-50" },
+    neutro: {
+      caixa: "border-white/15 from-white/15 to-white/[0.04]",
+      icone: "from-white/30 to-white/10 text-white",
+      valor: "text-white",
+    },
+    sucesso: {
+      caixa: "border-emerald-300/35 from-emerald-400/25 to-emerald-400/[0.04]",
+      icone: "from-emerald-300/55 to-emerald-500/20 text-emerald-50",
+      valor: "text-emerald-50",
+    },
+    perigo: {
+      caixa: "border-red-300/35 from-red-400/25 to-red-400/[0.04]",
+      icone: "from-red-300/55 to-red-500/20 text-red-50",
+      valor: "text-red-50",
+    },
+    alerta: {
+      caixa: "border-amber-300/45 from-amber-400/25 to-amber-400/[0.04]",
+      icone: "from-amber-300/60 to-amber-500/20 text-amber-50",
+      valor: "text-amber-50",
+    },
   }[tom];
-  const classe = `group relative flex min-w-0 items-center gap-2.5 rounded-xl border px-3 py-2.5 backdrop-blur ${estilo.caixa} ${
-    href ? "hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white transition-colors" : ""
-  }`;
+  const classe = `group relative flex min-w-0 items-center gap-2 rounded-xl border bg-gradient-to-br px-2.5 py-2 shadow-lg shadow-black/10 ring-1 ring-inset ring-white/5 backdrop-blur ${estilo.caixa} ${
+    href ? "hover:from-white/25 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-white transition" : ""
+  } ${className}`;
   const conteudo = (
     <>
-      <span className={`relative hidden h-9 w-9 shrink-0 items-center justify-center rounded-lg sm:flex ${estilo.icone}`}>
+      <span
+        className={`relative hidden h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br ring-1 ring-white/20 sm:flex ${estilo.icone}`}
+      >
         {icone}
         {pulsar && (
           <span aria-hidden className="absolute -right-0.5 -top-0.5 flex h-2.5 w-2.5">
             <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-300 opacity-75" />
-            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-300" />
+            <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-300 ring-2 ring-primary-dark" />
           </span>
         )}
       </span>
       <span className="min-w-0 flex-1 leading-tight">
-        <span className="flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-white/60">
+        <span className="flex items-center gap-1.5 text-[9.5px] font-semibold uppercase tracking-[0.16em] text-white/55">
           {pulsar && <span aria-hidden className="h-1.5 w-1.5 rounded-full bg-emerald-300 sm:hidden" />}
           {titulo}
         </span>
-        <span className={`block break-words text-sm sm:truncate sm:text-base font-bold tabular-nums ${estilo.valor}`}>{valor}</span>
-        <span className="block break-words text-[11px] text-white/65 sm:truncate">{detalhe}</span>
+        <span className={`block break-words text-sm font-bold tabular-nums sm:truncate sm:text-[15px] ${estilo.valor}`}>
+          {valor}
+        </span>
+        <span className="block break-words text-[10.5px] text-white/60 sm:truncate">{detalhe}</span>
       </span>
-      {href && <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-white/40 group-hover:text-white/80 transition-colors" />}
+      {acao}
+      {href && <ChevronRight aria-hidden className="h-4 w-4 shrink-0 text-white/35 transition-colors group-hover:text-white/80" />}
     </>
   );
   return href ? (
-    <Link href={href} className={classe}>
+    <Link href={href} title={dica} className={classe}>
       {conteudo}
     </Link>
   ) : (
-    <div className={classe}>{conteudo}</div>
+    <div title={dica} className={classe}>
+      {conteudo}
+    </div>
   );
 }
 
@@ -392,6 +425,10 @@ export default function InicioPage() {
   const maiorBarra = barrasHora ? Math.max(...barrasHora.map((b) => b.total), 0) : 0;
   const maiorVenda = vendas && vendas.length > 0 ? Math.max(...vendas.map((v) => v.total)) : null;
 
+  // quem abriu é a mesma pessoa logada neste aparelho?
+  const abertoPorMim =
+    !!caixa?.usuarioAberturaLogin && caixa.usuarioAberturaLogin.trim().toLowerCase() === usuario.login.trim().toLowerCase();
+
   const horasCaixa = caixa ? Math.floor(horasDesde(caixa.dataAbertura)) : 0;
   const caixaEsquecido = horasCaixa >= LIMITE_HORAS_CAIXA_ESQUECIDO;
 
@@ -435,38 +472,41 @@ export default function InicioPage() {
   return (
     <div className="min-h-full flex flex-col">
       {/* ---------- Faixa de comando: saudação, relógio e situação do dia num relance ---------- */}
-      <div className="shrink-0 relative overflow-hidden bg-primary-dark text-white px-4 py-4 sm:px-8 sm:py-5">
+      <div className="shrink-0 relative overflow-hidden bg-primary-dark text-white px-4 py-3 sm:px-8 sm:py-3.5">
         <div
           aria-hidden
           className="absolute inset-0 opacity-70"
           style={{
             backgroundImage:
               "linear-gradient(rgba(255,255,255,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.05) 1px, transparent 1px)",
-            backgroundSize: "32px 32px",
+            backgroundSize: "28px 28px",
           }}
         />
         <div aria-hidden className="absolute -left-24 -top-28 w-80 h-80 rounded-full bg-accent/25 blur-3xl" />
         <div aria-hidden className="absolute -right-16 -bottom-32 w-96 h-96 rounded-full bg-info/35 blur-3xl" />
-        <div className="relative max-w-7xl mx-auto flex flex-col gap-4">
+        <div aria-hidden className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-accent/70 to-transparent" />
+        <div className="relative max-w-7xl mx-auto flex flex-col gap-2.5">
           {/* linha 1: quem é + pergunta | relógio e data */}
-          <div className="flex items-start justify-between gap-x-6 gap-y-2">
+          <div className="flex items-center justify-between gap-x-6 gap-y-2">
             <div className="min-w-0">
-              <p className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.22em] text-white/60">
-                <PeriodoIcon className="w-4 h-4 shrink-0 text-accent-light" />
+              <p className="flex items-center gap-1.5 font-mono text-[11px] uppercase tracking-[0.22em] text-white/60">
+                <PeriodoIcon className="w-3.5 h-3.5 shrink-0 text-accent-light" />
                 <span className="truncate">
                   {saudacao()}, {primeiroNome}
                 </span>
               </p>
-              <h1 className="mt-1 text-xl sm:text-3xl font-bold tracking-tight">O que você precisa fazer agora?</h1>
+              <h1 className="mt-0.5 text-lg sm:text-2xl font-bold tracking-tight leading-tight">
+                O que você precisa fazer agora?
+              </h1>
             </div>
             <div className="shrink-0 text-right leading-none">
               <Relogio />
-              <p className="mt-1.5 text-xs sm:text-sm text-white/70">{dataPorExtenso()}</p>
+              <p className="mt-1 text-[11px] sm:text-xs text-white/65">{dataPorExtenso()}</p>
             </div>
           </div>
 
-          {/* linha 2: situação do dia — 4 indicadores do mesmo tamanho, cada um com título, valor e detalhe */}
-          <section aria-label="Situação agora" className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3">
+          {/* linha 2: situação do dia — indicadores do mesmo formato, cada um com título, valor e detalhe */}
+          <section aria-label="Situação agora" className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-2">
             <IndicadorHero
               icone={caixa ? <Unlock className="w-4 h-4" /> : <Lock className="w-4 h-4" />}
               titulo="Caixa"
@@ -475,12 +515,50 @@ export default function InicioPage() {
               valor={carregando ? "Consultando…" : caixa === undefined ? "Indisponível" : caixa ? "Aberto" : "Fechado"}
               detalhe={
                 carregando || caixa === undefined
-                  ? "Tentando falar com o servidor"
+                  ? "Falando com o servidor"
                   : caixa
-                    ? `${caixa.usuarioAberturaNome} · desde ${horaCurta(caixa.dataAbertura)}${horasCaixa >= 1 ? ` (${horasCaixa}h)` : ""}`
+                    ? caixa.usuarioReaberturaNome && caixa.dataReabertura
+                      ? `Reaberto por ${caixa.usuarioReaberturaNome} às ${horaCurta(caixa.dataReabertura)}`
+                      : `${caixa.usuarioAberturaNome}${abertoPorMim ? " (você)" : ""} · desde ${horaCurta(caixa.dataAbertura)}${horasCaixa >= 1 ? ` (${horasCaixa}h)` : ""}`
                     : "Abra o caixa para vender"
               }
+              dica={
+                caixa
+                  ? `Aberto por ${caixa.usuarioAberturaNome} em ${formatarDataHora(caixa.dataAbertura).replace(", ", " às ")}` +
+                    (caixa.usuarioReaberturaNome && caixa.dataReabertura
+                      ? ` · Reaberto por ${caixa.usuarioReaberturaNome} em ${formatarDataHora(caixa.dataReabertura).replace(", ", " às ")}`
+                      : "")
+                  : undefined
+              }
               href={!carregando && caixa === null ? "/pdv" : undefined}
+            />
+            <IndicadorHero
+              icone={<Wallet className="w-4 h-4" />}
+              titulo="Abertura"
+              valor={carregando ? "—" : caixa ? formatarMoeda(caixa.valorInicial) : "—"}
+              detalhe={
+                carregando
+                  ? "Consultando…"
+                  : caixa
+                    ? caixa.valorInicialOriginal !== null
+                      ? `Corrigido (era ${formatarMoeda(caixa.valorInicialOriginal)})`
+                      : "Valor inicial do caixa"
+                    : "Sem caixa aberto"
+              }
+              dica={
+                caixa && caixa.valorInicialOriginal !== null
+                  ? `Valor corrigido por ${caixa.usuarioEdicaoAberturaNome ?? "—"} (era ${formatarMoeda(caixa.valorInicialOriginal)})`
+                  : "Valor de abertura do caixa"
+              }
+              acao={
+                caixa ? (
+                  <EditarAberturaCaixa
+                    caixa={caixa}
+                    onAtualizado={(c) => setResumo((r) => (r ? { ...r, caixa: c } : r))}
+                    className="shrink-0 text-white/70 hover:bg-white/10"
+                  />
+                ) : null
+              }
             />
             <IndicadorHero
               icone={<UserRound className="w-4 h-4" />}
@@ -501,11 +579,13 @@ export default function InicioPage() {
                   ? "Somando as vendas…"
                   : vendas.length === 0
                     ? "Nenhuma venda ainda"
-                    : `${vendas.length} ${vendas.length === 1 ? "venda" : "vendas"}${ticketMedio !== null ? ` · médio ${formatarMoeda(ticketMedio)}` : ""}`
+                    : `${vendas.length} ${vendas.length === 1 ? "venda" : "vendas"}${ticketMedio !== null ? ` · méd. ${formatarMoeda(ticketMedio)}` : ""}`
               }
+              dica={ticketMedio !== null ? `Ticket médio de hoje: ${formatarMoeda(ticketMedio)}` : undefined}
               href="/vendas"
             />
             <IndicadorHero
+              className="col-span-2 xl:col-span-1"
               icone={temAlerta ? <AlertTriangle className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
               titulo="Atenção"
               tom={carregando ? "neutro" : temAlerta ? "alerta" : "sucesso"}
@@ -517,12 +597,17 @@ export default function InicioPage() {
                     ? [
                         (estoqueBaixo ?? 0) > 0 ? `${estoqueBaixo} estoque` : null,
                         (consignacoesAbertas?.length ?? 0) > 0
-                          ? `${consignacoesAbertas!.length} ${consignacoesAbertas!.length === 1 ? "consignação" : "consignações"}`
+                          ? `${consignacoesAbertas!.length} consig.`
                           : null,
                       ]
                         .filter(Boolean)
                         .join(" · ")
                     : "Estoque e consignações ok"
+              }
+              dica={
+                temAlerta
+                  ? `${estoqueBaixo ?? 0} produto(s) abaixo do mínimo · ${consignacoesAbertas?.length ?? 0} consignação(ões) aberta(s)${consignacoesVencidas ? ` (${consignacoesVencidas} vencida(s))` : ""}`
+                  : undefined
               }
               href={(estoqueBaixo ?? 0) > 0 ? "/estoque" : (consignacoesAbertas?.length ?? 0) > 0 ? "/consignados" : undefined}
             />
