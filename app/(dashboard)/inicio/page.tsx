@@ -9,16 +9,13 @@ import {
   CheckCircle2,
   ChevronRight,
   CreditCard,
-  Handshake,
   Lock,
   Moon,
-  Package,
   QrCode,
   Receipt,
   ShoppingBag,
   Sun,
   Sunrise,
-  TrendingUp,
   Unlock,
   UserRound,
   Wallet,
@@ -82,8 +79,6 @@ const GRUPO_POR_ROTA: Record<string, string> = {
   "/financas": "Gestão",
   "/usuarios": "Gestão",
 };
-
-const LIMITE_HORAS_CAIXA_ESQUECIDO = 12;
 
 interface Resumo {
   /** undefined = não deu para consultar (não mostra um estado errado); null = caixa fechado */
@@ -263,42 +258,6 @@ function IndicadorHero({
   );
 }
 
-function CartaoResumo({
-  icone,
-  titulo,
-  tom = "neutro",
-  children,
-}: {
-  icone: React.ReactNode;
-  titulo: string;
-  tom?: "neutro" | "sucesso" | "perigo" | "alerta";
-  children: React.ReactNode;
-}) {
-  // barra do topo + "azulejo" do ícone (degradê com brilho), conforme o estado do cartão
-  const estilo = {
-    sucesso: { barra: "from-success to-success/30", icone: "from-success to-success/70", brilho: "shadow-success/40" },
-    perigo: { barra: "from-danger to-danger/30", icone: "from-danger to-danger/70", brilho: "shadow-danger/40" },
-    alerta: { barra: "from-accent to-accent/30", icone: "from-accent to-accent-dark", brilho: "shadow-accent/40" },
-    neutro: { barra: "from-primary to-primary/30", icone: "from-primary to-primary-dark", brilho: "shadow-primary/40" },
-  }[tom];
-  return (
-    <div
-      className={`relative overflow-hidden rounded-2xl ${CARTAO_VIDRO} p-4 pt-5 flex flex-col gap-1.5 min-w-0 hover:-translate-y-0.5 transition`}
-    >
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${estilo.barra}`} />
-      <div className="flex items-center gap-3 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
-        <span
-          className={`w-10 h-10 rounded-xl bg-gradient-to-br ${estilo.icone} text-white flex items-center justify-center shrink-0 shadow-lg ${estilo.brilho} ring-1 ring-white/30`}
-        >
-          {icone}
-        </span>
-        {titulo}
-      </div>
-      {children}
-    </div>
-  );
-}
-
 export default function InicioPage() {
   const { usuario } = useAuth();
   const [resumo, setResumo] = useState<Resumo | null>(null);
@@ -407,30 +366,11 @@ export default function InicioPage() {
     ? consignacoesAbertas.filter((c) => c.prazoDevolucao && c.prazoDevolucao < hoje).length
     : null;
 
-  // mini-gráfico: vendas por hora (8h às 20h, horário de Brasília); fora disso entra na ponta mais próxima
-  const HORA_INICIAL = 8;
-  const HORA_FINAL = 20;
-  const barrasHora = vendas
-    ? Array.from({ length: HORA_FINAL - HORA_INICIAL + 1 }, (_, i) => {
-        const h = HORA_INICIAL + i;
-        const total = vendas
-          .filter((v) => {
-            const hv = Math.min(HORA_FINAL, Math.max(HORA_INICIAL, Number(horaCurta(v.dataHora).slice(0, 2))));
-            return hv === h;
-          })
-          .reduce((soma, v) => soma + v.total, 0);
-        return { h, total };
-      })
-    : null;
-  const maiorBarra = barrasHora ? Math.max(...barrasHora.map((b) => b.total), 0) : 0;
-  const maiorVenda = vendas && vendas.length > 0 ? Math.max(...vendas.map((v) => v.total)) : null;
-
   // quem abriu é a mesma pessoa logada neste aparelho?
   const abertoPorMim =
     !!caixa?.usuarioAberturaLogin && caixa.usuarioAberturaLogin.trim().toLowerCase() === usuario.login.trim().toLowerCase();
 
   const horasCaixa = caixa ? Math.floor(horasDesde(caixa.dataAbertura)) : 0;
-  const caixaEsquecido = horasCaixa >= LIMITE_HORAS_CAIXA_ESQUECIDO;
 
   const temAlerta = (estoqueBaixo ?? 0) > 0 || (consignacoesAbertas?.length ?? 0) > 0;
   const alertasTotal = (estoqueBaixo ?? 0) + (consignacoesAbertas?.length ?? 0);
@@ -616,155 +556,6 @@ export default function InicioPage() {
       </div>
 
       <div className="flex-1 flex flex-col gap-4 px-4 py-4 sm:px-8 sm:py-5 max-w-7xl w-full mx-auto">
-        {/* ---------- Resumo de hoje ---------- */}
-        <section aria-label="Resumo de hoje" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <CartaoResumo
-            titulo="Caixa"
-            tom={carregando || caixa === undefined ? "neutro" : caixa ? "sucesso" : "perigo"}
-            icone={caixa ? <Unlock className="w-5 h-5" strokeWidth={1.75} /> : <Lock className="w-5 h-5" strokeWidth={1.75} />}
-          >
-            {carregando ? (
-              <CarregandoCartao mensagem="Consultando o caixa…" progresso={progressoCarga} demorando={servidorDemorando} />
-            ) : caixa === undefined ? (
-              <p className="text-sm text-muted">Não foi possível consultar o caixa.</p>
-            ) : caixa ? (
-              <>
-                <p className="text-2xl font-bold tracking-tight text-success">Aberto</p>
-                <p className="text-xs text-muted truncate">
-                  {caixa.usuarioAberturaNome} · desde {horaCurta(caixa.dataAbertura)}
-                </p>
-                {caixaEsquecido && (
-                  <p className="text-xs font-medium text-accent-dark flex items-center gap-1">
-                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-                    Aberto há {horasCaixa}h — confira se precisa fechar
-                  </p>
-                )}
-                <Link
-                  href="/fechar-caixa"
-                  className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-lg border border-primary/40 bg-primary-soft px-3 py-1.5 text-xs font-semibold text-primary hover:bg-primary hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition-colors"
-                >
-                  Fechar caixa <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </>
-            ) : (
-              <>
-                <p className="text-2xl font-bold tracking-tight text-danger">Fechado</p>
-                <p className="text-xs text-muted">Abra o caixa para começar a vender.</p>
-                <Link
-                  href="/pdv"
-                  className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-lg bg-gradient-to-r from-primary to-primary-dark px-3 py-1.5 text-xs font-semibold text-white shadow-md shadow-primary/30 hover:brightness-110 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition"
-                >
-                  Abrir caixa <ArrowRight className="w-3.5 h-3.5" />
-                </Link>
-              </>
-            )}
-          </CartaoResumo>
-
-          <CartaoResumo titulo="Vendido hoje" icone={<ShoppingBag className="w-5 h-5" strokeWidth={1.75} />}>
-            {carregando ? (
-              <CarregandoCartao mensagem="Somando as vendas de hoje…" progresso={progressoCarga} demorando={servidorDemorando} />
-            ) : vendas ? (
-              <>
-                <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground">{formatarMoeda(totalHoje)}</p>
-                <p className="text-xs text-muted">
-                  {vendas.length === 0
-                    ? "Nenhuma venda ainda"
-                    : `${vendas.length} ${vendas.length === 1 ? "venda" : "vendas"}`}
-                </p>
-                {barrasHora && vendas.length > 0 && (
-                  <div className="mt-1.5 flex h-9 items-end gap-[3px]" role="img" aria-label="Vendas por hora, de 8h às 20h">
-                    {barrasHora.map((b) => (
-                      <span
-                        key={b.h}
-                        title={`${String(b.h).padStart(2, "0")}h · ${formatarMoeda(b.total)}`}
-                        className={`flex-1 rounded-sm ${b.total > 0 ? "bg-gradient-to-t from-primary to-info" : "bg-border/40"}`}
-                        style={{ height: b.total > 0 && maiorBarra > 0 ? `${Math.max(16, (b.total / maiorBarra) * 100)}%` : "8%" }}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted">Não foi possível consultar as vendas.</p>
-            )}
-          </CartaoResumo>
-
-          <CartaoResumo titulo="Ticket médio" icone={<TrendingUp className="w-5 h-5" strokeWidth={1.75} />}>
-            {carregando ? (
-              <CarregandoCartao mensagem="Calculando o ticket médio…" progresso={progressoCarga} demorando={servidorDemorando} />
-            ) : vendas ? (
-              <>
-                <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground">
-                  {ticketMedio !== null ? formatarMoeda(ticketMedio) : "—"}
-                </p>
-                <p className="text-xs text-muted">Valor médio por venda hoje</p>
-                {maiorVenda !== null && (
-                  <p className="mt-1 inline-flex w-fit items-center gap-1.5 rounded-md bg-info-light px-2 py-1 text-xs font-medium text-info-dark">
-                    <Zap className="w-3.5 h-3.5" />
-                    Maior venda: <span className="tabular-nums font-semibold">{formatarMoeda(maiorVenda)}</span>
-                  </p>
-                )}
-              </>
-            ) : (
-              <p className="text-sm text-muted">—</p>
-            )}
-          </CartaoResumo>
-
-          <CartaoResumo
-            titulo="Atenção"
-            tom={!carregando && temAlerta ? "alerta" : "sucesso"}
-            icone={
-              !carregando && temAlerta ? (
-                <AlertTriangle className="w-5 h-5" strokeWidth={1.75} />
-              ) : (
-                <CheckCircle2 className="w-5 h-5" strokeWidth={1.75} />
-              )
-            }
-          >
-            {carregando ? (
-              <CarregandoCartao mensagem="Verificando pendências…" progresso={progressoCarga} demorando={servidorDemorando} />
-            ) : !temAlerta ? (
-              <>
-                <p className="text-2xl font-bold tracking-tight text-success">Tudo certo</p>
-                <p className="text-xs text-muted">Nenhuma pendência por aqui.</p>
-              </>
-            ) : (
-              <ul className="flex flex-col gap-1.5">
-                {(estoqueBaixo ?? 0) > 0 && (
-                  <li>
-                    <Link
-                      href="/estoque"
-                      className="flex items-center gap-2 rounded-lg bg-accent-light/70 px-2.5 py-1.5 text-sm hover:bg-accent-light transition-colors"
-                    >
-                      <Package className="w-4 h-4 text-accent-dark shrink-0" />
-                      <span className="min-w-0">
-                        <strong>{estoqueBaixo}</strong> {estoqueBaixo === 1 ? "produto" : "produtos"} abaixo do mínimo
-                      </span>
-                    </Link>
-                  </li>
-                )}
-                {consignacoesAbertas && consignacoesAbertas.length > 0 && (
-                  <li>
-                    <Link
-                      href="/consignados"
-                      className="flex items-center gap-2 rounded-lg bg-info-light/70 px-2.5 py-1.5 text-sm hover:bg-info-light transition-colors"
-                    >
-                      <Handshake className="w-4 h-4 text-info shrink-0" />
-                      <span className="min-w-0">
-                        <strong>{consignacoesAbertas.length}</strong>{" "}
-                        {consignacoesAbertas.length === 1 ? "consignação aberta" : "consignações abertas"}
-                        {consignacoesVencidas ? (
-                          <span className="text-danger font-medium"> ({consignacoesVencidas} vencida{consignacoesVencidas === 1 ? "" : "s"})</span>
-                        ) : null}
-                      </span>
-                    </Link>
-                  </li>
-                )}
-              </ul>
-            )}
-          </CartaoResumo>
-        </section>
-
         <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_20rem] xl:grid-cols-[minmax(0,1fr)_22rem] gap-4 items-start">
           {/* ---------- Atalhos ---------- */}
           <div className="flex flex-col gap-4 min-w-0">
