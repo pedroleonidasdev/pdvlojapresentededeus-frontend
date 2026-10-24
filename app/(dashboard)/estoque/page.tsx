@@ -7,7 +7,7 @@ import { formatarMoeda } from "@/lib/format";
 import { situacaoEstoque, pesoSituacao } from "@/lib/estoque";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag, PackageX, ChevronRight } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag, PackageX, Package, Layers, Wallet, FilterX, Boxes } from "lucide-react";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
@@ -221,6 +221,29 @@ export default function EstoquePage() {
     [produtos]
   );
 
+  // números do topo: consideram todos os produtos ativos (não só os filtrados na tela)
+  const resumo = useMemo(() => {
+    let unidades = 0;
+    let valorVenda = 0;
+    let valorCusto = 0;
+    for (const produto of produtos) {
+      if (produto.ativo === false) continue;
+      const quantidade = Math.max(0, produto.quantidadeEstoque);
+      unidades += quantidade;
+      valorVenda += quantidade * produto.precoVenda;
+      if (produto.precoCusto != null) valorCusto += quantidade * produto.precoCusto;
+    }
+    return { unidades, valorVenda, valorCusto };
+  }, [produtos]);
+
+  const temFiltro = busca.trim() !== "" || categoriaFiltro !== "todas" || filtroEspecial !== "todos";
+
+  function limparFiltros() {
+    setBusca("");
+    setCategoriaFiltro("todas");
+    setFiltroEspecial("todos");
+  }
+
   return (
     <div>
       <PageHeader
@@ -237,66 +260,76 @@ export default function EstoquePage() {
                 setProdutoEmEdicao(null);
                 setModalAberto(true);
               }}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+              className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary transition"
             >
-              <Plus className="w-4 h-4" /> Novo produto
+              <Plus className="w-4 h-4" strokeWidth={2.25} /> Novo produto
             </button>
           )
         }
       />
 
-      <div className="p-4 md:p-8">
-        {!carregando && (emFalta.length > 0 || estoqueBaixo.length > 0) && (
-          <div className="mb-4 space-y-2">
-            {emFalta.length > 0 && (
-              <AlertaEstoque
-                tipo="em-falta"
-                produtos={emFalta}
-                ativo={filtroEspecial === "em-falta"}
-                onClick={() =>
-                  setFiltroEspecial((atual) => (atual === "em-falta" ? "todos" : "em-falta"))
-                }
-              />
-            )}
-            {estoqueBaixo.length > 0 && (
-              <AlertaEstoque
-                tipo="baixo"
-                produtos={estoqueBaixo}
-                ativo={filtroEspecial === "estoque-baixo"}
-                onClick={() =>
-                  setFiltroEspecial((atual) => (atual === "estoque-baixo" ? "todos" : "estoque-baixo"))
-                }
-              />
-            )}
-          </div>
+      <div className="p-4 md:p-8 space-y-4">
+        {/* ---------- Indicadores ---------- */}
+        {!carregando && (
+          <section aria-label="Resumo do estoque" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <CartaoIndicador
+              icone={<Package className="w-5 h-5" strokeWidth={1.75} />}
+              titulo="Produtos"
+              valor={String(produtos.length)}
+              detalhe={`${categorias.length} ${categorias.length === 1 ? "categoria" : "categorias"}`}
+            />
+            <CartaoIndicador
+              icone={<Layers className="w-5 h-5" strokeWidth={1.75} />}
+              titulo="Unidades em estoque"
+              valor={resumo.unidades.toLocaleString("pt-BR")}
+              detalhe="Soma de todos os produtos ativos"
+              tom="info"
+            />
+            <CartaoIndicador
+              icone={<Wallet className="w-5 h-5" strokeWidth={1.75} />}
+              titulo="Valor em estoque"
+              valor={formatarMoeda(resumo.valorVenda)}
+              detalhe={
+                isAdmin && resumo.valorCusto > 0
+                  ? `A preço de venda · custo ${formatarMoeda(resumo.valorCusto)}`
+                  : "A preço de venda"
+              }
+              tom="alerta"
+            />
+          </section>
         )}
 
-        <div className="mb-4 flex flex-wrap items-center gap-3">
-          <div className="relative w-full max-w-sm">
-            <input
-              type="text"
-              value={busca}
-              onChange={(e) => setBusca(e.target.value)}
-              placeholder="Buscar por nome, código ou categoria..."
-              className="input pl-3 pr-9 w-full"
-            />
-            {busca ? (
-              <button
-                onClick={() => setBusca("")}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted hover:text-foreground"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            ) : (
-              <Search className="w-4 h-4 text-muted absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-            )}
-          </div>
+        {/* ---------- Busca, filtros e ferramentas ---------- */}
+        <section
+          aria-label="Filtros"
+          className="rounded-2xl bg-surface/95 border border-border/70 ring-1 ring-white/60 shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-3 sm:p-4 space-y-3"
+        >
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-full sm:max-w-sm sm:flex-1">
+              <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                placeholder="Buscar por nome, código ou categoria..."
+                className="input pl-10! pr-9! py-2.5! w-full"
+              />
+              {busca && (
+                <button
+                  onClick={() => setBusca("")}
+                  aria-label="Limpar busca"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted hover:text-foreground hover:bg-background transition"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
 
-          <div className="flex items-center gap-2">
             <select
               value={categoriaFiltro}
               onChange={(e) => setCategoriaFiltro(e.target.value)}
-              className="input py-2"
+              aria-label="Filtrar por categoria"
+              className="input py-2.5! w-auto!"
             >
               <option value="todas">Todas as categorias</option>
               <option value="sem-categoria">Sem categoria</option>
@@ -308,85 +341,115 @@ export default function EstoquePage() {
                   </option>
                 ))}
             </select>
+
+            <div className="flex items-center gap-2">
+              <ArrowUpDown className="w-4 h-4 text-muted shrink-0" />
+              <select
+                value={ordenacao}
+                onChange={(e) => setOrdenacao(e.target.value as typeof ordenacao)}
+                aria-label="Ordenar por"
+                className="input py-2.5! w-auto!"
+              >
+                <option value="nome-asc">Nome (A-Z)</option>
+                <option value="nome-desc">Nome (Z-A)</option>
+                <option value="criticos">Mais críticos primeiro</option>
+                <option value="padrao">Ordem de cadastro</option>
+              </select>
+            </div>
+
+            {temFiltro && (
+              <button
+                onClick={limparFiltros}
+                className="inline-flex items-center gap-1.5 text-sm font-medium text-muted hover:text-foreground px-2.5 py-2 rounded-lg hover:bg-background transition"
+              >
+                <FilterX className="w-4 h-4" />
+                Limpar filtros
+              </button>
+            )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <ArrowUpDown className="w-4 h-4 text-muted shrink-0" />
-            <select
-              value={ordenacao}
-              onChange={(e) => setOrdenacao(e.target.value as typeof ordenacao)}
-              className="input py-2"
+          {/* atalhos de filtro, com a contagem de cada um */}
+          {!carregando && (
+            <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Situação do estoque">
+              <ChipFiltro ativo={filtroEspecial === "todos"} onClick={() => setFiltroEspecial("todos")} contagem={produtos.length}>
+                Todos
+              </ChipFiltro>
+              {emFalta.length > 0 && (
+                <ChipFiltro
+                  tom="perigo"
+                  ativo={filtroEspecial === "em-falta"}
+                  onClick={() => setFiltroEspecial((atual) => (atual === "em-falta" ? "todos" : "em-falta"))}
+                  contagem={emFalta.length}
+                  icone={<PackageX className="w-3.5 h-3.5" />}
+                >
+                  Em falta
+                </ChipFiltro>
+              )}
+              {estoqueBaixo.length > 0 && (
+                <ChipFiltro
+                  tom="alerta"
+                  ativo={filtroEspecial === "estoque-baixo"}
+                  onClick={() => setFiltroEspecial((atual) => (atual === "estoque-baixo" ? "todos" : "estoque-baixo"))}
+                  contagem={estoqueBaixo.length}
+                  icone={<AlertTriangle className="w-3.5 h-3.5" />}
+                >
+                  Estoque baixo
+                </ChipFiltro>
+              )}
+              {duplicados.size > 0 && (
+                <ChipFiltro
+                  tom="alerta"
+                  ativo={filtroEspecial === "duplicados"}
+                  onClick={() => setFiltroEspecial((atual) => (atual === "duplicados" ? "todos" : "duplicados"))}
+                  contagem={duplicados.size}
+                  icone={<Copy className="w-3.5 h-3.5" />}
+                  dica="Produtos com o mesmo nome (ignorando acento/maiúscula) ou o mesmo código de barras cadastrados mais de uma vez"
+                >
+                  Possíveis duplicados
+                </ChipFiltro>
+              )}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50">
+            {isAdmin && semCodigoCount > 0 && (
+              <button onClick={gerarCodigosFaltantes} disabled={gerandoCodigos} className={BOTAO_FERRAMENTA}>
+                {gerandoCodigos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Barcode className="w-4 h-4" />}
+                Gerar códigos faltantes ({semCodigoCount})
+              </button>
+            )}
+            {selecionados.size > 0 && (
+              <button onClick={() => setFolhaEtiquetasAberta(true)} className={BOTAO_FERRAMENTA}>
+                <Printer className="w-4 h-4" />
+                Imprimir etiquetas ({selecionados.size})
+              </button>
+            )}
+            <button
+              onClick={() => setFolhaEstoqueAberta(true)}
+              disabled={produtosFiltrados.length === 0}
+              title="Gera uma folha para imprimir e conferir o estoque físico contra o sistema"
+              className={BOTAO_FERRAMENTA}
             >
-              <option value="nome-asc">Nome (A-Z)</option>
-              <option value="nome-desc">Nome (Z-A)</option>
-              <option value="criticos">Mais críticos primeiro</option>
-              <option value="padrao">Ordem de cadastro</option>
-            </select>
+              <ClipboardList className="w-4 h-4" />
+              Imprimir estoque para conferência
+              {produtosFiltrados.length !== produtos.length && ` (${produtosFiltrados.length})`}
+            </button>
           </div>
-        </div>
+        </section>
 
         {mensagem && (
-          <div className="mb-4 rounded-lg bg-primary-light text-primary-dark text-sm px-4 py-2.5 flex items-center gap-2">
+          <div
+            role="status"
+            className="rounded-xl border border-success/25 bg-success-light text-success text-sm font-medium px-4 py-3 flex items-center gap-2"
+          >
             <CheckCircle2 className="w-4 h-4 shrink-0" />
             {mensagem}
           </div>
         )}
 
-        <div className="mb-4 flex flex-wrap items-center gap-2">
-          {duplicados.size > 0 && (
-            <button
-              onClick={() =>
-                setFiltroEspecial((atual) => (atual === "duplicados" ? "todos" : "duplicados"))
-              }
-              title="Produtos com o mesmo nome (ignorando acento/maiúscula) ou o mesmo código de barras cadastrados mais de uma vez"
-              className={`flex items-center gap-2 text-sm font-medium px-3 py-2 rounded-lg border transition ${
-                filtroEspecial === "duplicados"
-                  ? "bg-accent text-white border-accent"
-                  : "bg-surface text-accent-dark border-accent/30 hover:bg-accent/10"
-              }`}
-            >
-              <Copy className="w-4 h-4" />
-              Possíveis duplicados ({duplicados.size})
-            </button>
-          )}
-          {isAdmin && semCodigoCount > 0 && (
-            <button
-              onClick={gerarCodigosFaltantes}
-              disabled={gerandoCodigos}
-              className="flex items-center gap-2 bg-surface border border-border hover:bg-background text-foreground text-sm font-medium px-3 py-2 rounded-lg transition disabled:opacity-50"
-            >
-              {gerandoCodigos ? (
-                <Loader2 className="w-4 h-4 animate-spin" />
-              ) : (
-                <Barcode className="w-4 h-4" />
-              )}
-              Gerar códigos faltantes ({semCodigoCount})
-            </button>
-          )}
-          {selecionados.size > 0 && (
-            <button
-              onClick={() => setFolhaEtiquetasAberta(true)}
-              className="flex items-center gap-2 bg-surface border border-border hover:bg-background text-foreground text-sm font-medium px-3 py-2 rounded-lg transition"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimir etiquetas ({selecionados.size})
-            </button>
-          )}
-          <button
-            onClick={() => setFolhaEstoqueAberta(true)}
-            disabled={produtosFiltrados.length === 0}
-            title="Gera uma folha para imprimir e conferir o estoque físico contra o sistema"
-            className="flex items-center gap-2 bg-surface border border-border hover:bg-background text-foreground text-sm font-medium px-3 py-2 rounded-lg transition disabled:opacity-50"
-          >
-            <ClipboardList className="w-4 h-4" />
-            Imprimir estoque para conferência
-            {produtosFiltrados.length !== produtos.length && ` (${produtosFiltrados.length})`}
-          </button>
-        </div>
-
         {isAdmin && selecionados.size > 0 && (
-          <div className="mb-4 rounded-lg border border-border bg-surface px-4 py-3 flex flex-wrap items-center gap-3">
-            <span className="text-sm font-medium">
+          <div className="rounded-2xl border border-primary/30 bg-primary-soft px-4 py-3 flex flex-wrap items-center gap-3 shadow-sm">
+            <span className="text-sm font-semibold text-primary-dark">
               {selecionados.size} produto(s) selecionado(s)
               {selecionadosForaDoFiltro > 0 && (
                 <span className="text-muted font-normal"> ({selecionadosForaDoFiltro} fora do filtro atual)</span>
@@ -395,7 +458,7 @@ export default function EstoquePage() {
             <select
               value={categoriaLote}
               onChange={(e) => setCategoriaLote(e.target.value)}
-              className="input py-2"
+              className="input py-2! w-auto!"
             >
               <option value="">Escolher a nova categoria...</option>
               <option value="sem-categoria">Sem categoria</option>
@@ -410,7 +473,7 @@ export default function EstoquePage() {
             <button
               onClick={aplicarCategoriaLote}
               disabled={!categoriaLote || aplicandoCategoria}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
+              className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2 rounded-xl shadow-md shadow-primary/25 hover:brightness-110 transition disabled:opacity-50"
             >
               {aplicandoCategoria ? <Loader2 className="w-4 h-4 animate-spin" /> : <Tag className="w-4 h-4" />}
               Aplicar categoria aos selecionados
@@ -427,148 +490,210 @@ export default function EstoquePage() {
         {carregando ? (
           <CarregandoSecao />
         ) : (
-          <div className="bg-surface border border-border rounded-xl overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
-              <thead className="bg-background border-b border-border">
-                <tr className="text-left text-muted">
-                  <th className="px-5 py-3 font-medium w-8">
-                    <input
-                      type="checkbox"
-                      checked={
-                        produtosFiltrados.length > 0 &&
-                        produtosFiltrados.every((p) => selecionados.has(p.id))
-                      }
-                      onChange={(e) => {
-                        setSelecionados((atual) => {
-                          const novo = new Set(atual);
-                          if (e.target.checked) {
-                            produtosFiltrados.forEach((p) => novo.add(p.id));
-                          } else {
-                            produtosFiltrados.forEach((p) => novo.delete(p.id));
-                          }
-                          return novo;
-                        });
-                      }}
-                      className="w-4 h-4 rounded border-border"
-                    />
-                  </th>
-                  <th className="px-5 py-3 font-medium">Produto</th>
-                  <th className="px-5 py-3 font-medium">Categoria</th>
-                  <th className="px-5 py-3 font-medium">Preço</th>
-                  <th className="px-5 py-3 font-medium">Estoque</th>
-                  {isAdmin && <th className="px-5 py-3 font-medium text-right">Ações</th>}
-                </tr>
-              </thead>
-              <tbody>
-                {produtosFiltrados.map((produto) => {
-                  const situacao = situacaoEstoque(produto);
-                  return (
-                    <tr
-                      key={produto.id}
-                      className={`border-b border-border last:border-0 ${
-                        situacao === "em-falta"
-                          ? "bg-danger-light/60"
-                          : situacao === "baixo"
-                            ? "bg-accent-light/50"
-                            : ""
-                      }`}
-                    >
-                      <td className="px-5 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selecionados.has(produto.id)}
-                          onChange={() => alternarSelecao(produto.id)}
-                          className="w-4 h-4 rounded border-border"
-                        />
-                      </td>
-                      <td className="px-5 py-3">
-                        <div className="flex items-center gap-2">
-                          <p className="font-medium text-foreground">{produto.nome}</p>
-                          {duplicados.has(produto.id) && (
+          <div className="bg-surface border border-border/70 rounded-2xl overflow-hidden shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)]">
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm min-w-[720px]">
+                <thead className="bg-primary-soft border-b border-border/70">
+                  <tr className="text-left text-[11px] uppercase tracking-wider text-muted">
+                    <th className="pl-5 pr-2 py-3 font-semibold w-8">
+                      <input
+                        type="checkbox"
+                        aria-label="Selecionar todos os produtos da lista"
+                        checked={
+                          produtosFiltrados.length > 0 &&
+                          produtosFiltrados.every((p) => selecionados.has(p.id))
+                        }
+                        onChange={(e) => {
+                          setSelecionados((atual) => {
+                            const novo = new Set(atual);
+                            if (e.target.checked) {
+                              produtosFiltrados.forEach((p) => novo.add(p.id));
+                            } else {
+                              produtosFiltrados.forEach((p) => novo.delete(p.id));
+                            }
+                            return novo;
+                          });
+                        }}
+                        className="w-4 h-4 rounded border-border accent-primary"
+                      />
+                    </th>
+                    <th className="px-4 py-3 font-semibold">Produto</th>
+                    <th className="px-4 py-3 font-semibold">Categoria</th>
+                    <th className="px-4 py-3 font-semibold text-right">Preço</th>
+                    <th className="px-4 py-3 font-semibold">Estoque</th>
+                    {isAdmin && <th className="px-5 py-3 font-semibold text-right">Ações</th>}
+                  </tr>
+                </thead>
+                <tbody>
+                  {produtosFiltrados.map((produto) => {
+                    const situacao = situacaoEstoque(produto);
+                    const marcado = selecionados.has(produto.id);
+                    return (
+                      <tr
+                        key={produto.id}
+                        className={`border-b border-border/50 last:border-0 transition-colors ${
+                          marcado
+                            ? "bg-primary-soft"
+                            : situacao === "em-falta"
+                              ? "bg-danger-light/50 hover:bg-danger-light"
+                              : situacao === "baixo"
+                                ? "bg-accent-light/40 hover:bg-accent-light/70"
+                                : "hover:bg-primary-soft/50"
+                        }`}
+                      >
+                        <td className="pl-5 pr-2 py-3">
+                          <input
+                            type="checkbox"
+                            aria-label={`Selecionar ${produto.nome}`}
+                            checked={marcado}
+                            onChange={() => alternarSelecao(produto.id)}
+                            className="w-4 h-4 rounded border-border accent-primary"
+                          />
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex items-center gap-3 min-w-0">
                             <span
-                              title={`Possível duplicado: ${[...new Set(duplicados.get(produto.id))].join(" e ")}`}
-                              className="inline-flex items-center gap-1 text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-accent-light text-accent-dark shrink-0"
+                              aria-hidden
+                              className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl text-sm font-bold ring-1 ring-inset ${
+                                situacao === "em-falta"
+                                  ? "bg-danger-light text-danger ring-danger/20"
+                                  : situacao === "baixo"
+                                    ? "bg-accent-light text-accent-dark ring-accent/30"
+                                    : "bg-primary-light text-primary ring-primary/15"
+                              }`}
                             >
-                              <Copy className="w-2.5 h-2.5" />
-                              Duplicado
+                              {(produto.nome ?? "?").trim().charAt(0).toUpperCase() || "?"}
                             </span>
-                          )}
-                        </div>
-                        {produto.codigoBarras && (
-                          <p className="text-xs text-muted font-mono">{produto.codigoBarras}</p>
-                        )}
-                      </td>
-                      <td className="px-5 py-3 text-muted">{produto.categoria?.nome ?? "—"}</td>
-                      <td className="px-5 py-3 font-mono">{formatarMoeda(produto.precoVenda)}</td>
-                      <td className="px-5 py-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span
-                            className={`font-mono font-semibold ${
-                              situacao === "em-falta"
-                                ? "text-danger"
-                                : situacao === "baixo"
-                                  ? "text-accent-dark"
-                                  : "text-foreground"
-                            }`}
-                          >
-                            {produto.quantidadeEstoque}
-                          </span>
-                          {situacao === "em-falta" && (
-                            <span
-                              title="Produto sem estoque — precisa ser reposto"
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-danger text-white"
-                            >
-                              <PackageX className="w-3 h-3" />
-                              Em falta
-                            </span>
-                          )}
-                          {situacao === "baixo" && (
-                            <span
-                              title={`Abaixo do mínimo (${produto.estoqueMinimo})`}
-                              className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent text-white"
-                            >
-                              <AlertTriangle className="w-3 h-3" />
-                              Estoque baixo
-                            </span>
-                          )}
-                        </div>
-                        {produto.estoqueMinimo != null && (
-                          <p className="text-[11px] text-muted mt-0.5">mínimo: {produto.estoqueMinimo}</p>
-                        )}
-                      </td>
-                      {isAdmin && (
-                        <td className="px-5 py-3">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => {
-                                setProdutoEmEdicao(produto);
-                                setModalAberto(true);
-                              }}
-                              className="p-1.5 rounded-md text-muted hover:bg-background hover:text-primary transition"
-                            >
-                              <Pencil className="w-4 h-4" />
-                            </button>
-                            <button
-                              onClick={() => excluirProduto(produto.id)}
-                              className="p-1.5 rounded-md text-muted hover:bg-background hover:text-danger transition"
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </button>
+                            <div className="min-w-0">
+                              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                                <p className="font-semibold text-foreground leading-tight">{produto.nome}</p>
+                                {duplicados.has(produto.id) && (
+                                  <span
+                                    title={`Possível duplicado: ${[...new Set(duplicados.get(produto.id))].join(" e ")}`}
+                                    className="inline-flex items-center gap-1 text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-accent-light text-accent-dark shrink-0"
+                                  >
+                                    <Copy className="w-2.5 h-2.5" />
+                                    Duplicado
+                                  </span>
+                                )}
+                              </div>
+                              {produto.codigoBarras && (
+                                <p className="mt-0.5 flex items-center gap-1 text-[11px] text-muted font-mono">
+                                  <Barcode className="w-3 h-3 shrink-0" />
+                                  {produto.codigoBarras}
+                                </p>
+                              )}
+                            </div>
                           </div>
                         </td>
-                      )}
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-            {produtosFiltrados.length === 0 && (
-              <p className="text-center text-sm text-muted py-10">
-                {busca
-                  ? "Nenhum produto encontrado para essa busca."
-                  : filtroEspecial !== "todos" || categoriaFiltro !== "todas"
-                    ? "Nenhum produto neste filtro."
-                    : "Nenhum produto cadastrado."}
+                        <td className="px-4 py-3">
+                          {produto.categoria?.nome ? (
+                            <span className="inline-flex rounded-full bg-primary-light/70 px-2.5 py-0.5 text-xs font-medium text-primary-dark">
+                              {produto.categoria.nome}
+                            </span>
+                          ) : (
+                            <span className="text-muted">—</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-3 text-right">
+                          <p className="font-mono font-semibold tabular-nums">{formatarMoeda(produto.precoVenda)}</p>
+                          {isAdmin && produto.precoCusto != null && (
+                            <p className="text-[11px] text-muted font-mono tabular-nums">custo {formatarMoeda(produto.precoCusto)}</p>
+                          )}
+                        </td>
+                        <td className="px-4 py-3">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span
+                              className={`inline-flex min-w-10 justify-center rounded-lg px-2.5 py-1 font-mono text-sm font-bold tabular-nums ${
+                                situacao === "em-falta"
+                                  ? "bg-danger-light text-danger"
+                                  : situacao === "baixo"
+                                    ? "bg-accent-light text-accent-dark"
+                                    : "bg-success-light text-success"
+                              }`}
+                            >
+                              {produto.quantidadeEstoque}
+                            </span>
+                            {situacao === "em-falta" && (
+                              <span
+                                title="Produto sem estoque — precisa ser reposto"
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-danger text-white"
+                              >
+                                <PackageX className="w-3 h-3" />
+                                Em falta
+                              </span>
+                            )}
+                            {situacao === "baixo" && (
+                              <span
+                                title={`Abaixo do mínimo (${produto.estoqueMinimo})`}
+                                className="inline-flex items-center gap-1 text-[11px] font-semibold px-2 py-0.5 rounded-full bg-accent text-white"
+                              >
+                                <AlertTriangle className="w-3 h-3" />
+                                Estoque baixo
+                              </span>
+                            )}
+                          </div>
+                          {produto.estoqueMinimo != null && (
+                            <p className="text-[11px] text-muted mt-1">mínimo: {produto.estoqueMinimo}</p>
+                          )}
+                        </td>
+                        {isAdmin && (
+                          <td className="px-5 py-3">
+                            <div className="flex justify-end gap-1">
+                              <button
+                                onClick={() => {
+                                  setProdutoEmEdicao(produto);
+                                  setModalAberto(true);
+                                }}
+                                aria-label={`Editar ${produto.nome}`}
+                                title="Editar"
+                                className="p-2 rounded-lg text-muted hover:bg-primary-light hover:text-primary transition"
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => excluirProduto(produto.id)}
+                                aria-label={`Excluir ${produto.nome}`}
+                                title="Excluir"
+                                className="p-2 rounded-lg text-muted hover:bg-danger-light hover:text-danger transition"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        )}
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+
+            {produtosFiltrados.length === 0 ? (
+              <div className="flex flex-col items-center gap-3 px-6 py-14 text-center">
+                <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-primary-light text-primary">
+                  <Boxes className="w-7 h-7" strokeWidth={1.6} />
+                </span>
+                <p className="text-sm text-muted">
+                  {busca
+                    ? "Nenhum produto encontrado para essa busca."
+                    : temFiltro
+                      ? "Nenhum produto neste filtro."
+                      : "Nenhum produto cadastrado."}
+                </p>
+                {temFiltro && (
+                  <button
+                    onClick={limparFiltros}
+                    className="inline-flex items-center gap-1.5 rounded-xl border border-border bg-surface px-3.5 py-2 text-sm font-medium text-foreground hover:bg-background transition"
+                  >
+                    <FilterX className="w-4 h-4" />
+                    Limpar filtros
+                  </button>
+                )}
+              </div>
+            ) : (
+              <p className="px-5 py-2.5 text-xs text-muted border-t border-border/50 bg-primary-soft/40">
+                Mostrando {produtosFiltrados.length} {produtosFiltrados.length === 1 ? "produto" : "produtos"}
               </p>
             )}
           </div>
@@ -855,55 +980,99 @@ function ModalProduto({
   );
 }
 
-const NOMES_NO_ALERTA = 3;
+/** Botão discreto da faixa de ferramentas (etiquetas, conferência, códigos). */
+const BOTAO_FERRAMENTA =
+  "flex items-center gap-2 bg-surface border border-border hover:bg-primary-soft text-foreground text-sm font-medium px-3.5 py-2 rounded-xl transition disabled:opacity-50";
 
-function AlertaEstoque({
-  tipo,
-  produtos,
+/** Cartão de indicador do topo da tela (mesmo estilo dos cartões da tela Início). */
+function CartaoIndicador({
+  icone,
+  titulo,
+  valor,
+  detalhe,
+  tom = "neutro",
+}: {
+  icone: React.ReactNode;
+  titulo: string;
+  valor: string;
+  detalhe: string;
+  tom?: "neutro" | "info" | "alerta";
+}) {
+  const estilo = {
+    neutro: { barra: "from-primary to-primary/30", icone: "from-primary to-primary-dark", brilho: "shadow-primary/40" },
+    info: { barra: "from-info to-info/30", icone: "from-info to-info-dark", brilho: "shadow-info/40" },
+    alerta: { barra: "from-accent to-accent/30", icone: "from-accent to-accent-dark", brilho: "shadow-accent/40" },
+  }[tom];
+  return (
+    <div className="relative overflow-hidden rounded-2xl bg-surface/95 border border-white/70 ring-1 ring-border/40 shadow-[0_10px_30px_-14px_rgba(15,51,42,0.45)] p-4 pt-5 flex items-center gap-3.5 min-w-0">
+      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${estilo.barra}`} />
+      <span
+        className={`w-11 h-11 rounded-xl bg-gradient-to-br ${estilo.icone} text-white flex items-center justify-center shrink-0 shadow-lg ${estilo.brilho} ring-1 ring-white/30`}
+      >
+        {icone}
+      </span>
+      <div className="min-w-0">
+        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{titulo}</p>
+        <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground leading-tight truncate">{valor}</p>
+        <p className="text-xs text-muted truncate">{detalhe}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Botão-chip de filtro rápido, com a contagem do grupo. */
+function ChipFiltro({
   ativo,
   onClick,
+  contagem,
+  tom = "neutro",
+  icone,
+  dica,
+  children,
 }: {
-  tipo: "em-falta" | "baixo";
-  produtos: Produto[];
   ativo: boolean;
   onClick: () => void;
+  contagem: number;
+  tom?: "neutro" | "perigo" | "alerta";
+  icone?: React.ReactNode;
+  dica?: string;
+  children: React.ReactNode;
 }) {
-  const emFalta = tipo === "em-falta";
-  const qtd = produtos.length;
-  const titulo = emFalta
-    ? `${qtd} ${qtd === 1 ? "produto em falta" : "produtos em falta"}`
-    : `${qtd} ${qtd === 1 ? "produto com estoque baixo" : "produtos com estoque baixo"}`;
-
-  const nomes = [...produtos]
-    .sort((a, b) => (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" }))
-    .slice(0, NOMES_NO_ALERTA)
-    .map((p) => p.nome);
-  const restantes = qtd - nomes.length;
-  const detalhe = nomes.join(", ") + (restantes > 0 ? ` e mais ${restantes}` : "");
-
+  const cores = {
+    neutro: {
+      ativo: "bg-primary text-white border-primary shadow-md shadow-primary/25",
+      inativo: "bg-surface text-foreground border-border hover:bg-primary-soft",
+      numero: "bg-primary-light text-primary-dark",
+    },
+    perigo: {
+      ativo: "bg-danger text-white border-danger shadow-md shadow-danger/25",
+      inativo: "bg-danger-light text-danger border-danger/30 hover:bg-danger/10",
+      numero: "bg-danger/15 text-danger",
+    },
+    alerta: {
+      ativo: "bg-accent text-white border-accent shadow-md shadow-accent/25",
+      inativo: "bg-accent-light text-accent-dark border-accent/40 hover:bg-accent/15",
+      numero: "bg-accent/20 text-accent-dark",
+    },
+  }[tom];
   return (
     <button
       type="button"
       onClick={onClick}
       aria-pressed={ativo}
-      className={`w-full text-left flex items-center gap-3 rounded-xl border px-4 py-3 transition ${
-        emFalta
-          ? ativo
-            ? "bg-danger text-white border-danger"
-            : "bg-danger-light text-danger border-danger/40 hover:bg-danger/10"
-          : ativo
-            ? "bg-accent text-white border-accent"
-            : "bg-accent-light text-accent-dark border-accent/40 hover:bg-accent/20"
+      title={dica}
+      className={`inline-flex items-center gap-1.5 rounded-full border pl-3 pr-1.5 py-1 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
+        ativo ? cores.ativo : cores.inativo
       }`}
     >
-      {emFalta ? <PackageX className="w-5 h-5 shrink-0" /> : <AlertTriangle className="w-5 h-5 shrink-0" />}
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold">{titulo}</span>
-        <span className={`block text-xs truncate ${ativo ? "text-white/90" : "opacity-80"}`}>{detalhe}</span>
-      </span>
-      <span className="shrink-0 flex items-center gap-1 text-xs font-medium">
-        {ativo ? "Mostrando — clique para ver todos" : "Ver produtos"}
-        <ChevronRight className="w-4 h-4" />
+      {icone}
+      {children}
+      <span
+        className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-[11px] font-bold tabular-nums ${
+          ativo ? "bg-white/25 text-white" : cores.numero
+        }`}
+      >
+        {contagem}
       </span>
     </button>
   );
