@@ -331,3 +331,41 @@ body {
     animation: none;
   }
 }
+
+/* ---------- Tela de login ----------
+   O cartão entra suavemente e as "luzes" do fundo flutuam bem devagar. */
+@keyframes login-entra {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.985);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes login-flutua {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(1.5rem, -1rem, 0);
+  }
+}
+
+.login-entra {
+  animation: login-entra 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.login-orb {
+  animation: login-flutua 14s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-entra,
+  .login-orb {
+    animation: none;
+  }
+}
