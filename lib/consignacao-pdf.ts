@@ -8,10 +8,58 @@ const LARANJA: [number, number, number] = [232, 115, 26];
 const AZUL: [number, number, number] = [26, 127, 143];
 const CINZA: [number, number, number] = [217, 217, 217];
 
+/** Altura das barras (mm) e altura mínima da linha para caber número + código de barras. */
+const ALTURA_BARRAS = 6.5;
+const ALTURA_LINHA_COM_BARRAS = 15;
+
+type GeradorBarras = (alvo: object, texto: string, opcoes: object) => void;
+
+/** Converte o código em uma sequência de módulos ("1" = barra, "0" = espaço). Null se não der para codificar. */
+function modulosCodigoBarras(gerar: GeradorBarras, cod: string): string | null {
+  const texto = cod.trim();
+  if (!texto || texto === "-") return null;
+  for (const format of ["EAN13", "CODE128"]) {
+    try {
+      const alvo: { encodings?: { data: string }[] } = {};
+      gerar(alvo, texto, { format, displayValue: false, margin: 0 });
+      const modulos = (alvo.encodings ?? []).map((e) => e.data).join("");
+      if (modulos) return modulos;
+    } catch {
+      // formato não aceita esse código — tenta o próximo
+    }
+  }
+  return null;
+}
+
+/** Desenha as barras em vetor (nítido em qualquer zoom/impressão), centralizadas no rodapé da célula. */
+function desenharBarras(
+  d: { setFillColor: (r: number, g: number, b: number) => unknown; rect: (x: number, y: number, w: number, h: number, estilo: string) => unknown },
+  modulos: string,
+  cell: { x: number; y: number; width: number; height: number }
+) {
+  const largModulo = Math.min(0.3, (cell.width - 3) / modulos.length);
+  const largTotal = largModulo * modulos.length;
+  const x0 = cell.x + (cell.width - largTotal) / 2;
+  const y0 = cell.y + cell.height - ALTURA_BARRAS - 1.8;
+  d.setFillColor(0, 0, 0);
+  let i = 0;
+  while (i < modulos.length) {
+    if (modulos[i] === "1") {
+      let j = i;
+      while (j < modulos.length && modulos[j] === "1") j++;
+      d.rect(x0 + i * largModulo, y0, (j - i) * largModulo, ALTURA_BARRAS, "F");
+      i = j;
+    } else {
+      i++;
+    }
+  }
+}
+
 /** PDF A4 vetorial (texto selecionável): Termo de Responsabilidade + Relatório de mercadorias. */
 export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
   const { jsPDF } = await import("jspdf");
   const autoTable = (await import("jspdf-autotable")).default;
+  const gerarBarras = (await import("jsbarcode")).default as unknown as GeradorBarras;
   const logo = await carregarLogo();
 
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
@@ -120,6 +168,8 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
   const corpo: Celula[][] = [];
   /** true nas linhas que são título de categoria (precisam ficar junto do primeiro produto) */
   const ehCategoria: boolean[] = [];
+  /** código de cada linha do corpo (null nos títulos de categoria), para desenhar as barras */
+  const codigos: (string | null)[] = [];
   for (const g of m.grupos) {
     corpo.push([
       {
@@ -129,9 +179,13 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
       },
     ]);
     ehCategoria.push(true);
+    codigos.push(null);
     for (const l of g.linhas) {
       corpo.push([
-        l.cod,
+        {
+          content: l.cod,
+          styles: { halign: "center", valign: "top", fontSize: 9, minCellHeight: ALTURA_LINHA_COM_BARRAS },
+        },
         l.produto,
         String(l.qtdEnviada),
         formatarMoeda(l.vlrUnitario),
@@ -140,6 +194,7 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
         l.vlrVendido === null ? "" : formatarMoeda(l.vlrVendido),
       ]);
       ehCategoria.push(false);
+      codigos.push(l.cod);
     }
   }
 
@@ -175,8 +230,8 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
         footStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: "bold" },
         // soma = 180 mm (largura útil da página); a coluna do produto é a mais larga
         columnStyles: {
-          0: { cellWidth: 28 }, // cabe um código de barras de 13 dígitos
-          1: { cellWidth: 46 },
+          0: { cellWidth: 31 }, // número + código de barras EAN-13 logo abaixo
+          1: { cellWidth: 43 },
           2: { cellWidth: 17, ...centro },
           3: { cellWidth: 22, ...direita },
           4: { cellWidth: 25, ...direita }, // cabe o total em negrito (ex.: R$ 10.852,40) sem quebrar
@@ -205,9 +260,17 @@ export async function gerarPdfConsignacao(m: ModeloConsignacao): Promise<Blob> {
           ],
         ] as never,
         showFoot: ultimo ? "lastPage" : "never",
-        didDrawCell: (data: { section: string; column: { index: number }; row: { index: number } }) => {
+        didDrawCell: (data: {
+          section: string;
+          column: { index: number };
+          row: { index: number };
+          cell: { x: number; y: number; width: number; height: number };
+        }) => {
           if (data.section === "body" && data.column.index === 0) {
             paginas[inicio + data.row.index] = d.getCurrentPageInfo().pageNumber;
+            const cod = codigos[inicio + data.row.index];
+            const modulos = cod ? modulosCodigoBarras(gerarBarras, cod) : null;
+            if (modulos) desenharBarras(d, modulos, data.cell);
           }
         },
       });
