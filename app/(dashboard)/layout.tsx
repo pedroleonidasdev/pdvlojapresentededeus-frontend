@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
 import { encontrarNavItemPorPath } from "@/lib/nav-items";
@@ -11,7 +11,8 @@ import MonitorCaixa from "@/components/MonitorCaixa";
 import ChatSuporte from "@/components/ChatSuporte";
 import { ChamadaProvider } from "@/components/ChamadaProvider";
 import api from "@/lib/api";
-import { Menu } from "lucide-react";
+import { Menu, MessageCircle } from "lucide-react";
+import { ESTADO_CHAT_SERVIDOR, alternarChat, assinarEstadoChat, lerEstadoChat } from "@/lib/chat-eventos";
 import { TelaCarregamento } from "@/components/CarregamentoCatolico";
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
@@ -19,6 +20,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const router = useRouter();
   const pathname = usePathname();
   const [menuAberto, setMenuAberto] = useState(false);
+  const chat = useSyncExternalStore(assinarEstadoChat, lerEstadoChat, () => ESTADO_CHAT_SERVIDOR);
 
   // rota atual não permitida para o perfil do usuário logado (ex: CAIXA acessando /usuarios)
   const item = pathname ? encontrarNavItemPorPath(pathname) : undefined;
@@ -72,7 +74,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
           <div className="w-7 h-7 rounded-md overflow-hidden ring-1 ring-white/20 shrink-0">
             <img src="/icon-192.png" alt="" className="w-full h-full object-cover" />
           </div>
-          <p className="font-semibold text-sm truncate">Sistema de Gestão</p>
+          <p className="font-semibold text-sm truncate flex-1 min-w-0">Sistema de Gestão</p>
+          <button
+            onClick={alternarChat}
+            className="relative p-1.5 -mr-1.5 rounded-lg hover:bg-white/10 transition shrink-0"
+            aria-label={chat.naoLidas > 0 ? `Abrir conversas (${chat.naoLidas} não lidas)` : "Abrir conversas"}
+          >
+            <MessageCircle className={`w-6 h-6 ${chat.naoLidas > 0 ? "animate-pulse" : ""}`} />
+            {chat.naoLidas > 0 && (
+              <span className="absolute -right-0.5 -top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[10px] font-bold text-white">
+                {chat.naoLidas > 9 ? "9+" : chat.naoLidas}
+              </span>
+            )}
+          </button>
         </div>
 
         <main

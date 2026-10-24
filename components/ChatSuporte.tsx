@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Loader2, MessageCircle, Mic, Paperclip, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Loader2, Mic, Paperclip, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
 import SeletorEmoji from "@/components/SeletorEmoji";
 import GravadorAudio from "@/components/GravadorAudio";
 import MensagemAudio from "@/components/MensagemAudio";
@@ -12,6 +12,7 @@ import MensagemArquivo from "@/components/MensagemArquivo";
 import { MAX_ANEXO_BYTES, MAX_ANEXO_MB, formatarTamanho } from "@/lib/anexos";
 import { figurinhaTemTexto, soEmojis } from "@/lib/figurinhas";
 import { useChamada } from "@/components/ChamadaProvider";
+import { EVENTO_ALTERNAR_CHAT, publicarEstadoChat } from "@/lib/chat-eventos";
 
 interface Contato {
   id: number;
@@ -212,6 +213,21 @@ export default function ChatSuporte() {
     }
   }
 
+  // avisa o menu lateral / barra do celular (que têm o botão "Conversas") do total de não lidas e se está aberto
+  useEffect(() => {
+    publicarEstadoChat({ naoLidas: totalNaoLidas, aberto });
+  }, [totalNaoLidas, aberto]);
+
+  // o botão "Conversas" do menu pede para abrir/fechar o chat por este evento
+  useEffect(() => {
+    function alternar() {
+      if (abertoRef.current) setAberto(false);
+      else abrirChat();
+    }
+    window.addEventListener(EVENTO_ALTERNAR_CHAT, alternar);
+    return () => window.removeEventListener(EVENTO_ALTERNAR_CHAT, alternar);
+  });
+
   function abrirConversa(id: number) {
     ultimoIdRef.current = null;
     conversaIdRef.current = id;
@@ -373,28 +389,9 @@ export default function ChatSuporte() {
 
   return (
     <>
-      {!aberto && (
-        <button
-          onClick={abrirChat}
-          aria-label="Abrir conversas"
-          className={`fixed right-4 z-40 flex items-center gap-2 rounded-full bg-primary hover:bg-primary-dark text-white shadow-lg px-4 py-3 text-sm font-medium transition ${
-            totalNaoLidas > 0 ? "animate-pulse" : ""
-          }`}
-          style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
-        >
-          <MessageCircle className="w-5 h-5" />
-          Conversas
-          {totalNaoLidas > 0 && (
-            <span className="min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-xs flex items-center justify-center">
-              {totalNaoLidas > 9 ? "9+" : totalNaoLidas}
-            </span>
-          )}
-        </button>
-      )}
-
       {aberto && (
         <div
-          className="fixed right-4 z-40 flex h-[min(32rem,calc(100dvh-6rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+          className="fixed right-4 md:right-auto md:left-[15.75rem] z-40 flex h-[min(34rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
           style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
         >
           <div className="flex items-center justify-between gap-2 bg-primary px-3 py-3 text-white">

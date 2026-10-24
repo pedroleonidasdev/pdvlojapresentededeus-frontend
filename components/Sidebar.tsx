@@ -4,7 +4,7 @@ import { Fragment, useState, useSyncExternalStore } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useAuth } from "@/lib/auth-context";
-import { ChevronRight, LogOut, Sparkles, UserCog, X } from "lucide-react";
+import { ChevronRight, LogOut, MessageCircle, Sparkles, UserCog, X } from "lucide-react";
 import { NAV_ITEMS, LayoutGrid } from "@/lib/nav-items";
 import TrocarUsuarioModal from "./TrocarUsuarioModal";
 import CaixaStatusBadge from "./CaixaStatusBadge";
@@ -18,12 +18,13 @@ import {
   LINHA_INATIVA,
   LINHA_PERIGO,
 } from "@/lib/sidebar-estilos";
+import { ESTADO_CHAT_SERVIDOR, alternarChat, assinarEstadoChat, lerEstadoChat } from "@/lib/chat-eventos";
 import { EVENTO_ABRIR_NOVIDADES, EVENTO_NOVIDADES_VISTAS, temNovidadeNaoVista } from "@/lib/novidades";
 
 // Tamanhos COMPACTOS do menu (definidos aqui para o menu caber na tela sem barra de
 // rolagem). As cores/brilhos continuam vindo de @/lib/sidebar-estilos.
 //  - linha do menu: ícone de 28px (era ~40px) e pouco espaço vertical
-//  - ação do rodapé: ícone em cima, rótulo minúsculo embaixo, três lado a lado
+//  - ação do rodapé: ícone em cima, rótulo minúsculo embaixo, quatro lado a lado
 const LINHA = "group relative flex w-full items-center gap-2.5 rounded-xl px-2 py-1 text-left text-[13px] font-medium transition";
 const ICONE = "relative flex h-7 w-7 shrink-0 items-center justify-center overflow-hidden rounded-lg transition";
 const ACAO_RODAPE =
@@ -68,6 +69,9 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
   const [trocandoUsuario, setTrocandoUsuario] = useState(false);
   // selo "NOVO" no botão Novidades enquanto existir novidade que este navegador ainda não viu
   const novidadeNova = useSyncExternalStore(assinarNovidades, temNovidadeNaoVista, () => false);
+
+  // "Conversas": total de não lidas e se o chat está aberto (o painel fica no ChatSuporte)
+  const chat = useSyncExternalStore(assinarEstadoChat, lerEstadoChat, () => ESTADO_CHAT_SERVIDOR);
 
   if (!usuario) return null;
 
@@ -194,8 +198,28 @@ export default function Sidebar({ aberta, onFechar }: { aberta: boolean; onFecha
 
           {usuario.perfil === "ADMIN" && <NotificacoesPushButton />}
 
-          {/* Novidades, Trocar usuário e Sair: três ações lado a lado numa única fileira */}
-          <div className="grid grid-cols-3 gap-1">
+          {/* Conversas, Novidades, Trocar usuário e Sair: quatro ações lado a lado numa única fileira */}
+          <div className="grid grid-cols-4 gap-1">
+            <button
+              onClick={() => {
+                alternarChat();
+                onFechar();
+              }}
+              title={chat.naoLidas > 0 ? `Conversas (${chat.naoLidas} não lida${chat.naoLidas === 1 ? "" : "s"})` : "Conversas"}
+              aria-pressed={chat.aberto}
+              className={`${ACAO_RODAPE} ${chat.aberto ? LINHA_ATIVA : LINHA_INATIVA}`}
+            >
+              <span className={`${ICONE} ${chat.aberto ? ICONE_ATIVO : ICONE_INATIVO}`}>
+                <span aria-hidden="true" className={BRILHO_ICONE} />
+                <MessageCircle className={`relative w-4 h-4 ${chat.naoLidas > 0 ? "animate-pulse" : ""}`} strokeWidth={1.75} />
+              </span>
+              Conversas
+              {chat.naoLidas > 0 && (
+                <span className="absolute right-1 top-0.5 flex h-4 min-w-4 items-center justify-center rounded-full bg-danger px-1 text-[9px] font-bold text-white shadow-[0_0_8px_rgba(185,74,59,0.9)]">
+                  {chat.naoLidas > 9 ? "9+" : chat.naoLidas}
+                </span>
+              )}
+            </button>
             <button
               onClick={() => {
                 window.dispatchEvent(new Event(EVENTO_ABRIR_NOVIDADES));

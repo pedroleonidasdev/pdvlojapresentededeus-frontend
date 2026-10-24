@@ -16,6 +16,16 @@ export interface Novidade {
 
 export const NOVIDADES: Novidade[] = [
   {
+    id: "2026-10-24-conversas-no-menu",
+    data: "2026-10-24",
+    titulo: "Conversas agora fica no menu",
+    itens: [
+      "O balão “Conversas” saiu do canto da tela, onde atrapalhava a venda. Agora o botão “Conversas” fica no rodapé do menu lateral, com o número de mensagens não lidas.",
+      "No celular, o botão fica na barra verde do topo, ao lado do nome do sistema.",
+      "Ao abrir, a janela da conversa aparece ao lado do menu. Para fechar, use o X ou clique em “Conversas” de novo.",
+    ],
+  },
+  {
     id: "2026-10-21-chat-anexos",
     data: "2026-10-21",
     titulo: "Anexar arquivos no chat",
