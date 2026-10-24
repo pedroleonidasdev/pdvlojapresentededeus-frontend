@@ -1,12 +1,31 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import api, { iniciarTrocaDeToken } from "@/lib/api";
 import { atualizarToken } from "@/lib/sessao";
 import { UsuarioAdmin, Perfil } from "@/lib/types";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, X, Loader2, LogOut } from "lucide-react";
+import { Plus, Pencil, Trash2, LogOut, Users, UserCheck, ShieldCheck, Search, X, UserRound } from "lucide-react";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
+import {
+  BOTAO_PRIMARIO,
+  BOTAO_SECUNDARIO,
+  BOTAO_ICONE,
+  BOTAO_ICONE_PERIGO,
+  CARTAO,
+  THEAD,
+  TH,
+  TR,
+  CartaoIndicador,
+  ChipFiltro,
+  EstadoVazio,
+  Inicial,
+  Selo,
+  Aviso,
+  ModalBase,
+  BotaoSalvar,
+  BotaoCancelar,
+} from "@/components/ui";
 
 export default function UsuariosPage() {
   const [usuarios, setUsuarios] = useState<UsuarioAdmin[]>([]);
@@ -14,6 +33,8 @@ export default function UsuariosPage() {
   const [modalAberto, setModalAberto] = useState(false);
   const [usuarioEmEdicao, setUsuarioEmEdicao] = useState<UsuarioAdmin | null>(null);
   const [mensagem, setMensagem] = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
+  const [busca, setBusca] = useState("");
+  const [filtro, setFiltro] = useState<"todos" | "online" | "admin" | "inativos">("todos");
 
   async function carregar(silencioso = false) {
     if (!silencioso) setCarregando(true);
@@ -35,6 +56,19 @@ export default function UsuariosPage() {
   }, []);
 
   const totalOnline = usuarios.filter((u) => u.online).length;
+  const totalAdmins = usuarios.filter((u) => u.perfil === "ADMIN").length;
+  const totalInativos = usuarios.filter((u) => !u.ativo).length;
+
+  const visiveis = useMemo(() => {
+    const termo = busca.trim().toLowerCase();
+    return usuarios.filter((u) => {
+      if (filtro === "online" && !u.online) return false;
+      if (filtro === "admin" && u.perfil !== "ADMIN") return false;
+      if (filtro === "inativos" && u.ativo) return false;
+      if (!termo) return true;
+      return u.nome.toLowerCase().includes(termo) || u.login.toLowerCase().includes(termo);
+    });
+  }, [usuarios, busca, filtro]);
 
   async function excluir(u: UsuarioAdmin) {
     if (
@@ -96,7 +130,7 @@ export default function UsuariosPage() {
           <div className="flex items-center gap-2">
             <button
               onClick={() => encerrarSessoes(null)}
-              className="flex items-center gap-2 border border-border hover:bg-background text-foreground text-sm font-medium px-4 py-2 rounded-lg transition"
+              className={BOTAO_SECUNDARIO}
             >
               <LogOut className="w-4 h-4" /> Encerrar todas as sessões
             </button>
@@ -105,98 +139,180 @@ export default function UsuariosPage() {
                 setUsuarioEmEdicao(null);
                 setModalAberto(true);
               }}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+              className={BOTAO_PRIMARIO}
             >
-              <Plus className="w-4 h-4" /> Novo usuário
+              <Plus className="w-4 h-4" strokeWidth={2.25} /> Novo usuário
             </button>
           </div>
         }
       />
 
-      <div className="p-4 md:p-8">
-        {mensagem && (
-          <div
-            className={`mb-4 rounded-lg text-sm px-3 py-2 ${
-              mensagem.tipo === "ok" ? "bg-primary-light text-primary-dark" : "bg-danger-light text-danger"
-            }`}
-          >
-            {mensagem.texto}
-          </div>
-        )}
+      <div className="p-4 md:p-8 space-y-4">
+        {mensagem && <Aviso tipo={mensagem.tipo}>{mensagem.texto}</Aviso>}
+
         {carregando ? (
           <CarregandoSecao />
         ) : (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <div className="overflow-x-auto">
-            <table className="w-full text-sm min-w-[640px]">
-              <thead className="bg-background border-b border-border">
-                <tr className="text-left text-muted">
-                  <th className="px-5 py-3 font-medium">Nome</th>
-                  <th className="px-5 py-3 font-medium">Login</th>
-                  <th className="px-5 py-3 font-medium">Perfil</th>
-                  <th className="px-5 py-3 font-medium">Conexão</th>
-                  <th className="px-5 py-3 font-medium">Status</th>
-                  <th className="px-5 py-3 font-medium text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {usuarios.map((u) => (
-                  <tr key={u.id} className="border-b border-border last:border-0">
-                    <td className="px-5 py-3 font-medium text-foreground">{u.nome}</td>
-                    <td className="px-5 py-3 font-mono text-muted">{u.login}</td>
-                    <td className="px-5 py-3">
-                      <span className="text-xs font-mono uppercase tracking-wide text-muted">
-                        {u.perfil === "ADMIN" ? "Administrador" : "Operador de caixa"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <StatusConexao usuario={u} />
-                    </td>
-                    <td className="px-5 py-3">
-                      <span
-                        className={`text-xs px-2 py-0.5 rounded-full ${
-                          u.ativo ? "bg-primary-light text-primary-dark" : "bg-danger-light text-danger"
-                        }`}
-                      >
-                        {u.ativo ? "Ativo" : "Inativo"}
-                      </span>
-                    </td>
-                    <td className="px-5 py-3">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          onClick={() => encerrarSessoes(u)}
-                          title="Encerrar sessões deste usuário"
-                          className="p-1.5 rounded-md text-muted hover:bg-background hover:text-primary transition"
-                        >
-                          <LogOut className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => {
-                            setUsuarioEmEdicao(u);
-                            setModalAberto(true);
-                          }}
-                          className="p-1.5 rounded-md text-muted hover:bg-background hover:text-primary transition"
-                        >
-                          <Pencil className="w-4 h-4" />
-                        </button>
-                        <button
-                          onClick={() => excluir(u)}
-                          title="Excluir usuário"
-                          className="p-1.5 rounded-md text-muted hover:bg-background hover:text-danger transition"
-                        >
-                          <Trash2 className="w-4 h-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <>
+            <section aria-label="Resumo dos usuários" className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+              <CartaoIndicador
+                icone={<Users className="w-5 h-5" strokeWidth={1.75} />}
+                titulo="Usuários"
+                valor={String(usuarios.length)}
+                detalhe={totalInativos > 0 ? `${totalInativos} inativo(s)` : "Todos ativos"}
+              />
+              <CartaoIndicador
+                icone={<UserCheck className="w-5 h-5" strokeWidth={1.75} />}
+                titulo="Online agora"
+                valor={String(totalOnline)}
+                detalhe="Atualiza sozinho a cada 15 s"
+                tom="info"
+              />
+              <CartaoIndicador
+                icone={<ShieldCheck className="w-5 h-5" strokeWidth={1.75} />}
+                titulo="Administradores"
+                valor={String(totalAdmins)}
+                detalhe="Podem editar estoque e usuários"
+                tom="alerta"
+              />
+            </section>
+
+            <section
+              aria-label="Filtros"
+              className="rounded-2xl bg-surface/95 border border-border/70 ring-1 ring-white/60 shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-3 sm:p-4 flex flex-wrap items-center gap-3"
+            >
+              <div className="relative w-full sm:max-w-xs">
+                <Search className="w-4 h-4 text-muted absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                <input
+                  type="text"
+                  value={busca}
+                  onChange={(e) => setBusca(e.target.value)}
+                  placeholder="Buscar por nome ou login..."
+                  aria-label="Buscar usuário"
+                  className="input pl-10! pr-9! py-2.5!"
+                />
+                {busca && (
+                  <button
+                    onClick={() => setBusca("")}
+                    aria-label="Limpar busca"
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 rounded-md text-muted hover:text-foreground hover:bg-background transition"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                )}
+              </div>
+              <div className="flex flex-wrap items-center gap-2" role="group" aria-label="Filtrar usuários">
+                <ChipFiltro ativo={filtro === "todos"} onClick={() => setFiltro("todos")} contagem={usuarios.length}>
+                  Todos
+                </ChipFiltro>
+                <ChipFiltro ativo={filtro === "online"} onClick={() => setFiltro((f) => (f === "online" ? "todos" : "online"))} contagem={totalOnline}>
+                  Online
+                </ChipFiltro>
+                <ChipFiltro ativo={filtro === "admin"} onClick={() => setFiltro((f) => (f === "admin" ? "todos" : "admin"))} contagem={totalAdmins}>
+                  Administradores
+                </ChipFiltro>
+                {totalInativos > 0 && (
+                  <ChipFiltro
+                    tom="perigo"
+                    ativo={filtro === "inativos"}
+                    onClick={() => setFiltro((f) => (f === "inativos" ? "todos" : "inativos"))}
+                    contagem={totalInativos}
+                  >
+                    Inativos
+                  </ChipFiltro>
+                )}
+              </div>
+            </section>
+
+            <div className={CARTAO}>
+              {visiveis.length === 0 ? (
+                <EstadoVazio
+                  icone={<UserRound className="w-7 h-7" strokeWidth={1.6} />}
+                  mensagem={usuarios.length === 0 ? "Nenhum usuário cadastrado." : "Nenhum usuário neste filtro."}
+                />
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm min-w-[720px]">
+                    <thead className={THEAD}>
+                      <tr className="text-left">
+                        <th className={`${TH} pl-5`}>Nome</th>
+                        <th className={TH}>Login</th>
+                        <th className={TH}>Perfil</th>
+                        <th className={TH}>Conexão</th>
+                        <th className={TH}>Status</th>
+                        <th className={`${TH} pr-5 text-right`}>Ações</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {visiveis.map((u) => (
+                        <tr key={u.id} className={TR}>
+                          <td className="pl-5 pr-4 py-3">
+                            <div className="flex items-center gap-3">
+                              <Inicial nome={u.nome} tom={u.perfil === "ADMIN" ? "alerta" : "neutro"} />
+                              <span className="font-semibold text-foreground">{u.nome}</span>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3 font-mono text-muted">{u.login}</td>
+                          <td className="px-4 py-3">
+                            {u.perfil === "ADMIN" ? (
+                              <Selo tom="alerta">
+                                <ShieldCheck className="w-3 h-3" />
+                                Administrador
+                              </Selo>
+                            ) : (
+                              <Selo>Operador de caixa</Selo>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">
+                            <StatusConexao usuario={u} />
+                          </td>
+                          <td className="px-4 py-3">
+                            <Selo tom={u.ativo ? "sucesso" : "perigo"}>{u.ativo ? "Ativo" : "Inativo"}</Selo>
+                          </td>
+                          <td className="pl-4 pr-5 py-3">
+                            <div className="flex justify-end gap-1">
+                              <button
+                                onClick={() => encerrarSessoes(u)}
+                                aria-label={`Encerrar sessões de ${u.nome}`}
+                                title="Encerrar sessões deste usuário"
+                                className={BOTAO_ICONE}
+                              >
+                                <LogOut className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  setUsuarioEmEdicao(u);
+                                  setModalAberto(true);
+                                }}
+                                aria-label={`Editar ${u.nome}`}
+                                title="Editar"
+                                className={BOTAO_ICONE}
+                              >
+                                <Pencil className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => excluir(u)}
+                                aria-label={`Excluir ${u.nome}`}
+                                title="Excluir usuário"
+                                className={BOTAO_ICONE_PERIGO}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {visiveis.length > 0 && (
+                <p className="px-5 py-2.5 text-xs text-muted border-t border-border/50 bg-primary-soft/40">
+                  Mostrando {visiveis.length} {visiveis.length === 1 ? "usuário" : "usuários"}
+                </p>
+              )}
             </div>
-            {usuarios.length === 0 && (
-              <p className="text-center text-sm text-muted py-10">Nenhum usuário cadastrado.</p>
-            )}
-          </div>
+          </>
         )}
       </div>
 
@@ -228,8 +344,8 @@ function StatusConexao({ usuario }: { usuario: UsuarioAdmin }) {
     return (
       <span className="inline-flex items-center gap-2 text-xs font-medium text-primary-dark">
         <span className="relative flex w-2.5 h-2.5">
-          <span className="absolute inline-flex w-full h-full rounded-full bg-green-500 opacity-60 animate-ping" />
-          <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-green-500" />
+          <span className="absolute inline-flex w-full h-full rounded-full bg-emerald-400 opacity-60 animate-ping" />
+          <span className="relative inline-flex w-2.5 h-2.5 rounded-full bg-emerald-500" />
         </span>
         Online
       </span>
@@ -282,87 +398,60 @@ function ModalUsuario({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-2xl w-full max-w-sm overflow-hidden">
-        <div className="px-6 py-4 border-b border-border flex items-center justify-between">
-          <h3 className="font-semibold">{usuario ? "Editar usuário" : "Novo usuário"}</h3>
-          <button onClick={onClose} className="text-muted hover:text-foreground">
-            <X className="w-5 h-5" />
-          </button>
-        </div>
+    <ModalBase
+      titulo={usuario ? "Editar usuário" : "Novo usuário"}
+      icone={<UserRound className="w-5 h-5" />}
+      onClose={onClose}
+      rodape={
+        <>
+          <BotaoCancelar onClick={onClose} />
+          <BotaoSalvar salvando={salvando} onClick={salvar} disabled={!nome || !login || (!usuario && !senha)} />
+        </>
+      }
+    >
+      <label className="block">
+        <span className="block text-xs font-medium text-muted mb-1.5">Nome</span>
+        <input value={nome} onChange={(e) => setNome(e.target.value)} className="input" />
+      </label>
 
-        <div className="p-6 space-y-4">
-          <label className="block">
-            <span className="block text-xs font-medium text-muted mb-1.5">Nome</span>
-            <input value={nome} onChange={(e) => setNome(e.target.value)} className="input" />
-          </label>
+      <label className="block">
+        <span className="block text-xs font-medium text-muted mb-1.5">Login</span>
+        <input
+          value={login}
+          onChange={(e) => setLogin(e.target.value)}
+          disabled={!!usuario}
+          className="input disabled:opacity-60"
+        />
+      </label>
 
-          <label className="block">
-            <span className="block text-xs font-medium text-muted mb-1.5">Login</span>
-            <input
-              value={login}
-              onChange={(e) => setLogin(e.target.value)}
-              disabled={!!usuario}
-              className="input disabled:opacity-60"
-            />
-          </label>
+      <label className="block">
+        <span className="block text-xs font-medium text-muted mb-1.5">
+          {usuario ? "Nova senha (deixe em branco para manter)" : "Senha"}
+        </span>
+        <input type="password" value={senha} onChange={(e) => setSenha(e.target.value)} className="input" />
+      </label>
 
-          <label className="block">
-            <span className="block text-xs font-medium text-muted mb-1.5">
-              {usuario ? "Nova senha (deixe em branco para manter)" : "Senha"}
-            </span>
-            <input
-              type="password"
-              value={senha}
-              onChange={(e) => setSenha(e.target.value)}
-              className="input"
-            />
-          </label>
+      <label className="block">
+        <span className="block text-xs font-medium text-muted mb-1.5">Perfil</span>
+        <select value={perfil} onChange={(e) => setPerfil(e.target.value as Perfil)} className="input">
+          <option value="CAIXA">Operador de caixa</option>
+          <option value="ADMIN">Administrador</option>
+        </select>
+      </label>
 
-          <label className="block">
-            <span className="block text-xs font-medium text-muted mb-1.5">Perfil</span>
-            <select
-              value={perfil}
-              onChange={(e) => setPerfil(e.target.value as Perfil)}
-              className="input"
-            >
-              <option value="CAIXA">Operador de caixa</option>
-              <option value="ADMIN">Administrador</option>
-            </select>
-          </label>
+      {usuario && (
+        <label className="flex items-center gap-2 text-sm">
+          <input
+            type="checkbox"
+            checked={ativo}
+            onChange={(e) => setAtivo(e.target.checked)}
+            className="w-4 h-4 rounded border-border accent-primary"
+          />
+          Usuário ativo
+        </label>
+      )}
 
-          {usuario && (
-            <label className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={ativo}
-                onChange={(e) => setAtivo(e.target.checked)}
-                className="rounded border-border"
-              />
-              Usuário ativo
-            </label>
-          )}
-
-          {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
-        </div>
-
-        <div className="px-6 py-4 border-t border-border flex justify-end gap-2">
-          <button
-            onClick={onClose}
-            className="px-4 py-2 rounded-lg text-sm text-muted hover:bg-background transition"
-          >
-            Cancelar
-          </button>
-          <button
-            onClick={salvar}
-            disabled={salvando || !nome || !login || (!usuario && !senha)}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg bg-primary hover:bg-primary-dark text-white text-sm font-medium transition disabled:opacity-50"
-          >
-            {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
-            Salvar
-          </button>
-        </div>
-      </div>
-    </div>
+      {erro && <Aviso tipo="erro">{erro}</Aviso>}
+    </ModalBase>
   );
 }

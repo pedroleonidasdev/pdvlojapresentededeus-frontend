@@ -600,7 +600,7 @@ export default function FinancasPage() {
             </button>
             <button
               onClick={() => setModalAberto(true)}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+              className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 transition"
             >
               <Plus className="w-4 h-4" /> Novo lançamento
             </button>
@@ -661,7 +661,7 @@ export default function FinancasPage() {
         )}
 
         {/* 2) a lista, logo abaixo: é nela que se paga, edita e exclui */}
-        <div ref={refLista} className="bg-surface border border-border rounded-xl overflow-hidden scroll-mt-4">
+        <div ref={refLista} className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] overflow-hidden scroll-mt-4">
           <div className="flex flex-wrap items-center gap-2 px-4 pt-3">
             <div className="inline-flex rounded-lg border border-border p-0.5 bg-background">
               {(
@@ -849,7 +849,7 @@ export default function FinancasPage() {
 
         {/* compras parceladas em andamento — recolhido por padrão, para não poluir */}
         {buscou && parceladosEmAndamento.length > 0 && (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
+          <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] overflow-hidden">
             <button
               type="button"
               onClick={() => setPainelParceladosAberto((v) => !v)}
@@ -937,7 +937,7 @@ export default function FinancasPage() {
             <button
               onClick={() => carregar()}
               disabled={carregando}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-60 h-fit"
+              className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 transition disabled:opacity-60 h-fit"
             >
               {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
               Filtrar
@@ -997,7 +997,7 @@ export default function FinancasPage() {
 
         {/* despesas por categoria — clique numa linha pra filtrar a lista lá em cima */}
         {buscou && resumo.categoriasOrdenadas.length > 0 && (
-          <div className="bg-surface border border-border rounded-xl p-4">
+          <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-4">
             <div className="flex items-center justify-between mb-3">
               <p className="text-xs font-medium text-muted uppercase tracking-wide">
                 Despesas por categoria
@@ -1492,7 +1492,7 @@ function ModalNovoLancamento({
 
   return (
     <div
-      className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50"
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
       role="dialog"
       aria-modal="true"
     >

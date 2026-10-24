@@ -366,7 +366,7 @@ function VendasPageConteudo() {
       <PageHeader title="Relatórios de Vendas" subtitle="Consulte, filtre e corrija vendas registradas" />
 
       <div className="p-4 md:p-8 space-y-4">
-        <div className="bg-surface border border-border rounded-xl p-4 space-y-3">
+        <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-4 space-y-3">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-xs font-medium text-muted">Período rápido:</span>
             {[
@@ -533,7 +533,7 @@ function VendasPageConteudo() {
             <p className="text-sm">Nenhuma venda encontrada para esse filtro.</p>
           </div>
         ) : (
-          <div className="bg-surface border border-border rounded-xl divide-y divide-border">
+          <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] divide-y divide-border">
             {vendasFiltradas.map((venda) => (
               <div key={venda.id} className="px-5 py-4">
                 <div className="flex items-center justify-between gap-4">

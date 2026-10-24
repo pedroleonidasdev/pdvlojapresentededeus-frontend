@@ -75,7 +75,7 @@ export default function EditarAberturaCaixa({
 
       {aberto &&
         createPortal(
-          <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[70] no-print">
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-[70] no-print">
             <div className="bg-surface text-foreground rounded-2xl w-full max-w-sm overflow-hidden">
               <div className="flex items-center justify-between px-5 py-4 border-b border-border">
                 <div>
@@ -132,7 +132,7 @@ export default function EditarAberturaCaixa({
                 <button
                   onClick={salvar}
                   disabled={!mudou || salvando}
-                  className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-50"
+                  className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 transition disabled:opacity-50"
                 >
                   {salvando && <Loader2 className="w-4 h-4 animate-spin" />}
                   Salvar correção

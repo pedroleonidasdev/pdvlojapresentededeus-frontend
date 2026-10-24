@@ -11,6 +11,7 @@ import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, 
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
+import { CartaoIndicador, ChipFiltro, BOTAO_SECUNDARIO } from "@/components/ui";
 
 export default function EstoquePage() {
   const { usuario } = useAuth();
@@ -413,13 +414,13 @@ export default function EstoquePage() {
 
           <div className="flex flex-wrap items-center gap-2 pt-3 border-t border-border/50">
             {isAdmin && semCodigoCount > 0 && (
-              <button onClick={gerarCodigosFaltantes} disabled={gerandoCodigos} className={BOTAO_FERRAMENTA}>
+              <button onClick={gerarCodigosFaltantes} disabled={gerandoCodigos} className={BOTAO_SECUNDARIO}>
                 {gerandoCodigos ? <Loader2 className="w-4 h-4 animate-spin" /> : <Barcode className="w-4 h-4" />}
                 Gerar códigos faltantes ({semCodigoCount})
               </button>
             )}
             {selecionados.size > 0 && (
-              <button onClick={() => setFolhaEtiquetasAberta(true)} className={BOTAO_FERRAMENTA}>
+              <button onClick={() => setFolhaEtiquetasAberta(true)} className={BOTAO_SECUNDARIO}>
                 <Printer className="w-4 h-4" />
                 Imprimir etiquetas ({selecionados.size})
               </button>
@@ -428,7 +429,7 @@ export default function EstoquePage() {
               onClick={() => setFolhaEstoqueAberta(true)}
               disabled={produtosFiltrados.length === 0}
               title="Gera uma folha para imprimir e conferir o estoque físico contra o sistema"
-              className={BOTAO_FERRAMENTA}
+              className={BOTAO_SECUNDARIO}
             >
               <ClipboardList className="w-4 h-4" />
               Imprimir estoque para conferência
@@ -814,8 +815,8 @@ function ModalProduto({
 
   if (produtoSalvoComSucesso) {
     return (
-      <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-        <div className="bg-surface rounded-2xl w-full max-w-md overflow-hidden">
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div className="bg-surface rounded-2xl w-full max-w-md overflow-hidden shadow-2xl ring-1 ring-white/40">
           <div className="p-6 text-center space-y-4">
             <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-6 h-6 text-primary" />
@@ -845,8 +846,8 @@ function ModalProduto({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
-      <div className="bg-surface rounded-2xl w-full max-w-md overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+      <div className="bg-surface rounded-2xl w-full max-w-md overflow-hidden shadow-2xl ring-1 ring-white/40">
         <div className="px-6 py-4 border-b border-border flex items-center justify-between">
           <h3 className="font-semibold">{produto ? "Editar produto" : "Novo produto"}</h3>
           <button onClick={onClose} className="text-muted hover:text-foreground">
@@ -977,104 +978,6 @@ function ModalProduto({
         </div>
       </div>
     </div>
-  );
-}
-
-/** Botão discreto da faixa de ferramentas (etiquetas, conferência, códigos). */
-const BOTAO_FERRAMENTA =
-  "flex items-center gap-2 bg-surface border border-border hover:bg-primary-soft text-foreground text-sm font-medium px-3.5 py-2 rounded-xl transition disabled:opacity-50";
-
-/** Cartão de indicador do topo da tela (mesmo estilo dos cartões da tela Início). */
-function CartaoIndicador({
-  icone,
-  titulo,
-  valor,
-  detalhe,
-  tom = "neutro",
-}: {
-  icone: React.ReactNode;
-  titulo: string;
-  valor: string;
-  detalhe: string;
-  tom?: "neutro" | "info" | "alerta";
-}) {
-  const estilo = {
-    neutro: { barra: "from-primary to-primary/30", icone: "from-primary to-primary-dark", brilho: "shadow-primary/40" },
-    info: { barra: "from-info to-info/30", icone: "from-info to-info-dark", brilho: "shadow-info/40" },
-    alerta: { barra: "from-accent to-accent/30", icone: "from-accent to-accent-dark", brilho: "shadow-accent/40" },
-  }[tom];
-  return (
-    <div className="relative overflow-hidden rounded-2xl bg-surface/95 border border-white/70 ring-1 ring-border/40 shadow-[0_10px_30px_-14px_rgba(15,51,42,0.45)] p-4 pt-5 flex items-center gap-3.5 min-w-0">
-      <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${estilo.barra}`} />
-      <span
-        className={`w-11 h-11 rounded-xl bg-gradient-to-br ${estilo.icone} text-white flex items-center justify-center shrink-0 shadow-lg ${estilo.brilho} ring-1 ring-white/30`}
-      >
-        {icone}
-      </span>
-      <div className="min-w-0">
-        <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">{titulo}</p>
-        <p className="text-2xl font-bold tracking-tight tabular-nums text-foreground leading-tight truncate">{valor}</p>
-        <p className="text-xs text-muted truncate">{detalhe}</p>
-      </div>
-    </div>
-  );
-}
-
-/** Botão-chip de filtro rápido, com a contagem do grupo. */
-function ChipFiltro({
-  ativo,
-  onClick,
-  contagem,
-  tom = "neutro",
-  icone,
-  dica,
-  children,
-}: {
-  ativo: boolean;
-  onClick: () => void;
-  contagem: number;
-  tom?: "neutro" | "perigo" | "alerta";
-  icone?: React.ReactNode;
-  dica?: string;
-  children: React.ReactNode;
-}) {
-  const cores = {
-    neutro: {
-      ativo: "bg-primary text-white border-primary shadow-md shadow-primary/25",
-      inativo: "bg-surface text-foreground border-border hover:bg-primary-soft",
-      numero: "bg-primary-light text-primary-dark",
-    },
-    perigo: {
-      ativo: "bg-danger text-white border-danger shadow-md shadow-danger/25",
-      inativo: "bg-danger-light text-danger border-danger/30 hover:bg-danger/10",
-      numero: "bg-danger/15 text-danger",
-    },
-    alerta: {
-      ativo: "bg-accent text-white border-accent shadow-md shadow-accent/25",
-      inativo: "bg-accent-light text-accent-dark border-accent/40 hover:bg-accent/15",
-      numero: "bg-accent/20 text-accent-dark",
-    },
-  }[tom];
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-pressed={ativo}
-      title={dica}
-      className={`inline-flex items-center gap-1.5 rounded-full border pl-3 pr-1.5 py-1 text-sm font-medium transition focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary ${
-        ativo ? cores.ativo : cores.inativo
-      }`}
-    >
-      {icone}
-      {children}
-      <span
-        className={`min-w-6 rounded-full px-1.5 py-0.5 text-center text-[11px] font-bold tabular-nums ${
-          ativo ? "bg-white/25 text-white" : cores.numero
-        }`}
-      >
-        {contagem}
-      </span>
-    </button>
   );
 }
 

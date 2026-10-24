@@ -14,7 +14,7 @@ import { CalendarDays, Filter } from "lucide-react";
  * - <AtalhosPeriodo>       linha "Período rápido" (Hoje, 7 dias, Este mês...).
  */
 
-const CLASSE_CARTAO = "bg-surface border border-border rounded-xl p-4";
+const CLASSE_CARTAO = "bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-4";
 
 export function PainelFiltros({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <div className={`flex flex-wrap items-end gap-3 ${CLASSE_CARTAO} ${className}`}>{children}</div>;

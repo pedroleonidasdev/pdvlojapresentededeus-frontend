@@ -50,8 +50,8 @@ export default function TrocarUsuarioModal({ onFechar }: { onFechar: () => void 
   if (!montado) return null;
 
   return createPortal(
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 text-foreground">
-      <div className="bg-surface rounded-2xl w-full max-w-sm overflow-hidden">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 text-foreground">
+      <div className="bg-surface rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl ring-1 ring-white/40">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="flex items-center gap-2 font-semibold text-sm text-foreground">
             <UserCog className="w-4 h-4" />

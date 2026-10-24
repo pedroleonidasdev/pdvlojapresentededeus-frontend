@@ -774,7 +774,7 @@ export default function RelatoriosPage() {
           </div>
         )}
 
-        <div className="flex flex-wrap items-end gap-3 bg-surface border border-border rounded-xl p-4">
+        <div className="flex flex-wrap items-end gap-3 bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-4">
           <div className="basis-full flex flex-wrap items-center gap-2">
             <span className="flex items-center gap-1.5 text-xs font-medium text-muted mr-1">
               <CalendarDays className="w-3.5 h-3.5" />
@@ -820,7 +820,7 @@ export default function RelatoriosPage() {
           <button
             onClick={() => gerar()}
             disabled={carregando}
-            className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition disabled:opacity-60 h-fit"
+            className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 transition disabled:opacity-60 h-fit"
           >
             {carregando && <Loader2 className="w-4 h-4 animate-spin" />}
             Gerar relatório
@@ -874,7 +874,7 @@ export default function RelatoriosPage() {
         {jaGerou && !carregando && (
           <>
             {/* filtros locais sobre o período já carregado */}
-            <div className="flex flex-wrap items-center gap-4 bg-surface border border-border rounded-xl p-4">
+            <div className="flex flex-wrap items-center gap-4 bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-4">
               <div className="flex items-center gap-2 text-xs text-muted">
                 <Filter className="w-3.5 h-3.5" />
                 Filtros
@@ -1009,7 +1009,7 @@ export default function RelatoriosPage() {
             </div>
 
             {/* gráfico de vendas por dia */}
-            <div className="bg-surface border border-border rounded-xl p-5">
+            <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-5">
               <div className="flex flex-wrap items-start justify-between gap-2 mb-4">
                 <h3 className="text-sm font-semibold">Vendas por dia</h3>
                 {melhorDia && (
@@ -1065,7 +1065,7 @@ export default function RelatoriosPage() {
               )}
             </div>
 
-            <div className="bg-surface border border-border rounded-xl p-5">
+            <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-5">
               <h3 className="text-sm font-semibold mb-1">Composição do faturamento líquido</h3>
               <p className="text-[11px] text-muted mb-4">
                 De onde vem o valor total: vendas feitas no PDV, ajuste das trocas e o que a loja recebeu das consignações fechadas no período.
@@ -1100,7 +1100,7 @@ export default function RelatoriosPage() {
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-              <div className="bg-surface border border-border rounded-xl p-5">
+              <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-5">
                 <h3 className="text-sm font-semibold mb-1">Por forma de pagamento</h3>
                 <p className="text-[11px] text-muted mb-4">Vendas e ajuste de trocas já somados</p>
                 <ul className="space-y-4">
@@ -1161,7 +1161,7 @@ export default function RelatoriosPage() {
                 </div>
               </div>
 
-              <div className="bg-surface border border-border rounded-xl p-5">
+              <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-5">
                 <h3 className="text-sm font-semibold mb-4">Produtos mais vendidos</h3>
                 <ul className="space-y-3.5">
                   {metricas.produtosMaisVendidos.map((p, idx) => {
@@ -1200,7 +1200,7 @@ export default function RelatoriosPage() {
               </div>
             </div>
 
-            <div className="bg-surface border border-border rounded-xl p-5">
+            <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-5">
               <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
                   <FileText className="w-4 h-4 text-primary" />
@@ -1279,7 +1279,7 @@ export default function RelatoriosPage() {
               )}
             </div>
 
-            <div className="bg-surface border border-border rounded-xl p-5">
+            <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-5">
               <h3 className="text-sm font-semibold mb-1 flex items-center gap-2">
                 <Vault className="w-4 h-4 text-primary" />
                 Conciliação de caixa
@@ -1402,7 +1402,7 @@ export default function RelatoriosPage() {
               )}
             </div>
 
-            <div className="bg-surface border border-border rounded-xl p-5">
+            <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-5">
               <h3 className="text-sm font-semibold mb-4 flex items-center gap-2">
                 <Repeat className="w-4 h-4 text-primary" />
                 Trocas do período

@@ -81,7 +81,7 @@ export default function ConsignadosPage() {
           action={
             <button
               onClick={() => setNovaAberta(true)}
-              className="flex items-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium px-4 py-2 rounded-lg transition"
+              className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 transition"
             >
               <Plus className="w-4 h-4" />
               Nova consignação
@@ -118,7 +118,7 @@ export default function ConsignadosPage() {
                         setSelecionada(c);
                       }
                     }}
-                    className="w-full text-left bg-surface border border-border rounded-xl p-4 hover:border-primary transition cursor-pointer"
+                    className="w-full text-left bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-4 hover:border-primary transition cursor-pointer"
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div className="min-w-0">
@@ -599,7 +599,7 @@ function ModalConsignacaoForm({
     }`;
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-3 sm:p-4 z-50 no-print">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 z-50 no-print">
       <div className="bg-background rounded-2xl w-full max-w-6xl h-[94dvh] max-h-[900px] flex flex-col overflow-hidden shadow-xl">
         {/* ------------------------------ Cabeçalho ------------------------------ */}
         <div className="flex items-center justify-between px-5 py-4 shrink-0 bg-gradient-to-r from-primary to-primary-dark text-white">
@@ -1398,7 +1398,7 @@ function ModalDetalhe({
   }
 
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50 no-print">
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50 no-print">
       {lendoFotos && (
         <LerConferenciaFoto
           consignacao={consignacao}

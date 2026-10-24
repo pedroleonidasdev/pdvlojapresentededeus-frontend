@@ -10,6 +10,7 @@ import ConfirmarFechamentoCaixaModal from "@/components/ConfirmarFechamentoCaixa
 import EditarAberturaCaixa from "@/components/EditarAberturaCaixa";
 import { Loader2, Unlock, User, Clock, CheckCircle2, Vault, AlertTriangle } from "lucide-react";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
+import { BOTAO_PRIMARIO, CARTAO, Aviso, EstadoVazio } from "@/components/ui";
 
 /**
  * Tela simples de fechamento de caixa para o operador: ele informa quanto tem
@@ -69,37 +70,47 @@ export default function FecharCaixaPage() {
     <div>
       <PageHeader title="Fechar Caixa" subtitle="Conte o dinheiro físico em caixa e confirme o fechamento" />
 
-      <div className="p-4 md:p-8 max-w-lg">
+      <div className="p-4 md:p-8 max-w-xl">
         {caixa === undefined ? (
           <CarregandoSecao />
         ) : fechadoComSucesso ? (
-          <div className="bg-surface border border-border rounded-xl p-6 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-primary-light flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-6 h-6 text-primary" />
-            </div>
-            <div>
-              <p className="font-semibold text-foreground">Caixa fechado com sucesso!</p>
-              <p className="text-sm text-muted mt-1">
-                Já pode encerrar o expediente. Para abrir um novo caixa, vá até a tela de Venda.
-              </p>
+          <div className={`${CARTAO} relative`}>
+            <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-accent to-primary" />
+            <div className="flex flex-col items-center gap-4 px-6 py-12 text-center">
+              <span className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white flex items-center justify-center shadow-lg shadow-primary/40 ring-1 ring-white/30">
+                <CheckCircle2 className="w-8 h-8" strokeWidth={1.75} />
+              </span>
+              <div>
+                <p className="text-lg font-semibold text-foreground">Caixa fechado com sucesso!</p>
+                <p className="text-sm text-muted mt-1 max-w-sm">
+                  Já pode encerrar o expediente. Para abrir um novo caixa, vá até a tela de Venda.
+                </p>
+              </div>
             </div>
           </div>
         ) : caixa === null ? (
-          <div className="bg-surface border border-border rounded-xl p-6 text-center">
-            <Vault className="w-8 h-8 mx-auto mb-2 text-muted opacity-50" />
-            <p className="text-sm text-muted">Nenhum caixa aberto no momento.</p>
+          <div className={CARTAO}>
+            <EstadoVazio
+              icone={<Vault className="w-7 h-7" strokeWidth={1.6} />}
+              mensagem="Nenhum caixa aberto no momento."
+            />
           </div>
         ) : (
-          <div className="bg-surface border border-border rounded-xl overflow-hidden">
-            <div className="flex items-center gap-3 bg-primary-light px-5 py-4">
-              <div className="w-9 h-9 rounded-lg bg-primary text-white flex items-center justify-center shrink-0">
-                <Unlock className="w-4 h-4" />
-              </div>
-              <div>
-                <p className="text-xs text-primary-dark/70 uppercase tracking-wide font-medium">
+          <div className={`${CARTAO} relative`}>
+            <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-accent to-primary" />
+            <div className="flex items-center gap-3.5 bg-primary-soft px-5 pt-6 pb-4 border-b border-border/60">
+              <span className="relative w-11 h-11 rounded-xl bg-gradient-to-br from-primary to-primary-dark text-white flex items-center justify-center shrink-0 shadow-lg shadow-primary/40 ring-1 ring-white/30">
+                <Unlock className="w-5 h-5" strokeWidth={1.75} />
+                <span aria-hidden className="absolute -right-1 -top-1 flex h-3 w-3">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-70" />
+                  <span className="relative inline-flex h-3 w-3 rounded-full bg-emerald-500 ring-2 ring-surface" />
+                </span>
+              </span>
+              <div className="min-w-0">
+                <p className="font-mono text-[10px] uppercase tracking-[0.2em] text-primary-dark/70 font-semibold">
                   Caixa aberto
                 </p>
-                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-primary-dark/80 mt-0.5">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-0.5 text-xs text-primary-dark/80 mt-1">
                   <span className="flex items-center gap-1">
                     <User className="w-3 h-3" />
                     Aberto por {caixa.usuarioAberturaNome}
@@ -122,8 +133,8 @@ export default function FecharCaixaPage() {
               </div>
             </div>
 
-            <div className="p-5 space-y-4">
-              <div className="flex gap-2 rounded-lg bg-danger-light text-danger text-xs px-3 py-2.5">
+            <div className="p-5 sm:p-6 space-y-5">
+              <div className="flex gap-2.5 rounded-xl border border-danger/25 bg-danger-light text-danger text-xs font-medium px-3.5 py-3">
                 <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
                 <p>
                   Conte <strong>apenas o dinheiro em espécie</strong> (cédulas e moedas) que está na
@@ -133,7 +144,7 @@ export default function FecharCaixaPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-muted mb-1.5">
+                <label className="block text-sm font-medium text-foreground mb-2">
                   Quanto tem fisicamente (em espécie) em caixa agora?
                 </label>
                 <input
@@ -145,17 +156,17 @@ export default function FecharCaixaPage() {
                   }}
                   onKeyDown={(e) => e.key === "Enter" && valorFinal !== "" && setConfirmando(true)}
                   placeholder="R$ 0,00"
-                  className="input w-full text-lg font-mono"
+                  className="input w-full text-2xl! font-mono font-semibold tabular-nums py-3.5!"
                   autoFocus
                 />
               </div>
 
-              {erro && <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erro}</div>}
+              {erro && <Aviso tipo="erro">{erro}</Aviso>}
 
               <button
                 onClick={() => setConfirmando(true)}
                 disabled={fechando || valorFinal === ""}
-                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white text-sm font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+                className={`${BOTAO_PRIMARIO} w-full py-3!`}
               >
                 {fechando && <Loader2 className="w-4 h-4 animate-spin" />}
                 Fechar caixa
