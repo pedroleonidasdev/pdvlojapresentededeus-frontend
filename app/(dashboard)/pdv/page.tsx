@@ -9,6 +9,7 @@ import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import { situacaoEstoque } from "@/lib/estoque";
 import PageHeader from "@/components/PageHeader";
+import { definirTrabalhoEmAndamento } from "@/lib/trabalho-em-andamento";
 import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X, Barcode, QrCode, Banknote, CreditCard, Check, Keyboard, UserRound } from "lucide-react";
 import { BarraCarregamento, CarregandoSecao } from "@/components/CarregamentoCatolico";
 
@@ -79,6 +80,12 @@ export default function PdvPage() {
   // muito próximos podem disparar o handler antes disso. O ref bloqueia imediatamente.
   const enviandoVendaRef = useRef(false);
   const [etapaFinalizacao, setEtapaFinalizacao] = useState<"processando" | "finalizando" | "sucesso" | null>(null);
+
+  // avisa o aviso de atualização que há venda em andamento (ele não reinicia sozinho nesse caso)
+  useEffect(() => {
+    definirTrabalhoEmAndamento("venda", carrinho.length > 0 || finalizando);
+    return () => definirTrabalhoEmAndamento("venda", false);
+  }, [carrinho.length, finalizando]);
 
   useEffect(() => {
     async function verificarCaixa() {
