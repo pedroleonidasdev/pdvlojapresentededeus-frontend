@@ -9,7 +9,7 @@ import { imprimirCupom } from "@/lib/impressora";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
 import { situacaoEstoque } from "@/lib/estoque";
 import PageHeader from "@/components/PageHeader";
-import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X, Barcode, QrCode, Banknote, CreditCard, Check, Keyboard } from "lucide-react";
+import { Search, Trash2, Plus, Minus, ShoppingCart, CheckCircle2, Loader2, Tag, DollarSign, Lock, Printer, X, Barcode, QrCode, Banknote, CreditCard, Check, Keyboard, UserRound } from "lucide-react";
 import { BarraCarregamento, CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 interface ItemCarrinho {
@@ -855,51 +855,77 @@ export default function PdvPage() {
       </div>
 
       {caixaFechado && (
-        <div className="absolute inset-0 z-30 flex items-center justify-center p-4">
+        // véu desfocado: a tela de venda fica ao fundo, sem competir com a janela
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-primary-dark/25 backdrop-blur-md">
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="titulo-abrir-caixa"
-            className="w-full max-w-sm bg-surface border border-border rounded-2xl shadow-2xl ring-1 ring-black/5 overflow-hidden"
+            className="login-entra relative w-full max-w-md overflow-hidden rounded-3xl bg-surface shadow-[0_30px_80px_-20px_rgba(15,51,42,0.55)] ring-1 ring-black/5"
           >
-            <div className="bg-primary text-white px-6 py-5 text-center">
-              <Lock className="w-8 h-8 mx-auto mb-2" />
-              <p id="titulo-abrir-caixa" className="font-semibold">Abrir caixa</p>
-              <p className="text-xs text-white/70 mt-0.5">
-                Informe o valor inicial para liberar as vendas
-              </p>
+            <div aria-hidden className="absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-primary via-accent to-primary" />
+
+            <div className="px-8 pt-9 pb-2 text-center">
+              <span className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white shadow-lg shadow-primary/30 ring-1 ring-white/30">
+                <Lock className="h-6 w-6" strokeWidth={1.75} />
+              </span>
+              <h2 id="titulo-abrir-caixa" className="text-xl font-semibold tracking-tight text-foreground">
+                Abrir caixa
+              </h2>
+              <p className="mt-1 text-sm text-muted">Informe o valor inicial para liberar as vendas</p>
             </div>
 
-            <div className="p-6 space-y-4">
+            <div className="space-y-5 px-8 pb-7 pt-5">
               <label className="block">
-                <span className="block text-xs font-medium text-muted mb-1.5">Valor inicial do caixa</span>
-                <input
-                  inputMode="decimal"
-                  autoFocus
-                  value={valorInicialCaixa}
-                  onChange={(e) => {
-                    const v = e.target.value;
-                    if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorInicialCaixa(v);
-                  }}
-                  placeholder="0,00"
-                  onKeyDown={(e) => e.key === "Enter" && valorInicialCaixa !== "" && !abrindoCaixa && abrirCaixa()}
-                  className="w-full px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-sm"
-                />
+                <span className="mb-1.5 block text-sm font-medium text-foreground">Valor inicial do caixa</span>
+                <span className="relative block">
+                  <span
+                    aria-hidden
+                    className="pointer-events-none absolute left-4 top-1/2 -translate-y-1/2 font-mono text-lg font-semibold text-muted"
+                  >
+                    R$
+                  </span>
+                  <input
+                    inputMode="decimal"
+                    autoFocus
+                    value={valorInicialCaixa}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (v === "" || /^[0-9]*[.,]?[0-9]*$/.test(v)) setValorInicialCaixa(v);
+                    }}
+                    placeholder="0,00"
+                    onKeyDown={(e) => e.key === "Enter" && valorInicialCaixa !== "" && !abrindoCaixa && abrirCaixa()}
+                    className="w-full rounded-xl border border-border bg-white/70 py-3.5 pl-12 pr-4 font-mono text-2xl font-semibold tabular-nums text-foreground shadow-inner shadow-primary/5 transition placeholder:text-muted/40 focus:border-primary focus:bg-white focus:outline-none focus:ring-4 focus:ring-primary/15"
+                  />
+                </span>
+                <span className="mt-1.5 block text-xs text-muted">Dinheiro em espécie que já está na gaveta.</span>
               </label>
 
               {erroCaixa && (
-                <div className="rounded-lg bg-danger-light text-danger text-xs px-3 py-2">{erroCaixa}</div>
+                <div
+                  role="alert"
+                  className="rounded-xl border border-danger/25 bg-danger-light px-3.5 py-3 text-xs font-medium text-danger"
+                >
+                  {erroCaixa}
+                </div>
               )}
 
               <button
                 onClick={abrirCaixa}
                 disabled={abrindoCaixa || valorInicialCaixa === ""}
-                className="w-full flex items-center justify-center gap-2 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-primary to-primary-dark py-3.5 text-sm font-semibold text-white shadow-md shadow-primary/30 ring-1 ring-white/10 transition hover:-translate-y-0.5 hover:brightness-110 active:translate-y-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:opacity-50 disabled:hover:translate-y-0 disabled:hover:brightness-100"
               >
-                {abrindoCaixa && <Loader2 className="w-4 h-4 animate-spin" />}
+                {abrindoCaixa && <Loader2 className="h-4 w-4 animate-spin" />}
                 Abrir caixa e iniciar vendas
               </button>
             </div>
+
+            {usuario?.nome && (
+              <div className="flex items-center justify-center gap-1.5 border-t border-border/60 bg-primary-soft/50 px-8 py-3 text-xs text-muted">
+                <UserRound className="h-3.5 w-3.5" />
+                O caixa será aberto em nome de <strong className="font-semibold text-foreground">{usuario.nome}</strong>
+              </div>
+            )}
           </div>
         </div>
       )}
