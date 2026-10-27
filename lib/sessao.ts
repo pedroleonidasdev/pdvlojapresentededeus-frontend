@@ -2,19 +2,17 @@
  * Login guardado POR ABA (sessionStorage), para dar para entrar com usuários
  * diferentes em abas diferentes do mesmo navegador sem um derrubar o outro.
  *
- * O localStorage continua guardando o "último login" só para uma aba nova (ou
- * o app reaberto) começar já logada: ao abrir, a aba copia esse login para a
- * sua própria sessão e, daí em diante, não é mais afetada pelas outras abas.
+ * O localStorage guarda o "último login" só para uso interno (ex.: notificações push);
+ * uma aba nova NÃO o herda — precisa entrar com usuário e senha.
  *
  * Regras que mantêm "quem aparece logado" == "dono do token enviado ao servidor":
  *  1. Token e usuário SEMPRE são lidos/copiados como um par. Nunca se mistura o
  *     token de um lado com o nome do outro.
- *  2. Uma aba que SAIU (logout ou sessão expirada) não herda de novo o login de
- *     outra aba sozinha; só volta a ter sessão quando alguém entrar nela.
+ *  2. Nenhuma aba herda o login de outra: só tem sessão quem entrou nela.
  */
 const CHAVE_TOKEN = "pdv_token";
 const CHAVE_USUARIO = "pdv_user";
-// marca, só nesta aba, que ela saiu e não deve herdar o "último login" de outra aba
+// marca, só nesta aba, que ela saiu (mantida por compatibilidade)
 const CHAVE_SAIU = "pdv_aba_saiu";
 
 interface Sessao {
@@ -40,17 +38,9 @@ function resolverSessao(): Sessao {
       return SEM_SESSAO;
     }
 
-    // aba que saiu não herda o login de outra aba
-    if (sessionStorage.getItem(CHAVE_SAIU) !== null) return SEM_SESSAO;
-
-    // aba nova herda o último login (o par completo)
-    const tokenUltimo = localStorage.getItem(CHAVE_TOKEN);
-    const usuarioUltimo = localStorage.getItem(CHAVE_USUARIO);
-    if (tokenUltimo !== null && usuarioUltimo !== null) {
-      sessionStorage.setItem(CHAVE_TOKEN, tokenUltimo);
-      sessionStorage.setItem(CHAVE_USUARIO, usuarioUltimo);
-      return { token: tokenUltimo, usuario: usuarioUltimo };
-    }
+    // Aba nova (ou app reaberto) NÃO herda o login de outra aba: cada pessoa precisa entrar
+    // com o próprio usuário. Antes, a aba nova herdava o "último login" do navegador, e quem
+    // abria o sistema sem perceber operava (e abria o caixa) como o usuário anterior.
     return SEM_SESSAO;
   } catch {
     return SEM_SESSAO;
