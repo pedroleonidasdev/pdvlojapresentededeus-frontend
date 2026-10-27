@@ -324,11 +324,52 @@ body {
 }
 
 .aviso-chat-barra {
-  animation: aviso-chat-barra 8s linear forwards;
+  animation: aviso-chat-barra 20s linear forwards;
+}
+
+/* brilho dourado pulsando em volta do pop-up, para chamar a atenção */
+@keyframes aviso-chat-brilho {
+  0%,
+  100% {
+    box-shadow: 0 18px 40px -12px rgba(15, 51, 42, 0.6), 0 0 0 0 rgba(224, 151, 47, 0.55);
+  }
+  50% {
+    box-shadow: 0 18px 40px -12px rgba(15, 51, 42, 0.6), 0 0 0 10px rgba(224, 151, 47, 0);
+  }
+}
+
+@keyframes aviso-chat-sino {
+  0%,
+  100% {
+    transform: rotate(0);
+  }
+  10%,
+  30%,
+  50% {
+    transform: rotate(-16deg);
+  }
+  20%,
+  40%,
+  60% {
+    transform: rotate(16deg);
+  }
+  70% {
+    transform: rotate(0);
+  }
+}
+
+.aviso-chat-brilho {
+  animation: aviso-chat-entra 0.38s cubic-bezier(0.2, 0.9, 0.3, 1.15) both, aviso-chat-brilho 1.6s ease-out 0.4s 6;
+}
+
+.aviso-chat-sino {
+  animation: aviso-chat-sino 1.4s ease-in-out 0.4s 3;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .aviso-chat {
+  .aviso-chat,
+  .aviso-chat-brilho,
+  .aviso-chat-sino {
     animation: none;
   }
 }
