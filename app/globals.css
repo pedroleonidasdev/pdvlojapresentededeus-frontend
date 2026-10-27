@@ -370,3 +370,47 @@ body {
     animation: none;
   }
 }
+
+
+/* ---------- Chat: janela e mensagens ---------- */
+@keyframes chat-janela-entra {
+  from {
+    opacity: 0;
+    transform: translateY(0.75rem) scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@keyframes chat-msg-entra {
+  from {
+    opacity: 0;
+    transform: translateY(0.4rem);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.chat-janela {
+  animation: chat-janela-entra 0.28s cubic-bezier(0.2, 0.9, 0.3, 1.1) both;
+}
+
+.chat-msg {
+  animation: chat-msg-entra 0.22s ease-out both;
+}
+
+.chat-input {
+  border-radius: 1.25rem;
+  padding: 0.6rem 1rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-janela,
+  .chat-msg {
+    animation: none;
+  }
+}

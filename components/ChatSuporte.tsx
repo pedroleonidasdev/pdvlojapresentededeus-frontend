@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Loader2, Mic, Paperclip, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Check, CheckCheck, Loader2, MessageCircle, Mic, Paperclip, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
 import SeletorEmoji from "@/components/SeletorEmoji";
 import GravadorAudio from "@/components/GravadorAudio";
 import MensagemAudio from "@/components/MensagemAudio";
@@ -44,28 +44,139 @@ function descreverErro(e: unknown, padrao: string): string {
   return padrao;
 }
 
-const CONTATOS_FECHADO_MS = 10_000;
+const CONTATOS_FECHADO_MS = 5_000;
 const CONTATOS_ABERTO_MS = 6_000;
 const MENSAGENS_MS = 3_000;
 
+// Um único contexto de áudio, reaproveitado. Os navegadores só liberam som depois de um clique/toque
+// do usuário na página; por isso ele é "destravado" na primeira interação (ver useEffect abaixo).
+let contextoAudio: AudioContext | null = null;
+
+function obterContextoAudio(): AudioContext | null {
+  try {
+    if (contextoAudio) return contextoAudio;
+    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
+    if (!Ctx) return null;
+    contextoAudio = new Ctx();
+    return contextoAudio;
+  } catch {
+    return null;
+  }
+}
+
+function liberarAudio() {
+  const ctx = obterContextoAudio();
+  if (ctx && ctx.state === "suspended") void ctx.resume().catch(() => {});
+}
+
+/** Toca um "ding-dong" de duas notas, bem audível, para avisar que chegou mensagem. */
 function apitar() {
   try {
-    const Ctx = window.AudioContext ?? (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext;
-    if (!Ctx) return;
-    const ctx = new Ctx();
-    const osc = ctx.createOscillator();
-    const ganho = ctx.createGain();
-    osc.type = "sine";
-    osc.frequency.value = 880;
-    ganho.gain.value = 0.08;
-    osc.connect(ganho);
-    ganho.connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.18);
-    osc.onended = () => void ctx.close();
+    const ctx = obterContextoAudio();
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+    const inicio = ctx.currentTime + 0.02;
+    [
+      { freq: 880, t: 0 },
+      { freq: 1319, t: 0.2 },
+    ].forEach(({ freq, t }) => {
+      const osc = ctx.createOscillator();
+      const ganho = ctx.createGain();
+      osc.type = "sine";
+      osc.frequency.value = freq;
+      ganho.gain.setValueAtTime(0.0001, inicio + t);
+      ganho.gain.exponentialRampToValueAtTime(0.35, inicio + t + 0.02);
+      ganho.gain.exponentialRampToValueAtTime(0.0001, inicio + t + 0.45);
+      osc.connect(ganho);
+      ganho.connect(ctx.destination);
+      osc.start(inicio + t);
+      osc.stop(inicio + t + 0.5);
+    });
   } catch {
     // navegador bloqueou o áudio antes de qualquer clique: sem problema, fica só o aviso visual
   }
+}
+
+/** Som curto e suave para mensagem que chega com a conversa aberta e a janela em foco. */
+function tocarSuave() {
+  try {
+    const ctx = obterContextoAudio();
+    if (!ctx) return;
+    if (ctx.state === "suspended") void ctx.resume().catch(() => {});
+    const inicio = ctx.currentTime + 0.01;
+    const osc = ctx.createOscillator();
+    const ganho = ctx.createGain();
+    osc.type = "sine";
+    osc.frequency.value = 988;
+    ganho.gain.setValueAtTime(0.0001, inicio);
+    ganho.gain.exponentialRampToValueAtTime(0.18, inicio + 0.02);
+    ganho.gain.exponentialRampToValueAtTime(0.0001, inicio + 0.25);
+    osc.connect(ganho);
+    ganho.connect(ctx.destination);
+    osc.start(inicio);
+    osc.stop(inicio + 0.3);
+  } catch {
+    // sem som: não faz mal
+  }
+}
+
+function chaveDia(iso: string): string {
+  return new Date(iso).toDateString();
+}
+
+function rotuloDia(iso: string): string {
+  const d = new Date(iso);
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+  if (d.toDateString() === hoje.toDateString()) return "Hoje";
+  if (d.toDateString() === ontem.toDateString()) return "Ontem";
+  return d.toLocaleDateString("pt-BR", { day: "2-digit", month: "long" });
+}
+
+/** Confirmação de leitura: ✓ enviada, ✓✓ azul quando a outra pessoa leu. */
+function Recibo({ lida, escuro }: { lida: boolean; escuro: boolean }) {
+  const titulo = lida ? "Lida" : "Enviada";
+  return lida ? (
+    <CheckCheck aria-label={titulo} className={`h-3.5 w-3.5 ${escuro ? "text-sky-300" : "text-sky-600"}`} strokeWidth={2.5}>
+      <title>{titulo}</title>
+    </CheckCheck>
+  ) : (
+    <Check aria-label={titulo} className={`h-3.5 w-3.5 ${escuro ? "text-white/60" : "text-muted"}`} strokeWidth={2.5}>
+      <title>{titulo}</title>
+    </Check>
+  );
+}
+
+function Rodape({ m, minha, escuro = true, className = "" }: { m: Mensagem; minha: boolean; escuro?: boolean; className?: string }) {
+  const cor = minha ? (escuro ? "text-white/70" : "text-muted") : "text-muted";
+  return (
+    <span className={`mt-1 flex items-center gap-1 text-[10px] ${minha ? "justify-end" : "justify-start"} ${cor} ${className}`}>
+      {formatarHora(m.criadaEm)}
+      {minha && <Recibo lida={m.lida} escuro={escuro} />}
+    </span>
+  );
+}
+
+function Avatar({ nome, online, tamanho = "h-10 w-10", claro = false }: { nome: string; online?: boolean; tamanho?: string; claro?: boolean }) {
+  return (
+    <span
+      className={`relative flex ${tamanho} shrink-0 items-center justify-center rounded-full text-sm font-bold ring-1 ${
+        claro
+          ? "bg-white/15 text-white ring-white/30"
+          : "bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/25 ring-white/40"
+      }`}
+    >
+      {nome.trim().charAt(0).toUpperCase() || "?"}
+      {online !== undefined && (
+        <span
+          className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 ${claro ? "border-primary-dark" : "border-surface"} ${
+            online ? "bg-emerald-400" : "bg-slate-400"
+          }`}
+        />
+      )}
+    </span>
+  );
 }
 
 /** Texto curto para o pop-up, conforme o tipo da mensagem. */
@@ -126,6 +237,17 @@ export default function ChatSuporte() {
   useEffect(() => {
     abertoRef.current = aberto;
   }, [aberto]);
+
+  // destrava o som do aviso na primeira interação com a página (regra dos navegadores)
+  useEffect(() => {
+    const eventos = ["pointerdown", "keydown", "touchstart"] as const;
+    const destravar = () => {
+      liberarAudio();
+      eventos.forEach((e) => window.removeEventListener(e, destravar));
+    };
+    eventos.forEach((e) => window.addEventListener(e, destravar, { passive: true }));
+    return () => eventos.forEach((e) => window.removeEventListener(e, destravar));
+  }, []);
 
   useEffect(() => {
     conversaIdRef.current = conversaId;
@@ -194,17 +316,49 @@ export default function ChatSuporte() {
     if (id === null || buscandoMensagensRef.current) return;
     buscandoMensagensRef.current = true;
     try {
-      const params = ultimoIdRef.current !== null ? { depois: ultimoIdRef.current } : {};
-      const { data } = await api.get<Mensagem[]>(`/suporte/conversas/${id}/mensagens`, { params });
-      if (conversaIdRef.current !== id || data.length === 0) return; // trocou de conversa ou nada novo
+      // Traz sempre as mensagens recentes (não só as novas): assim quem enviou também fica
+      // sabendo quando a outra pessoa leu (os ✓✓ azuis).
+      const { data } = await api.get<Mensagem[]>(`/suporte/conversas/${id}/mensagens`);
+      if (conversaIdRef.current !== id || data.length === 0) return; // trocou de conversa ou nada ainda
 
-      ultimoIdRef.current = data[data.length - 1].id;
+      const ultimoConhecido = ultimoIdRef.current;
+      ultimoIdRef.current = Math.max(ultimoConhecido ?? 0, data[data.length - 1].id);
+      const novasDele = data.filter(
+        (m) => m.remetenteId === id && !m.lida && (ultimoConhecido === null || m.id > ultimoConhecido)
+      );
+
       setMensagens((atuais) => {
+        const porId = new Map(data.map((m) => [m.id, m]));
         const conhecidas = new Set(atuais.map((m) => m.id));
-        return [...atuais, ...data.filter((m) => !conhecidas.has(m.id))];
+        let mudou = false;
+        const atualizadas = atuais.map((m) => {
+          const nova = porId.get(m.id);
+          if (nova && nova.lida !== m.lida) {
+            mudou = true;
+            return { ...m, lida: nova.lida };
+          }
+          return m;
+        });
+        const extras = data.filter((m) => !conhecidas.has(m.id));
+        if (!mudou && extras.length === 0) return atuais;
+        return [...atualizadas, ...extras];
       });
 
-      if (data.some((m) => m.remetenteId === id)) {
+      const emFoco = !document.hidden && document.hasFocus();
+      if (novasDele.length > 0) {
+        if (emFoco) {
+          tocarSuave();
+        } else {
+          // conversa aberta, mas a pessoa está em outra aba/janela: avisa com som e notificação
+          apitar();
+          if ("Notification" in window && Notification.permission === "granted") {
+            new Notification("Nova mensagem", { body: previaDaMensagem(novasDele[novasDele.length - 1]), tag: "chat-suporte" });
+          }
+        }
+      }
+
+      // só confirma a leitura quando a pessoa está realmente olhando a conversa
+      if (emFoco && data.some((m) => m.remetenteId === id && !m.lida)) {
         await api.post(`/suporte/conversas/${id}/lidas`);
         void buscarContatos();
       }
@@ -235,7 +389,16 @@ export default function ChatSuporte() {
     if (!usuario || !aberto || conversaId === null) return;
     void buscarMensagens();
     const intervalo = setInterval(() => void buscarMensagens(), MENSAGENS_MS);
-    return () => clearInterval(intervalo);
+    const aoVoltar = () => {
+      if (document.visibilityState === "visible") void buscarMensagens();
+    };
+    document.addEventListener("visibilitychange", aoVoltar);
+    window.addEventListener("focus", aoVoltar);
+    return () => {
+      clearInterval(intervalo);
+      document.removeEventListener("visibilitychange", aoVoltar);
+      window.removeEventListener("focus", aoVoltar);
+    };
   }, [usuario, aberto, conversaId, buscarMensagens]);
 
   useEffect(() => {
@@ -441,6 +604,67 @@ export default function ChatSuporte() {
     requestAnimationFrame(() => el?.setSelectionRange(posicao, posicao));
   }
 
+  const renderBolha = (m: Mensagem) => {
+    if (m.tipo === "CHAMADA") {
+      return (
+        <div className="flex justify-center">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-surface px-3 py-1 text-xs text-muted shadow-sm">
+            <PhoneCall className="h-3.5 w-3.5" />
+            {m.texto} · {formatarHora(m.criadaEm)}
+          </span>
+        </div>
+      );
+    }
+    const minha = m.destinatarioId === conversaId;
+    const balao = minha
+      ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/20"
+      : "rounded-2xl rounded-bl-md border border-border/60 bg-surface shadow-sm";
+    if (m.tipo === "AUDIO") {
+      return (
+        <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
+          <div className={`px-3 py-2 text-sm ${balao}`}>
+            <MensagemAudio mensagemId={m.id} duracao={Number(m.texto) || 0} minha={minha} />
+            <Rodape m={m} minha={minha} />
+          </div>
+        </div>
+      );
+    }
+    if (m.tipo === "ARQUIVO") {
+      return (
+        <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
+          <div className={`max-w-[85%] px-2.5 py-2 text-sm ${balao}`}>
+            <MensagemArquivo mensagemId={m.id} texto={m.texto} minha={minha} />
+            <Rodape m={m} minha={minha} className="px-0.5" />
+          </div>
+        </div>
+      );
+    }
+    if (m.tipo === "FIGURINHA") {
+      return (
+        <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
+          <div className="max-w-[85%]">
+            {figurinhaTemTexto(m.texto) ? (
+              <p className="rounded-2xl border border-accent/40 bg-accent-light px-4 py-3 text-center text-base font-semibold shadow-sm">
+                {m.texto}
+              </p>
+            ) : (
+              <p className="text-center text-6xl leading-none drop-shadow-sm">{m.texto}</p>
+            )}
+            <Rodape m={m} minha={minha} escuro={false} />
+          </div>
+        </div>
+      );
+    }
+    return (
+      <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
+        <div className={`max-w-[85%] px-3.5 py-2 text-sm ${balao}`}>
+          <p className={`whitespace-pre-wrap break-words ${soEmojis(m.texto) ? "text-3xl leading-tight" : ""}`}>{m.texto}</p>
+          <Rodape m={m} minha={minha} />
+        </div>
+      </div>
+    );
+  };
+
   if (!usuario) return null;
 
   return (
@@ -452,32 +676,40 @@ export default function ChatSuporte() {
       />
       {aberto && (
         <div
-          className="fixed right-4 md:right-auto md:left-[15.75rem] z-40 flex h-[min(34rem,calc(100dvh-2rem))] w-[min(22rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-2xl border border-border bg-surface shadow-2xl"
+          className="chat-janela fixed right-4 md:right-auto md:left-[15.75rem] z-40 flex h-[min(36rem,calc(100dvh-2rem))] w-[min(23rem,calc(100vw-2rem))] flex-col overflow-hidden rounded-3xl border border-white/60 bg-surface shadow-[0_28px_70px_-20px_rgba(15,51,42,0.6)] ring-1 ring-black/10"
           style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
         >
-          <div className="flex items-center justify-between gap-2 bg-primary px-3 py-3 text-white">
-            <div className="flex min-w-0 items-center gap-2">
+          <div className="relative flex items-center justify-between gap-2 bg-gradient-to-br from-primary via-primary to-primary-dark px-3 py-3.5 text-white">
+            <span aria-hidden className="pointer-events-none absolute -right-8 -top-10 h-28 w-28 rounded-full bg-accent/20 blur-2xl" />
+            <div className="relative flex min-w-0 items-center gap-2.5">
               {conversaId !== null && (
                 <button
                   onClick={voltarParaLista}
                   aria-label="Voltar para a lista"
-                  className="p-1.5 rounded-lg hover:bg-white/10 transition"
+                  className="rounded-xl p-1.5 transition hover:bg-white/10"
                 >
                   <ArrowLeft className="w-5 h-5" />
                 </button>
               )}
-              <div className="min-w-0 pl-1">
-                <p className="truncate text-sm font-semibold">
+              {conversaId === null ? (
+                <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-white/15 ring-1 ring-white/25">
+                  <MessageCircle className="h-5 w-5" />
+                </span>
+              ) : (
+                <Avatar nome={contatoAtual?.nome ?? "?"} online={contatoAtual?.online ?? false} claro />
+              )}
+              <div className="min-w-0">
+                <p className="truncate text-sm font-bold leading-tight">
                   {conversaId === null ? "Conversas" : (contatoAtual?.nome ?? "Conversa")}
                 </p>
-                <p className="truncate text-xs text-white/80">
+                <p className="truncate text-xs text-white/75">
                   {conversaId === null
                     ? `Você: @${usuario.login} · conversas privadas`
                     : `@${contatoAtual?.login ?? ""} · ${contatoAtual?.online ? "online agora" : "offline"}`}
                 </p>
               </div>
             </div>
-            <div className="flex shrink-0 items-center">
+            <div className="relative flex shrink-0 items-center">
               {conversaId !== null && (
                 <>
                   <button
@@ -485,7 +717,7 @@ export default function ChatSuporte() {
                     disabled={!contatoAtual?.online || emChamada}
                     aria-label="Chamada de áudio"
                     title={contatoAtual?.online ? "Chamada de áudio" : "Disponível quando a pessoa estiver online"}
-                    className="p-1.5 rounded-lg hover:bg-white/10 transition disabled:opacity-40 disabled:hover:bg-transparent"
+                    className="rounded-xl p-1.5 transition hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
                   >
                     <Phone className="w-5 h-5" />
                   </button>
@@ -494,7 +726,7 @@ export default function ChatSuporte() {
                     disabled={!contatoAtual?.online || emChamada}
                     aria-label="Chamada de vídeo"
                     title={contatoAtual?.online ? "Chamada de vídeo" : "Disponível quando a pessoa estiver online"}
-                    className="p-1.5 rounded-lg hover:bg-white/10 transition disabled:opacity-40 disabled:hover:bg-transparent"
+                    className="rounded-xl p-1.5 transition hover:bg-white/10 disabled:opacity-40 disabled:hover:bg-transparent"
                   >
                     <Video className="w-5 h-5" />
                   </button>
@@ -502,7 +734,7 @@ export default function ChatSuporte() {
                     onClick={() => setConfirmandoApagar(true)}
                     aria-label="Apagar conversa"
                     title="Apagar conversa"
-                    className="p-1.5 rounded-lg hover:bg-white/10 transition"
+                    className="rounded-xl p-1.5 transition hover:bg-white/10"
                   >
                     <Trash2 className="w-5 h-5" />
                   </button>
@@ -514,7 +746,7 @@ export default function ChatSuporte() {
                   setAberto(false);
                 }}
                 aria-label="Fechar chat"
-                className="p-1.5 rounded-lg hover:bg-white/10 transition"
+                className="rounded-xl p-1.5 transition hover:bg-white/10"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -548,7 +780,7 @@ export default function ChatSuporte() {
           )}
 
           {conversaId === null ? (
-            <div className="flex-1 min-h-0 overflow-y-auto bg-background">
+            <div className="flex-1 min-h-0 space-y-1 overflow-y-auto bg-gradient-to-b from-background to-surface-alt/40 p-2">
               {contatosOrdenados.length === 0 ? (
                 <p className="px-4 py-10 text-center text-sm text-muted">
                   Não há outro usuário ativo para conversar. Cadastre um em Usuários.
@@ -558,24 +790,19 @@ export default function ChatSuporte() {
                   <button
                     key={c.id}
                     onClick={() => abrirConversa(c.id)}
-                    className="flex w-full items-center gap-3 border-b border-border px-4 py-3 text-left transition hover:bg-surface"
+                    className={`flex w-full items-center gap-3 rounded-2xl px-3 py-2.5 text-left transition hover:bg-surface hover:shadow-sm ${
+                      c.naoLidas > 0 ? "bg-surface shadow-sm ring-1 ring-accent/40" : ""
+                    }`}
                   >
-                    <span className="relative flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-primary-light text-sm font-semibold text-primary-dark">
-                      {c.nome.charAt(0).toUpperCase()}
-                      <span
-                        className={`absolute -bottom-0.5 -right-0.5 h-3 w-3 rounded-full border-2 border-background ${
-                          c.online ? "bg-success" : "bg-muted"
-                        }`}
-                      />
-                    </span>
+                    <Avatar nome={c.nome} online={c.online} />
                     <span className="min-w-0 flex-1">
-                      <span className="block truncate text-sm font-medium">{c.nome}</span>
+                      <span className={`block truncate text-sm ${c.naoLidas > 0 ? "font-bold" : "font-semibold"}`}>{c.nome}</span>
                       <span className="block truncate text-xs text-muted">
                         {c.perfil === "ADMIN" ? "Administrador" : "Caixa"} · @{c.login} · {c.online ? "online" : "offline"}
                       </span>
                     </span>
                     {c.naoLidas > 0 && (
-                      <span className="min-w-5 h-5 px-1.5 rounded-full bg-danger text-white text-xs flex items-center justify-center">
+                      <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-gradient-to-br from-accent to-accent-dark px-1.5 text-xs font-bold text-white shadow shadow-accent/40">
                         {c.naoLidas > 9 ? "9+" : c.naoLidas}
                       </span>
                     )}
@@ -586,7 +813,7 @@ export default function ChatSuporte() {
           ) : (
             <>
               <div
-                className={`relative flex-1 min-h-0 space-y-2 overflow-y-auto bg-background px-3 py-3 ${
+                className={`relative flex-1 min-h-0 space-y-2 overflow-y-auto bg-gradient-to-b from-background to-surface-alt/40 px-3 py-3 ${
                   arrastando ? "outline-2 -outline-offset-4 outline-dashed outline-primary" : ""
                 }`}
                 onDragOver={(e) => {
@@ -609,83 +836,25 @@ export default function ChatSuporte() {
                   </p>
                 )}
                 {mensagens.length === 0 && (
-                  <p className="py-8 text-center text-sm text-muted">
-                    Nenhuma mensagem ainda. Escreva abaixo para começar a conversa.
-                  </p>
+                  <div className="flex flex-col items-center gap-2 py-10 text-center">
+                    <span className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary">
+                      <MessageCircle className="h-6 w-6" />
+                    </span>
+                    <p className="text-sm text-muted">Nenhuma mensagem ainda.<br />Escreva abaixo para começar a conversa.</p>
+                  </div>
                 )}
-                {mensagens.map((m) => {
-                  if (m.tipo === "CHAMADA") {
-                    return (
-                      <div key={m.id} className="flex justify-center">
-                        <span className="inline-flex items-center gap-1.5 rounded-full border border-border bg-surface px-3 py-1 text-xs text-muted">
-                          <PhoneCall className="h-3.5 w-3.5" />
-                          {m.texto} · {formatarHora(m.criadaEm)}
+                {mensagens.map((m, i) => (
+                  <Fragment key={m.id}>
+                    {(i === 0 || chaveDia(mensagens[i - 1].criadaEm) !== chaveDia(m.criadaEm)) && (
+                      <div className="flex justify-center py-1">
+                        <span className="rounded-full bg-primary/10 px-3 py-0.5 text-[11px] font-semibold text-primary">
+                          {rotuloDia(m.criadaEm)}
                         </span>
                       </div>
-                    );
-                  }
-                  const minha = m.destinatarioId === conversaId;
-                  if (m.tipo === "AUDIO") {
-                    return (
-                      <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`rounded-2xl px-3 py-2 text-sm ${
-                            minha ? "rounded-br-sm bg-primary text-white" : "rounded-bl-sm border border-border bg-surface"
-                          }`}
-                        >
-                          <MensagemAudio mensagemId={m.id} duracao={Number(m.texto) || 0} minha={minha} />
-                          <p className={`mt-1 text-[10px] ${minha ? "text-white/70" : "text-muted"}`}>{formatarHora(m.criadaEm)}</p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (m.tipo === "ARQUIVO") {
-                    return (
-                      <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-2.5 py-2 text-sm ${
-                            minha ? "rounded-br-sm bg-primary text-white" : "rounded-bl-sm border border-border bg-surface"
-                          }`}
-                        >
-                          <MensagemArquivo mensagemId={m.id} texto={m.texto} minha={minha} />
-                          <p className={`mt-1 px-0.5 text-[10px] ${minha ? "text-white/70" : "text-muted"}`}>{formatarHora(m.criadaEm)}</p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  if (m.tipo === "FIGURINHA") {
-                    return (
-                      <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
-                        <div className="max-w-[85%]">
-                          {figurinhaTemTexto(m.texto) ? (
-                            <p className="rounded-2xl border border-accent/40 bg-accent-light px-4 py-3 text-center text-base font-semibold">
-                              {m.texto}
-                            </p>
-                          ) : (
-                            <p className="text-center text-6xl leading-none">{m.texto}</p>
-                          )}
-                          <p className={`mt-1 text-[10px] text-muted ${minha ? "text-right" : "text-left"}`}>
-                            {formatarHora(m.criadaEm)}
-                          </p>
-                        </div>
-                      </div>
-                    );
-                  }
-                  return (
-                    <div key={m.id} className={`flex ${minha ? "justify-end" : "justify-start"}`}>
-                      <div
-                        className={`max-w-[85%] rounded-2xl px-3 py-2 text-sm ${
-                          minha ? "bg-primary text-white rounded-br-sm" : "bg-surface border border-border rounded-bl-sm"
-                        }`}
-                      >
-                        <p className={`whitespace-pre-wrap break-words ${soEmojis(m.texto) ? "text-3xl leading-tight" : ""}`}>{m.texto}</p>
-                        <p className={`mt-1 text-[10px] ${minha ? "text-white/70" : "text-muted"}`}>
-                          {formatarHora(m.criadaEm)}
-                        </p>
-                      </div>
-                    </div>
-                  );
-                })}
+                    )}
+                    {renderBolha(m)}
+                  </Fragment>
+                ))}
                 <div ref={fimRef} />
               </div>
 
@@ -714,13 +883,13 @@ export default function ChatSuporte() {
                   onErro={setErro}
                 />
               ) : (
-              <div className="flex items-end gap-2 border-t border-border bg-surface p-3">
+              <div className="flex items-end gap-1.5 border-t border-border/60 bg-surface p-2.5">
                 <button
                   onClick={() => setSeletorAberto((v) => !v)}
                   aria-label="Emojis e figurinhas"
                   title="Emojis e figurinhas"
                   aria-pressed={seletorAberto}
-                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-lg transition hover:bg-background ${
+                  className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-full transition hover:bg-background ${
                     seletorAberto ? "bg-primary-light text-primary" : "text-muted"
                   }`}
                 >
@@ -731,7 +900,7 @@ export default function ChatSuporte() {
                   disabled={enviando}
                   aria-label="Anexar arquivo"
                   title={`Anexar arquivo (até ${MAX_ANEXO_MB} MB)`}
-                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg text-muted transition hover:bg-background disabled:opacity-50"
+                  className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-muted transition hover:bg-background disabled:opacity-50"
                 >
                   <Paperclip className="w-5 h-5" />
                 </button>
@@ -757,14 +926,14 @@ export default function ChatSuporte() {
                   rows={1}
                   maxLength={1000}
                   placeholder="Escreva uma mensagem…"
-                  className="input flex-1 resize-none max-h-28"
+                  className="input chat-input flex-1 resize-none max-h-28"
                 />
                 {texto.trim() || enviando ? (
                   <button
                     onClick={() => void enviar()}
                     disabled={!texto.trim() || enviando}
                     aria-label="Enviar mensagem"
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition hover:bg-primary-dark disabled:opacity-50"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/30 transition hover:brightness-110 active:scale-95 disabled:opacity-50"
                   >
                     {enviando ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                   </button>
@@ -774,7 +943,7 @@ export default function ChatSuporte() {
                     disabled={emChamada}
                     aria-label="Gravar áudio"
                     title={emChamada ? "Indisponível durante uma chamada" : "Gravar áudio"}
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white transition hover:bg-primary-dark disabled:opacity-50"
+                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/30 transition hover:brightness-110 active:scale-95 disabled:opacity-50"
                   >
                     <Mic className="w-4 h-4" />
                   </button>
