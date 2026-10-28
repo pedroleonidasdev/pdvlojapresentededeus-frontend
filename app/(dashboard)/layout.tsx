@@ -6,6 +6,7 @@ import { useAuth } from "@/lib/auth-context";
 import { encontrarNavItemPorPath } from "@/lib/nav-items";
 import Sidebar from "@/components/Sidebar";
 import AtualizacaoSistema from "@/components/AtualizacaoSistema";
+import AtualizacaoServidor from "@/components/AtualizacaoServidor";
 import Novidades from "@/components/Novidades";
 import MonitorCaixa from "@/components/MonitorCaixa";
 import ChatSuporte from "@/components/ChatSuporte";
@@ -52,6 +53,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     <ChamadaProvider>
     <div className="flex min-h-screen bg-background">
       <AtualizacaoSistema />
+      <AtualizacaoServidor />
       <Novidades />
       {/* aviso de caixa aberto/fechado: só para quem tem perfil ADMIN */}
       {usuario.perfil === "ADMIN" && <MonitorCaixa />}
