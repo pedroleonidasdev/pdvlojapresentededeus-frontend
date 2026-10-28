@@ -1,10 +1,10 @@
 "use client";
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, ReactNode, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
-import { ArrowLeft, Check, CheckCheck, Loader2, MessageCircle, Mic, Paperclip, Phone, PhoneCall, Send, Smile, Trash2, Video, X } from "lucide-react";
+import { ArrowLeft, Ban, Check, CheckCheck, ChevronDown, Copy, Loader2, MessageCircle, Mic, Paperclip, Pencil, Phone, PhoneCall, Reply, Send, Smile, Trash2, Video, X } from "lucide-react";
 import SeletorEmoji from "@/components/SeletorEmoji";
 import GravadorAudio from "@/components/GravadorAudio";
 import MensagemAudio from "@/components/MensagemAudio";
@@ -22,6 +22,21 @@ interface Contato {
   perfil: string;
   online: boolean;
   naoLidas: number;
+  digitando: boolean;
+  ultimaMensagem: string | null;
+  ultimaEm: string | null;
+  ultimoAcessoHaSeg: number | null;
+}
+
+interface StatusConversa {
+  digitando: boolean;
+  online: boolean;
+  ultimoAcessoHaSeg: number | null;
+}
+
+interface Reacao {
+  usuarioId: number;
+  emoji: string;
 }
 
 interface Mensagem {
@@ -32,6 +47,10 @@ interface Mensagem {
   criadaEm: string;
   lida: boolean;
   tipo: string | null;
+  respostaA: { id: number; remetenteId: number; previa: string } | null;
+  reacoes: Reacao[];
+  editada: boolean;
+  apagadaParaTodos: boolean;
 }
 
 /** Texto de erro útil: usa a mensagem do servidor ou ao menos o código HTTP, para dar para diagnosticar. */
@@ -47,6 +66,10 @@ function descreverErro(e: unknown, padrao: string): string {
 const CONTATOS_FECHADO_MS = 5_000;
 const CONTATOS_ABERTO_MS = 6_000;
 const MENSAGENS_MS = 3_000;
+const STATUS_MS = 2_000;
+const REACOES_RAPIDAS = ["👍", "❤️", "😂", "😮", "😢", "🙏"];
+const JANELA_EDICAO_MS = 15 * 60_000;
+const JANELA_APAGAR_TODOS_MS = 48 * 3_600_000;
 
 // Um único contexto de áudio, reaproveitado. Os navegadores só liberam som depois de um clique/toque
 // do usuário na página; por isso ele é "destravado" na primeira interação (ver useEffect abaixo).
@@ -118,6 +141,25 @@ function tocarSuave() {
   } catch {
     // sem som: não faz mal
   }
+}
+
+/** "online agora", "visto por último hoje às 14:05"... a partir de há quantos segundos a pessoa foi vista. */
+function descreverPresenca(online: boolean, haSeg: number | null): string {
+  if (online) return "online agora";
+  if (haSeg === null) return "offline";
+  const quando = new Date(Date.now() - haSeg * 1000);
+  const hora = quando.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+  const hoje = new Date();
+  const ontem = new Date();
+  ontem.setDate(hoje.getDate() - 1);
+  if (quando.toDateString() === hoje.toDateString()) return `visto por último hoje às ${hora}`;
+  if (quando.toDateString() === ontem.toDateString()) return `visto por último ontem às ${hora}`;
+  return `visto por último ${quando.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} às ${hora}`;
+}
+
+/** O que pode mudar numa mensagem depois de enviada (leitura, reações, edição, apagada). */
+function assinaturaMensagem(m: Mensagem): string {
+  return JSON.stringify([m.lida, m.texto, m.editada, m.apagadaParaTodos, m.reacoes]);
 }
 
 function chaveDia(iso: string): string {
@@ -204,6 +246,32 @@ function formatarHora(iso: string): string {
     : `${d.toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })} ${hora}`;
 }
 
+function ItemMenu({
+  icone,
+  texto,
+  aoClicar,
+  perigo = false,
+}: {
+  icone: ReactNode;
+  texto: string;
+  aoClicar: () => void;
+  perigo?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      onClick={aoClicar}
+      className={`flex w-full items-center gap-2.5 rounded-xl px-2.5 py-2 text-left transition hover:bg-primary-soft ${
+        perigo ? "text-danger hover:bg-danger-light" : ""
+      }`}
+    >
+      {icone}
+      {texto}
+    </button>
+  );
+}
+
 export default function ChatSuporte() {
   const { usuario } = useAuth();
   const { iniciarChamada, emChamada } = useChamada();
@@ -215,6 +283,12 @@ export default function ChatSuporte() {
   const [enviando, setEnviando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [confirmandoApagar, setConfirmandoApagar] = useState(false);
+  // funções estilo WhatsApp: menu da mensagem, responder (citação), editar e "digitando…"
+  const [menuId, setMenuId] = useState<number | null>(null);
+  const [respondendo, setRespondendo] = useState<Mensagem | null>(null);
+  const [editando, setEditando] = useState<Mensagem | null>(null);
+  const [statusOutro, setStatusOutro] = useState<StatusConversa | null>(null);
+  const ultimoAvisoDigitandoRef = useRef(0);
   const [seletorAberto, setSeletorAberto] = useState(false);
   const [gravando, setGravando] = useState(false);
   const [apagando, setApagando] = useState(false);
@@ -333,9 +407,9 @@ export default function ChatSuporte() {
         let mudou = false;
         const atualizadas = atuais.map((m) => {
           const nova = porId.get(m.id);
-          if (nova && nova.lida !== m.lida) {
+          if (nova && assinaturaMensagem(nova) !== assinaturaMensagem(m)) {
             mudou = true;
-            return { ...m, lida: nova.lida };
+            return nova;
           }
           return m;
         });
@@ -368,6 +442,25 @@ export default function ChatSuporte() {
       buscandoMensagensRef.current = false;
     }
   }, [buscarContatos]);
+
+  // "digitando…" e "visto por último": consulta leve a cada poucos segundos, só com uma conversa aberta
+  const buscarStatus = useCallback(async () => {
+    const id = conversaIdRef.current;
+    if (id === null) return;
+    try {
+      const { data } = await api.get<StatusConversa>(`/suporte/conversas/${id}/status`);
+      if (conversaIdRef.current === id) setStatusOutro(data);
+    } catch {
+      // tenta de novo no próximo ciclo
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!usuario || !aberto || conversaId === null) return;
+    void buscarStatus();
+    const intervalo = setInterval(() => void buscarStatus(), STATUS_MS);
+    return () => clearInterval(intervalo);
+  }, [usuario, aberto, conversaId, buscarStatus]);
 
   // contatos: alimenta a lista e o contador do botão
   useEffect(() => {
@@ -403,7 +496,7 @@ export default function ChatSuporte() {
 
   useEffect(() => {
     if (aberto && conversaId !== null) fimRef.current?.scrollIntoView({ block: "end" });
-  }, [aberto, conversaId, mensagens]);
+  }, [aberto, conversaId, mensagens, statusOutro?.digitando]);
 
   const totalNaoLidas = useMemo(() => contatos.reduce((soma, c) => soma + c.naoLidas, 0), [contatos]);
   const contatosOrdenados = useMemo(
@@ -411,6 +504,7 @@ export default function ChatSuporte() {
       [...contatos].sort(
         (a, b) =>
           Number(b.naoLidas > 0) - Number(a.naoLidas > 0) ||
+          (b.ultimaEm ? Date.parse(b.ultimaEm) : 0) - (a.ultimaEm ? Date.parse(a.ultimaEm) : 0) ||
           Number(b.online) - Number(a.online) ||
           a.nome.localeCompare(b.nome, "pt-BR")
       ),
@@ -445,6 +539,10 @@ export default function ChatSuporte() {
     ultimoIdRef.current = null;
     conversaIdRef.current = id;
     setMensagens([]);
+    setStatusOutro(null);
+    setMenuId(null);
+    setRespondendo(null);
+    setEditando(null);
     setErro(null);
     setTexto("");
     setConfirmandoApagar(false);
@@ -465,6 +563,10 @@ export default function ChatSuporte() {
     conversaIdRef.current = null;
     setConversaId(null);
     setMensagens([]);
+    setStatusOutro(null);
+    setMenuId(null);
+    setRespondendo(null);
+    setEditando(null);
     setErro(null);
     setConfirmandoApagar(false);
     setSeletorAberto(false);
@@ -497,9 +599,14 @@ export default function ChatSuporte() {
     setEnviando(true);
     setErro(null);
     try {
-      const { data } = await api.post<Mensagem>(`/suporte/conversas/${conversaId}/mensagens`, { texto: conteudo, tipo });
+      const { data } = await api.post<Mensagem>(`/suporte/conversas/${conversaId}/mensagens`, {
+        texto: conteudo,
+        tipo,
+        respostaAId: respondendo?.id,
+      });
       ultimoIdRef.current = Math.max(ultimoIdRef.current ?? 0, data.id);
       setMensagens((atuais) => (atuais.some((m) => m.id === data.id) ? atuais : [...atuais, data]));
+      setRespondendo(null);
       return true;
     } catch (e) {
       setErro(descreverErro(e, "Não foi possível enviar."));
@@ -512,7 +619,93 @@ export default function ChatSuporte() {
   async function enviar() {
     const conteudo = texto.trim();
     if (!conteudo) return;
+    if (editando) {
+      setEnviando(true);
+      setErro(null);
+      try {
+        const { data } = await api.put<Mensagem>(`/suporte/mensagens/${editando.id}`, { texto: conteudo });
+        atualizarMensagem(data);
+        setEditando(null);
+        setTexto("");
+      } catch (e) {
+        setErro(descreverErro(e, "Não foi possível editar a mensagem."));
+      } finally {
+        setEnviando(false);
+      }
+      return;
+    }
     if (await postarMensagem(conteudo)) setTexto("");
+  }
+
+  /** Avisa a outra pessoa que estou digitando (no máximo uma vez a cada 2,5 s). */
+  function avisarDigitando(valor: string) {
+    if (!valor.trim() || conversaId === null || editando) return;
+    const agora = Date.now();
+    if (agora - ultimoAvisoDigitandoRef.current < 2_500) return;
+    ultimoAvisoDigitandoRef.current = agora;
+    api.post(`/suporte/conversas/${conversaId}/digitando`).catch(() => {});
+  }
+
+  function atualizarMensagem(nova: Mensagem) {
+    setMensagens((atuais) => atuais.map((m) => (m.id === nova.id ? nova : m)));
+  }
+
+  async function reagir(m: Mensagem, emoji: string) {
+    setMenuId(null);
+    try {
+      const { data } = await api.put<Mensagem>(`/suporte/mensagens/${m.id}/reacao`, { emoji });
+      atualizarMensagem(data);
+    } catch (e) {
+      setErro(descreverErro(e, "Não foi possível reagir."));
+    }
+  }
+
+  async function apagarMensagem(m: Mensagem, paraTodos: boolean) {
+    setMenuId(null);
+    const pergunta = paraTodos ? "Apagar esta mensagem para todos?" : "Apagar esta mensagem só para você?";
+    if (!confirm(pergunta)) return;
+    try {
+      await api.delete(`/suporte/mensagens/${m.id}`, { params: { paraTodos } });
+      if (paraTodos) atualizarMensagem({ ...m, apagadaParaTodos: true, texto: "", reacoes: [] });
+      else setMensagens((atuais) => atuais.filter((x) => x.id !== m.id));
+      void buscarContatos();
+    } catch (e) {
+      setErro(descreverErro(e, "Não foi possível apagar a mensagem."));
+    }
+  }
+
+  function comecarResposta(m: Mensagem) {
+    setMenuId(null);
+    setEditando(null);
+    setRespondendo(m);
+    textareaRef.current?.focus();
+  }
+
+  function comecarEdicao(m: Mensagem) {
+    setMenuId(null);
+    setRespondendo(null);
+    setEditando(m);
+    setTexto(m.texto);
+    textareaRef.current?.focus();
+  }
+
+  function cancelarRespostaOuEdicao() {
+    if (editando) setTexto("");
+    setEditando(null);
+    setRespondendo(null);
+  }
+
+  async function copiarTexto(m: Mensagem) {
+    setMenuId(null);
+    try {
+      await navigator.clipboard.writeText(m.texto);
+    } catch {
+      // navegador sem permissão de área de transferência: nada a fazer
+    }
+  }
+
+  function irParaMensagem(id: number) {
+    document.getElementById(`msg-${id}`)?.scrollIntoView({ block: "center", behavior: "smooth" });
   }
 
   async function enviarAudio(audio: Blob, duracao: number) {
@@ -604,7 +797,7 @@ export default function ChatSuporte() {
     requestAnimationFrame(() => el?.setSelectionRange(posicao, posicao));
   }
 
-  const renderBolha = (m: Mensagem) => {
+  const renderBolha = (m: Mensagem, indice: number) => {
     if (m.tipo === "CHAMADA") {
       return (
         <div className="flex justify-center">
@@ -616,50 +809,157 @@ export default function ChatSuporte() {
       );
     }
     const minha = m.destinatarioId === conversaId;
+    const apagada = m.apagadaParaTodos;
+    const figurinha = m.tipo === "FIGURINHA" && !apagada;
     const balao = minha
       ? "rounded-2xl rounded-br-md bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/20"
       : "rounded-2xl rounded-bl-md border border-border/60 bg-surface shadow-sm";
-    if (m.tipo === "AUDIO") {
-      return (
-        <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
-          <div className={`px-3 py-2 text-sm ${balao}`}>
-            <MensagemAudio mensagemId={m.id} duracao={Number(m.texto) || 0} minha={minha} />
-            <Rodape m={m} minha={minha} />
-          </div>
-        </div>
+    const idade = Date.now() - Date.parse(m.criadaEm);
+    const podeEditar = minha === false ? false : m.tipo === null && !apagada && idade <= JANELA_EDICAO_MS;
+    const podeApagarTodos = minha === false ? false : !apagada && idade <= JANELA_APAGAR_TODOS_MS;
+
+    // reações agrupadas por emoji ("👍 2")
+    const grupos = new Map<string, { qtd: number; minha: boolean }>();
+    for (const r of m.reacoes ?? []) {
+      const atual = grupos.get(r.emoji) ?? { qtd: 0, minha: false };
+      grupos.set(r.emoji, { qtd: atual.qtd + 1, minha: atual.minha || r.usuarioId !== conversaId });
+    }
+    const minhaReacao = [...grupos.entries()].find(([, g]) => g.minha)?.[0] ?? null;
+
+    let corpo: ReactNode;
+    if (apagada) {
+      corpo = (
+        <p className="flex items-center gap-1.5 text-sm italic opacity-80">
+          <Ban className="h-3.5 w-3.5" /> Mensagem apagada
+        </p>
+      );
+    } else if (m.tipo === "AUDIO") {
+      corpo = <MensagemAudio mensagemId={m.id} duracao={Number(m.texto) || 0} minha={minha} />;
+    } else if (m.tipo === "ARQUIVO") {
+      corpo = <MensagemArquivo mensagemId={m.id} texto={m.texto} minha={minha} />;
+    } else if (figurinha) {
+      corpo = figurinhaTemTexto(m.texto) ? (
+        <p className="rounded-2xl border border-accent/40 bg-accent-light px-4 py-3 text-center text-base font-semibold shadow-sm">
+          {m.texto}
+        </p>
+      ) : (
+        <p className="text-center text-6xl leading-none drop-shadow-sm">{m.texto}</p>
+      );
+    } else {
+      corpo = (
+        <p className={`whitespace-pre-wrap break-words ${soEmojis(m.texto) ? "text-3xl leading-tight" : ""}`}>{m.texto}</p>
       );
     }
-    if (m.tipo === "ARQUIVO") {
-      return (
-        <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
-          <div className={`max-w-[85%] px-2.5 py-2 text-sm ${balao}`}>
-            <MensagemArquivo mensagemId={m.id} texto={m.texto} minha={minha} />
-            <Rodape m={m} minha={minha} className="px-0.5" />
-          </div>
-        </div>
-      );
-    }
-    if (m.tipo === "FIGURINHA") {
-      return (
-        <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
-          <div className="max-w-[85%]">
-            {figurinhaTemTexto(m.texto) ? (
-              <p className="rounded-2xl border border-accent/40 bg-accent-light px-4 py-3 text-center text-base font-semibold shadow-sm">
-                {m.texto}
-              </p>
-            ) : (
-              <p className="text-center text-6xl leading-none drop-shadow-sm">{m.texto}</p>
-            )}
-            <Rodape m={m} minha={minha} escuro={false} />
-          </div>
-        </div>
-      );
-    }
+
+    const citacao =
+      m.respostaA && !apagada ? (
+        <button
+          type="button"
+          onClick={() => irParaMensagem(m.respostaA!.id)}
+          className={`mb-1.5 block w-full rounded-lg border-l-4 px-2.5 py-1.5 text-left text-xs ${
+            minha ? "border-accent bg-white/15 text-white/90" : "border-primary bg-primary-soft text-foreground/80"
+          }`}
+        >
+          <span className={`block font-bold ${minha ? "text-accent" : "text-primary"}`}>
+            {m.respostaA.remetenteId === conversaId ? (contatoAtual?.nome ?? "") : "Você"}
+          </span>
+          <span className="block truncate">{m.respostaA.previa}</span>
+        </button>
+      ) : null;
+
+    const rodape = <Rodape m={m} minha={minha} escuro={!figurinha} />;
+    const aberto_ = menuId === m.id;
+
     return (
-      <div className={`chat-msg flex ${minha ? "justify-end" : "justify-start"}`}>
-        <div className={`max-w-[85%] px-3.5 py-2 text-sm ${balao}`}>
-          <p className={`whitespace-pre-wrap break-words ${soEmojis(m.texto) ? "text-3xl leading-tight" : ""}`}>{m.texto}</p>
-          <Rodape m={m} minha={minha} />
+      <div id={`msg-${m.id}`} className={`chat-msg group flex ${minha ? "justify-end" : "justify-start"}`}>
+        <div className={`relative flex max-w-[85%] flex-col ${minha ? "items-end" : "items-start"}`}>
+          <div className="relative">
+            {figurinha ? (
+              <div>
+                {corpo}
+                {rodape}
+              </div>
+            ) : (
+              <div className={`px-3.5 py-2 text-sm ${balao}`}>
+                {citacao}
+                {corpo}
+                {m.editada && !apagada && (
+                  <span className={`text-[10px] italic ${minha ? "text-white/70" : "text-muted"}`}>editada</span>
+                )}
+                {rodape}
+              </div>
+            )}
+
+            {!apagada && (
+              <button
+                type="button"
+                onClick={() => setMenuId(aberto_ ? null : m.id)}
+                aria-label="Opções da mensagem"
+                aria-expanded={aberto_}
+                className={`absolute top-1 flex h-6 w-6 items-center justify-center rounded-full bg-surface text-muted shadow ring-1 ring-border/60 transition hover:text-foreground focus-visible:opacity-100 ${
+                  minha ? "-left-7" : "-right-7"
+                } ${aberto_ ? "opacity-100" : "opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-60"}`}
+              >
+                <ChevronDown className="h-4 w-4" />
+              </button>
+            )}
+
+            {aberto_ && (
+              <>
+                <div className="fixed inset-0 z-20" onClick={() => setMenuId(null)} aria-hidden />
+                <div
+                  role="menu"
+                  className={`absolute z-30 w-56 rounded-2xl border border-border/70 bg-surface p-1.5 text-sm text-foreground shadow-xl ${
+                    minha ? "right-0" : "left-0"
+                  } ${indice >= 2 ? "bottom-full mb-1.5" : "top-full mt-1.5"}`}
+                >
+                  <div className="flex justify-between gap-0.5 px-1 pb-1.5">
+                    {REACOES_RAPIDAS.map((e) => (
+                      <button
+                        key={e}
+                        type="button"
+                        onClick={() => void reagir(m, minhaReacao === e ? "" : e)}
+                        aria-label={`Reagir com ${e}`}
+                        className={`flex h-8 w-8 items-center justify-center rounded-full text-lg transition hover:scale-125 hover:bg-primary-soft ${
+                          minhaReacao === e ? "bg-primary-light ring-1 ring-primary/40" : ""
+                        }`}
+                      >
+                        {e}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="border-t border-border/50 pt-1">
+                    <ItemMenu icone={<Reply className="h-4 w-4" />} texto="Responder" aoClicar={() => comecarResposta(m)} />
+                    {m.tipo === null && <ItemMenu icone={<Copy className="h-4 w-4" />} texto="Copiar" aoClicar={() => void copiarTexto(m)} />}
+                    {podeEditar && <ItemMenu icone={<Pencil className="h-4 w-4" />} texto="Editar" aoClicar={() => comecarEdicao(m)} />}
+                    <ItemMenu icone={<Trash2 className="h-4 w-4" />} texto="Apagar para mim" aoClicar={() => void apagarMensagem(m, false)} perigo />
+                    {podeApagarTodos && (
+                      <ItemMenu icone={<Trash2 className="h-4 w-4" />} texto="Apagar para todos" aoClicar={() => void apagarMensagem(m, true)} perigo />
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
+
+          {grupos.size > 0 && (
+            <div className={`-mt-1.5 flex gap-1 ${minha ? "pr-2" : "pl-2"}`}>
+              {[...grupos.entries()].map(([emoji, g]) => (
+                <button
+                  key={emoji}
+                  type="button"
+                  onClick={() => void reagir(m, g.minha ? "" : emoji)}
+                  title={g.minha ? "Toque para remover sua reação" : "Reagir também"}
+                  className={`flex items-center gap-0.5 rounded-full border bg-surface px-1.5 py-0.5 text-xs shadow-sm ${
+                    g.minha ? "border-primary/50 ring-1 ring-primary/20" : "border-border/60"
+                  }`}
+                >
+                  <span>{emoji}</span>
+                  {g.qtd > 1 && <span className="font-semibold text-muted">{g.qtd}</span>}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </div>
     );
@@ -705,7 +1005,16 @@ export default function ChatSuporte() {
                 <p className="truncate text-xs text-white/75">
                   {conversaId === null
                     ? `Você: @${usuario.login} · conversas privadas`
-                    : `@${contatoAtual?.login ?? ""} · ${contatoAtual?.online ? "online agora" : "offline"}`}
+                    : null}
+                  {conversaId !== null &&
+                    (statusOutro?.digitando || contatoAtual?.digitando ? (
+                      <span className="font-semibold text-emerald-300">digitando…</span>
+                    ) : (
+                      descreverPresenca(
+                        statusOutro?.online ?? contatoAtual?.online ?? false,
+                        statusOutro?.ultimoAcessoHaSeg ?? contatoAtual?.ultimoAcessoHaSeg ?? null
+                      )
+                    ))}
                 </p>
               </div>
             </div>
@@ -796,9 +1105,18 @@ export default function ChatSuporte() {
                   >
                     <Avatar nome={c.nome} online={c.online} />
                     <span className="min-w-0 flex-1">
-                      <span className={`block truncate text-sm ${c.naoLidas > 0 ? "font-bold" : "font-semibold"}`}>{c.nome}</span>
-                      <span className="block truncate text-xs text-muted">
-                        {c.perfil === "ADMIN" ? "Administrador" : "Caixa"} · @{c.login} · {c.online ? "online" : "offline"}
+                      <span className="flex items-baseline justify-between gap-2">
+                        <span className={`truncate text-sm ${c.naoLidas > 0 ? "font-bold" : "font-semibold"}`}>{c.nome}</span>
+                        {c.ultimaEm && (
+                          <span className={`shrink-0 text-[10px] ${c.naoLidas > 0 ? "font-bold text-accent-dark" : "text-muted"}`}>
+                            {formatarHora(c.ultimaEm)}
+                          </span>
+                        )}
+                      </span>
+                      <span className={`block truncate text-xs ${c.digitando ? "font-semibold text-emerald-600" : "text-muted"}`}>
+                        {c.digitando
+                          ? "digitando…"
+                          : (c.ultimaMensagem ?? `${c.perfil === "ADMIN" ? "Administrador" : "Caixa"} · @${c.login}`)}
                       </span>
                     </span>
                     {c.naoLidas > 0 && (
@@ -852,9 +1170,19 @@ export default function ChatSuporte() {
                         </span>
                       </div>
                     )}
-                    {renderBolha(m)}
+                    {renderBolha(m, i)}
                   </Fragment>
                 ))}
+                {statusOutro?.digitando && (
+                  <div className="chat-msg flex justify-start" aria-live="polite">
+                    <div className="flex items-center gap-1 rounded-2xl rounded-bl-md border border-border/60 bg-surface px-3.5 py-3 shadow-sm">
+                      <span className="sr-only">{contatoAtual?.nome ?? "A pessoa"} está digitando</span>
+                      <span className="chat-ponto h-2 w-2 rounded-full bg-muted" />
+                      <span className="chat-ponto h-2 w-2 rounded-full bg-muted [animation-delay:0.15s]" />
+                      <span className="chat-ponto h-2 w-2 rounded-full bg-muted [animation-delay:0.3s]" />
+                    </div>
+                  </div>
+                )}
                 <div ref={fimRef} />
               </div>
 
@@ -874,6 +1202,28 @@ export default function ChatSuporte() {
 
               {seletorAberto && (
                 <SeletorEmoji onEmoji={inserirEmoji} onFigurinha={(f) => void enviarFigurinha(f)} desabilitado={enviando} />
+              )}
+
+              {(respondendo || editando) && (
+                <div className="flex items-center gap-2 border-t border-border/60 bg-primary-soft px-3 py-2">
+                  <span aria-hidden className="h-9 w-1 shrink-0 rounded-full bg-accent" />
+                  <div className="min-w-0 flex-1 text-xs">
+                    <p className="flex items-center gap-1 font-bold text-primary">
+                      {editando ? <Pencil className="h-3 w-3" /> : <Reply className="h-3 w-3" />}
+                      {editando
+                        ? "Editando mensagem"
+                        : `Respondendo a ${respondendo!.remetenteId === conversaId ? (contatoAtual?.nome ?? "") : "você mesmo"}`}
+                    </p>
+                    <p className="truncate text-muted">{previaDaMensagem(editando ?? respondendo ?? undefined)}</p>
+                  </div>
+                  <button
+                    onClick={cancelarRespostaOuEdicao}
+                    aria-label="Cancelar"
+                    className="rounded-full p-1.5 text-muted transition hover:bg-white/70"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
               )}
 
               {gravando ? (
@@ -908,7 +1258,10 @@ export default function ChatSuporte() {
                 <textarea
                   ref={textareaRef}
                   value={texto}
-                  onChange={(e) => setTexto(e.target.value)}
+                  onChange={(e) => {
+                    setTexto(e.target.value);
+                    avisarDigitando(e.target.value);
+                  }}
                   onPaste={(e) => {
                     // colar print/arquivo (Ctrl+V) envia como anexo; colar texto continua normal
                     const colados = Array.from(e.clipboardData.files);
@@ -918,6 +1271,11 @@ export default function ChatSuporte() {
                     }
                   }}
                   onKeyDown={(e) => {
+                    if (e.key === "Escape" && (respondendo || editando)) {
+                      e.preventDefault();
+                      cancelarRespostaOuEdicao();
+                      return;
+                    }
                     if (e.key === "Enter" && !e.shiftKey) {
                       e.preventDefault();
                       void enviar();
@@ -925,7 +1283,7 @@ export default function ChatSuporte() {
                   }}
                   rows={1}
                   maxLength={1000}
-                  placeholder="Escreva uma mensagem…"
+                  placeholder={editando ? "Edite a mensagem…" : "Escreva uma mensagem…"}
                   className="input chat-input flex-1 resize-none max-h-28"
                 />
                 {texto.trim() || enviando ? (

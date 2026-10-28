@@ -455,3 +455,27 @@ body {
     animation: none;
   }
 }
+
+/* "digitando…": três pontinhos que pulam em sequência */
+@keyframes chat-ponto {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+    opacity: 0.5;
+  }
+  30% {
+    transform: translateY(-0.3rem);
+    opacity: 1;
+  }
+}
+
+.chat-ponto {
+  animation: chat-ponto 1.1s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-ponto {
+    animation: none;
+  }
+}
