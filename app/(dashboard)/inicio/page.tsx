@@ -27,6 +27,7 @@ import { useAuth } from "@/lib/auth-context";
 import { BarraCarregamento } from "@/components/CarregamentoCatolico";
 import EditarAberturaCaixa from "@/components/EditarAberturaCaixa";
 import { NAV_ITEMS } from "@/lib/nav-items";
+import { EVENTO_ABRIR_NOVIDADES, NOVIDADES } from "@/lib/novidades";
 import { Caixa, Consignacao, Produto, Venda } from "@/lib/types";
 import {
   dataBrasiliaISO,
@@ -156,6 +157,27 @@ function Relogio() {
       <span className="animate-pulse text-accent-light/80">:</span>
       {minuto}
     </span>
+  );
+}
+
+/**
+ * Número da versão em uso: data da novidade mais recente + código curto do deploy (commit).
+ * Clicar abre a caixa de Novidades com o histórico de atualizações.
+ */
+function VersaoSistema() {
+  const versao = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
+  const codigo = /^[0-9a-f]{40}$/i.test(versao) ? versao.slice(0, 7) : "dev";
+  const numero = NOVIDADES[0]?.data.replaceAll("-", ".");
+  return (
+    <button
+      type="button"
+      onClick={() => window.dispatchEvent(new Event(EVENTO_ABRIR_NOVIDADES))}
+      title="Ver o histórico de atualizações"
+      className="mt-1 font-mono text-[10px] sm:text-[11px] tracking-wide text-white/55 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-light"
+    >
+      Versão {numero ? `${numero} · ` : ""}
+      {codigo}
+    </button>
   );
 }
 
@@ -442,6 +464,7 @@ export default function InicioPage() {
             <div className="shrink-0 text-right leading-none">
               <Relogio />
               <p className="mt-1 text-[11px] sm:text-xs text-white/65">{dataPorExtenso()}</p>
+              <VersaoSistema />
             </div>
           </div>
 
