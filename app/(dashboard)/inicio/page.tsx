@@ -161,13 +161,13 @@ function Relogio() {
 }
 
 /**
- * Número da versão em uso: data da novidade mais recente + código curto do deploy (commit).
+ * Número da versão em uso: 1.N, onde N é a quantidade de novidades cadastradas em lib/novidades.ts
+ * (sobe sozinho a cada novidade nova), mais a data da mais recente.
  * Clicar abre a caixa de Novidades com o histórico de atualizações.
  */
 function VersaoSistema() {
-  const versao = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
-  const codigo = /^[0-9a-f]{40}$/i.test(versao) ? versao.slice(0, 7) : "dev";
-  const numero = NOVIDADES[0]?.data.replaceAll("-", ".");
+  const numero = `1.${NOVIDADES.length}`;
+  const data = NOVIDADES[0]?.data.split("-").reverse().join(".");
   return (
     <button
       type="button"
@@ -175,8 +175,8 @@ function VersaoSistema() {
       title="Ver o histórico de atualizações"
       className="mt-1 font-mono text-[10px] sm:text-[11px] tracking-wide text-white/55 transition hover:text-white focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent-light"
     >
-      Versão {numero ? `${numero} · ` : ""}
-      {codigo}
+      Versão {numero}
+      {data ? ` · ${data}` : ""}
     </button>
   );
 }
