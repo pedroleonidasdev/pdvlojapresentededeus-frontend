@@ -11,6 +11,44 @@ function base64UrlParaUint8Array(base64Url: string): Uint8Array {
   return Uint8Array.from([...bruto].map((c) => c.charCodeAt(0)));
 }
 
+/**
+ * A inscrição do navegador foi criada com a chave VAPID pública ATUAL? Se as chaves do
+ * servidor forem trocadas, inscrições antigas continuam existindo no navegador mas o
+ * serviço de push (FCM/Apple) passa a recusar os envios (HTTP 403/400).
+ */
+function inscricaoUsaChave(inscricao: PushSubscription, chave: Uint8Array): boolean {
+  const atual = inscricao.options?.applicationServerKey;
+  if (!atual) return false;
+  const bytes = new Uint8Array(atual);
+  return bytes.length === chave.length && bytes.every((b, i) => b === chave[i]);
+}
+
+/**
+ * Devolve uma inscrição que usa a chave VAPID atual: reaproveita a existente se bater;
+ * se foi criada com outra chave, cancela e cria uma nova (a permissão já concedida
+ * dispensa novo pedido ao usuário).
+ */
+async function obterInscricaoComChaveAtual(
+  registro: ServiceWorkerRegistration,
+  vapidPublicKey: string
+): Promise<PushSubscription> {
+  const chave = base64UrlParaUint8Array(vapidPublicKey);
+  let inscricao = await registro.pushManager.getSubscription();
+  if (inscricao && !inscricaoUsaChave(inscricao, chave)) {
+    await inscricao.unsubscribe();
+    inscricao = null;
+  }
+  if (!inscricao) {
+    inscricao = await registro.pushManager.subscribe({
+      userVisibleOnly: true,
+      // cast necessário: a lib do TS tipa applicationServerKey como BufferSource,
+      // e a variação de tipo do Uint8Array entre versões do TS não bate 1:1 com isso
+      applicationServerKey: chave as BufferSource,
+    });
+  }
+  return inscricao;
+}
+
 export function suportaNotificacaoPush(): boolean {
   return typeof window !== "undefined" && "serviceWorker" in navigator && "PushManager" in window;
 }
@@ -165,15 +203,7 @@ export async function ativarNotificacoes(): Promise<void> {
   }
 
   const registro = await navigator.serviceWorker.ready;
-  let inscricao = await registro.pushManager.getSubscription();
-  if (!inscricao) {
-    inscricao = await registro.pushManager.subscribe({
-      userVisibleOnly: true,
-      // cast necessário: a lib do TS tipa applicationServerKey como BufferSource,
-      // e a variação de tipo do Uint8Array entre versões do TS não bate 1:1 com isso
-      applicationServerKey: base64UrlParaUint8Array(vapidPublicKey) as BufferSource,
-    });
-  }
+  const inscricao = await obterInscricaoComChaveAtual(registro, vapidPublicKey);
 
   await enviarInscricaoAoBackend(inscricao);
   await atualizarConfigServiceWorker();
@@ -192,8 +222,13 @@ export async function sincronizarInscricao(): Promise<void> {
   if (!suportaNotificacaoPush() || Notification.permission !== "granted") return;
   try {
     const registro = await navigator.serviceWorker.ready;
-    const inscricao = await registro.pushManager.getSubscription();
-    if (inscricao) await enviarInscricaoAoBackend(inscricao);
+    const vapidPublicKey = process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY;
+    const existente = await registro.pushManager.getSubscription();
+    if (existente && vapidPublicKey) {
+      // se a inscrição for de uma chave antiga, recria com a atual (cura sozinho após troca de chaves)
+      const inscricao = await obterInscricaoComChaveAtual(registro, vapidPublicKey);
+      await enviarInscricaoAoBackend(inscricao);
+    }
     await atualizarConfigServiceWorker();
   } catch {
     // best-effort — se falhar, tenta de novo na próxima vez que o app abrir
