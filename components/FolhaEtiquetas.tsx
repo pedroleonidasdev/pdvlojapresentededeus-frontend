@@ -30,7 +30,7 @@ const QUANTIDADE_MAX = 99;
 
 /**
  * Tela de etiquetas para impressão: cada produto selecionado vira uma etiqueta
- * (nome + preço + código de barras), repetida pela quantidade escolhida — a
+ * (preço em destaque + código de barras, com o nome bem pequeno), repetida pela quantidade escolhida — a
  * mesma quantidade vale igualmente para todos os produtos selecionados. A
  * pré-visualização abaixo é só para conferência — o botão envia os dados para
  * o agente local goldensky-agente.py, que imprime direto na impressora térmica
@@ -243,14 +243,14 @@ export default function FolhaEtiquetas({
           {comCodigo.length > 0 ? (
             <>
               <div className="max-w-[220px] mx-auto text-center border border-dashed border-border rounded-lg px-2 pt-3 pb-1">
-                <p className="text-[10px] font-medium leading-[1.05] px-1">{comCodigo[0].nome}</p>
-                <p className="text-[11px] font-mono leading-none mt-0.5">{formatarMoeda(comCodigo[0].precoVenda)}</p>
+                <p className="text-[6px] font-medium leading-none text-muted truncate px-1">{comCodigo[0].nome}</p>
+                <p className="text-[20px] font-bold font-mono leading-none mt-1">{formatarMoeda(comCodigo[0].precoVenda)}</p>
                 <BarcodeSvg
                   valor={comCodigo[0].codigoBarras!}
-                  altura={15}
-                  largura={0.8}
+                  altura={22}
+                  largura={0.9}
                   fontSize={8}
-                  className="mx-auto mt-0"
+                  className="mx-auto mt-1"
                 />
               </div>
               <p className="text-[11px] text-muted text-center mt-3">
