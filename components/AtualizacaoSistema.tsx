@@ -4,6 +4,13 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertTriangle, Check, CheckCircle2, Download, Loader2, RotateCw } from "lucide-react";
 import { BarraCarregamento, CruzIcone, OracaoRotativa } from "@/components/CarregamentoCatolico";
 import { haTrabalhoEmAndamento } from "@/lib/trabalho-em-andamento";
+import {
+  buscarVersaoServidor,
+  gravarServidorVisto,
+  lerMostrarAtualizado,
+  lerServidorVisto,
+  limparMostrarAtualizado,
+} from "@/lib/versao-servidor";
 
 // Versão embutida neste JavaScript (definida em next.config.ts).
 const VERSAO_ATUAL = process.env.NEXT_PUBLIC_APP_VERSION ?? "";
@@ -51,20 +58,32 @@ function versaoCurta(versao?: string | null): string | null {
  *    tentar de novo.
  * 3. Ao abrir na versão nova aparece "Sistema atualizado!" (fecha sozinho). Na primeira vez que o
  *    navegador abre o sistema só registra a versão, sem mostrar nada.
+ * 4. Atualização do SERVIDOR (backend) conta do mesmo jeito: se a versão do servidor muda com o sistema
+ *    aberto, aparece o mesmo aviso (atualizar agora / mais tarde).
+ * 5. "Mais tarde" não esconde o assunto: fica a caixinha "Atualização disponível" na tela até a pessoa
+ *    atualizar, e o aviso completo volta depois de 30 min. Quem sai e entra de novo é atualizado antes de
+ *    o sistema ser liberado (ver GuardaAtualizacao).
  */
 export default function AtualizacaoSistema() {
   const [novaVersao, setNovaVersao] = useState<string | null>(null);
-  const [fase, setFase] = useState<Fase>(() => (versaoMudouDesdeUltimaVisita() ? "sucesso" : "aviso"));
+  const [fase, setFase] = useState<Fase>(() => (versaoMudouDesdeUltimaVisita() || lerMostrarAtualizado() ? "sucesso" : "aviso"));
   const [progresso, setProgresso] = useState(0);
   const [passo, setPasso] = useState(0);
   const [segundos, setSegundos] = useState<number | null>(null);
   const [ocupado, setOcupado] = useState(false);
+  // "Mais tarde": o aviso completo some, mas a caixinha "Atualização disponível" fica na tela
+  const [adiado, setAdiado] = useState(false);
 
   const progressoRef = useRef(0);
   const quadroRef = useRef<number | null>(null);
   const atualizandoRef = useRef(false);
-  // "Mais tarde": enquanto não chegar esse horário, o aviso não reaparece
-  const adiadoAteRef = useRef(0);
+  // versão do servidor que gerou o aviso (para registrar como "vista" quando a pessoa atualizar)
+  const servidorNovoRef = useRef<string | null>(null);
+
+  // a confirmação "Sistema atualizado!" (se pedida pelo porteiro) já foi lida; não repete no próximo carregamento
+  useEffect(() => {
+    limparMostrarAtualizado();
+  }, []);
 
   // registra a versão que este navegador está usando agora
   useEffect(() => {
@@ -80,14 +99,28 @@ export default function AtualizacaoSistema() {
     // em desenvolvimento a versão muda a todo momento — não avisa
     if (process.env.NODE_ENV !== "production" || !VERSAO_ATUAL) return;
     if (atualizandoRef.current) return;
-    if (Date.now() < adiadoAteRef.current) return;
+
+    // 1) versão do sistema (frontend) publicada
     try {
       const resp = await fetch("/api/versao", { cache: "no-store" });
-      if (!resp.ok) return;
-      const { versao } = (await resp.json()) as { versao?: string | null };
-      if (versao && versao !== VERSAO_ATUAL) setNovaVersao(versao);
+      if (resp.ok) {
+        const { versao } = (await resp.json()) as { versao?: string | null };
+        if (versao && versao !== VERSAO_ATUAL) setNovaVersao(versao);
+      }
     } catch {
       // sem internet agora — tenta de novo na próxima checagem
+    }
+
+    // 2) versão do servidor (backend): mudou desde que este navegador a viu pela última vez?
+    const servidor = await buscarVersaoServidor(8000);
+    if (servidor?.versao) {
+      const vista = lerServidorVisto();
+      if (!vista) {
+        gravarServidorVisto(servidor.versao);
+      } else if (vista !== servidor.versao) {
+        servidorNovoRef.current = servidor.versao;
+        setNovaVersao((atual) => atual ?? servidor.versao);
+      }
     }
   }, []);
 
@@ -175,6 +208,7 @@ export default function AtualizacaoSistema() {
       await animarAte(100, 500);
       // deixa a barra cheia à vista por um instante antes de reiniciar
       await new Promise((r) => setTimeout(r, 600));
+      if (servidorNovoRef.current) gravarServidorVisto(servidorNovoRef.current);
       window.location.reload();
     } catch {
       atualizandoRef.current = false;
@@ -189,7 +223,7 @@ export default function AtualizacaoSistema() {
   }, [atualizar]);
 
   useEffect(() => {
-    if (fase !== "aviso" || !novaVersao) return;
+    if (fase !== "aviso" || !novaVersao || adiado) return;
     let restante = SEGUNDOS_AUTOMATICO;
     const tick = () => {
       const emAndamento = haTrabalhoEmAndamento();
@@ -213,7 +247,7 @@ export default function AtualizacaoSistema() {
       clearTimeout(primeiro);
       clearInterval(intervalo);
     };
-  }, [fase, novaVersao]);
+  }, [fase, novaVersao, adiado]);
 
   // limpa a animação se o componente sair da tela
   useEffect(() => {
@@ -222,14 +256,25 @@ export default function AtualizacaoSistema() {
     };
   }, []);
 
+  // depois de "Mais tarde", o aviso completo volta sozinho passado um tempo
+  useEffect(() => {
+    if (!adiado) return;
+    const t = setTimeout(() => setAdiado(false), ADIAR_AVISO_MS);
+    return () => clearTimeout(t);
+  }, [adiado]);
+
   function adiar() {
-    adiadoAteRef.current = Date.now() + ADIAR_AVISO_MS;
-    setNovaVersao(null);
+    setAdiado(true);
     setSegundos(null);
     setFase("aviso");
   }
 
   if (fase === "aviso" && !novaVersao) return null;
+
+  // "Mais tarde": só a caixinha, que lembra que há atualização e deixa atualizar quando quiser
+  if (fase === "aviso" && adiado) {
+    return <CaixaAtualizacaoPendente onClick={() => setAdiado(false)} />;
+  }
 
   return (
     <PainelAtualizacao
@@ -259,6 +304,10 @@ export function PainelAtualizacao({
   onAtualizar,
   onAdiar,
   onFechar,
+  passos = PASSOS,
+  titulo = "Atualizando o sistema…",
+  rotulo = "Atualizando",
+  aviso = "Não feche esta janela. O sistema reinicia sozinho.",
 }: {
   fase: Fase;
   versaoAtual: string | null;
@@ -270,6 +319,11 @@ export function PainelAtualizacao({
   onAtualizar: () => void;
   onAdiar: () => void;
   onFechar: () => void;
+  /** Etapas mostradas na fase "atualizando" (padrão: as da atualização com reinício). */
+  passos?: string[];
+  titulo?: string;
+  rotulo?: string;
+  aviso?: string;
 }) {
   return (
     <div
@@ -363,10 +417,10 @@ export function PainelAtualizacao({
                 <RotateCw className="h-7 w-7 animate-spin [animation-duration:2s]" strokeWidth={1.75} />
               </IconeFase>
               <p className="font-mono text-[10px] font-semibold uppercase tracking-[0.22em] text-accent-dark">
-                Atualizando
+                {rotulo}
               </p>
               <h2 id="titulo-atualizacao" className="mt-1.5 text-xl font-semibold tracking-tight text-foreground">
-                Atualizando o sistema…
+                {titulo}
               </h2>
 
               <div className="mt-6">
@@ -375,7 +429,7 @@ export function PainelAtualizacao({
               </div>
 
               <ol className="mx-auto mt-5 max-w-xs space-y-2 text-left">
-                {PASSOS.map((texto, i) => {
+                {passos.map((texto, i) => {
                   const feito = i < passo;
                   const atual = i === passo;
                   return (
@@ -407,7 +461,7 @@ export function PainelAtualizacao({
               </ol>
 
               <OracaoRotativa className="mt-5" />
-              <p className="mt-4 text-xs text-muted">Não feche esta janela. O sistema reinicia sozinho.</p>
+              <p className="mt-4 text-xs text-muted">{aviso}</p>
             </div>
           )}
 
@@ -511,5 +565,31 @@ function IconeFase({
     >
       {children}
     </span>
+  );
+}
+
+/**
+ * Caixinha fixa que lembra que existe atualização nova (depois de "Mais tarde"). Fica visível em
+ * qualquer tela até a pessoa atualizar; clicar nela abre o aviso para atualizar agora.
+ */
+function CaixaAtualizacaoPendente({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="aviso-chat fixed left-1/2 z-[35] flex -translate-x-1/2 items-center gap-2.5 rounded-full border-2 border-accent bg-accent-light px-4 py-2.5 text-sm font-semibold text-accent-dark shadow-[0_12px_30px_-10px_rgba(15,51,42,0.55)] transition hover:brightness-105 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+      style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+      aria-label="Há uma atualização nova do sistema. Clique para atualizar."
+    >
+      <span aria-hidden className="relative flex h-2.5 w-2.5">
+        <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-accent opacity-75" />
+        <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-accent-dark" />
+      </span>
+      Atualização disponível
+      <span className="inline-flex items-center gap-1 rounded-full bg-primary px-2.5 py-0.5 text-xs font-bold text-white">
+        <Download className="h-3.5 w-3.5" />
+        Atualizar
+      </span>
+    </button>
   );
 }

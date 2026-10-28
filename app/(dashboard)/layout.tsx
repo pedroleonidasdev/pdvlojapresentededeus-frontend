@@ -7,6 +7,7 @@ import { encontrarNavItemPorPath } from "@/lib/nav-items";
 import Sidebar from "@/components/Sidebar";
 import AtualizacaoSistema from "@/components/AtualizacaoSistema";
 import AtualizacaoServidor from "@/components/AtualizacaoServidor";
+import GuardaAtualizacao from "@/components/GuardaAtualizacao";
 import Novidades from "@/components/Novidades";
 import MonitorCaixa from "@/components/MonitorCaixa";
 import ChatSuporte from "@/components/ChatSuporte";
@@ -50,6 +51,7 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   }
 
   return (
+    <GuardaAtualizacao>
     <ChamadaProvider>
     <div className="flex min-h-screen bg-background">
       <AtualizacaoSistema />
@@ -100,5 +102,6 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       </div>
     </div>
     </ChamadaProvider>
+    </GuardaAtualizacao>
   );
 }
