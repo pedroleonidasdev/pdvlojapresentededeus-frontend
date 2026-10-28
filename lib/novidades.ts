@@ -18,14 +18,33 @@ export const NOVIDADES: Novidade[] = [
   {
     id: "2026-10-28-atualizacao-e-chat",
     data: "2026-10-28",
-    titulo: "Atualizações automáticas e novo chat",
+    titulo: "Atualização obrigatória, caixinha de aviso e chat estilo WhatsApp",
     itens: [
       "Ao entrar no sistema, ele confere se há versão nova e se atualiza antes de liberar a operação, com uma barra mostrando o andamento.",
-      "Com o sistema aberto, quando sai uma versão nova aparece o aviso “Há uma nova versão do sistema”. Sem venda em andamento ele reinicia sozinho em 20 segundos; com venda em andamento, só atualiza quando você clicar em “Atualizar agora”.",
+      "Com o sistema aberto, quando sai uma versão nova aparece o aviso “Há uma nova versão do sistema”, com os botões “Atualizar agora” e “Mais tarde”.",
       "Se escolher “Mais tarde”, a caixinha “Atualização disponível” fica na tela até você atualizar.",
       "Quando o servidor está reiniciando ou atualizando, aparece o aviso “Atualizando o servidor…” e, ao voltar, a confirmação de que já pode continuar as vendas.",
-      "O chat de Conversas ganhou visual no estilo WhatsApp, confirmação de leitura, som e um pop-up mais visível para novas mensagens.",
-      "Abrir o sistema em outra aba não herda mais o login de outra aba.",
+      "O chat de Conversas ganhou visual no estilo WhatsApp, e o pop-up de nova mensagem ficou mais visível.",
+    ],
+  },
+  {
+    id: "2026-10-27-chat-leitura-e-login",
+    data: "2026-10-27",
+    titulo: "Chat com confirmação de leitura e login por aba",
+    itens: [
+      "No chat, agora dá para ver quando a mensagem foi lida. O visual foi renovado e há um som ao chegar mensagem nova.",
+      "O pop-up de nova mensagem ficou mais fácil de perceber.",
+      "Uma aba nova não herda mais o login de outra aba: cada aba mantém o seu usuário.",
+    ],
+  },
+  {
+    id: "2026-10-26-atualizacao-em-etapas",
+    data: "2026-10-26",
+    titulo: "Atualização com barra de progresso e abrir caixa mais limpo",
+    itens: [
+      "Ao atualizar, uma barra de progresso mostra as etapas: verificando, baixando, preparando e reiniciando. O seu login é mantido.",
+      "Sem venda em andamento, o sistema reinicia sozinho depois de uma contagem. Com venda em andamento, ele espera você terminar, porque o carrinho se perderia.",
+      "A janela de abrir o caixa ficou mais limpa e profissional.",
     ],
   },
   {
@@ -36,6 +55,19 @@ export const NOVIDADES: Novidade[] = [
       "O balão “Conversas” saiu do canto da tela, onde atrapalhava a venda. Agora o botão “Conversas” fica no rodapé do menu lateral, com o número de mensagens não lidas.",
       "No celular, o botão fica na barra verde do topo, ao lado do nome do sistema.",
       "Ao abrir, a janela da conversa aparece ao lado do menu. Para fechar, use o X ou clique em “Conversas” de novo.",
+    ],
+  },
+  {
+    id: "2026-10-24-visual-e-pop-up",
+    data: "2026-10-24",
+    titulo: "Novo visual e pop-up de mensagem",
+    itens: [
+      "Visual novo nas telas de Categorias, Usuários, Caixa e nas janelas (modais), além do login e do Estoque.",
+      "No Estoque: indicadores no topo, filtros em chips e uma tabela nova.",
+      "A tela de Venda ficou mais clara e compacta.",
+      "No Início, uma faixa compacta mostra o valor de abertura do caixa, os cartões de resumo repetidos saíram e o menu lateral mostra só o selo do caixa.",
+      "Aparece um pop-up quando chega uma nova mensagem no chat.",
+      "Nos consignados, o código de barras agora aparece abaixo do código no PDF.",
     ],
   },
   {
@@ -68,6 +100,17 @@ export const NOVIDADES: Novidade[] = [
       "Ao mudar o preço de um produto no cadastro, as consignações em aberto acompanham o novo preço. Itens que você já tinha ajustado à mão ficam como estão.",
       "Agora é possível usar preço R$ 0,00 (por exemplo, para brindes).",
       "O botão de salvar a edição de uma consignação fechada agora se chama “Salvar conferência corrigida”.",
+    ],
+  },
+  {
+    id: "2026-10-10-consignados-faturamento",
+    data: "2026-10-10",
+    titulo: "Consignados no Faturamento",
+    itens: [
+      "Consignações fechadas entram no Faturamento e nas Finanças: vale o valor vendido menos a comissão do consignatário.",
+      "Na nova consignação, o item sem estoque pode ser tirado da lista com o botão “Remover”.",
+      "A lista de produtos ganhou caixinha de busca com resultados por relevância.",
+      "No relatório, a coluna COD. mostra o código de barras do estoque.",
     ],
   },
 ];
