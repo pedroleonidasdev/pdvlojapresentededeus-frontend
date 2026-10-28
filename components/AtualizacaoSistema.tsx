@@ -325,6 +325,53 @@ export function PainelAtualizacao({
   rotulo?: string;
   aviso?: string;
 }) {
+  const caixaRef = useRef<HTMLDivElement>(null);
+  const aoEscRef = useRef<() => void>(() => {});
+  // Esc = "Mais tarde" / "Fechar" (nunca durante a atualização, nem atualiza sem querer)
+  useEffect(() => {
+    aoEscRef.current = fase === "aviso" || fase === "erro" ? onAdiar : fase === "sucesso" ? onFechar : () => {};
+  });
+
+  // mantém o Tab dentro da janela enquanto ela está aberta (aria-modal)
+  useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        aoEscRef.current();
+        return;
+      }
+      if (e.key !== "Tab" || !caixaRef.current) return;
+      const focaveis = caixaRef.current.querySelectorAll<HTMLElement>("button:not([disabled])");
+      if (focaveis.length === 0) {
+        e.preventDefault();
+        return;
+      }
+      const primeiro = focaveis[0];
+      const ultimo = focaveis[focaveis.length - 1];
+      const ativo = document.activeElement;
+      if (!caixaRef.current.contains(ativo)) {
+        e.preventDefault();
+        primeiro.focus();
+      } else if (e.shiftKey && ativo === primeiro) {
+        e.preventDefault();
+        ultimo.focus();
+      } else if (!e.shiftKey && ativo === ultimo) {
+        e.preventDefault();
+        primeiro.focus();
+      }
+    };
+    document.addEventListener("keydown", aoTeclar);
+    return () => document.removeEventListener("keydown", aoTeclar);
+  }, []);
+
+  // a confirmação "Sistema atualizado!" fecha sozinha (não depende da animação do CSS, que pode estar desligada)
+  useEffect(() => {
+    if (fase !== "sucesso") return;
+    const t = setTimeout(() => aoEscRef.current(), SEGUNDOS_CONFIRMACAO * 1000);
+    return () => clearTimeout(t);
+  }, [fase]);
+
+  const semInternet = typeof navigator !== "undefined" && navigator.onLine === false;
+
   return (
     <div
       className="fixed inset-0 z-[100] flex items-center justify-center bg-primary-dark/60 backdrop-blur-md p-4"
@@ -332,7 +379,7 @@ export function PainelAtualizacao({
       aria-modal="true"
       aria-labelledby="titulo-atualizacao"
     >
-      <div className="login-entra relative w-full max-w-md overflow-hidden rounded-3xl bg-surface text-center shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5">
+      <div ref={caixaRef} className="login-entra relative w-full max-w-md overflow-hidden rounded-3xl bg-surface text-center shadow-[0_30px_80px_-20px_rgba(0,0,0,0.6)] ring-1 ring-black/5">
         <div aria-hidden className="h-1.5 w-full bg-gradient-to-r from-primary via-accent to-primary" />
 
         <div className="px-7 py-8 sm:px-9 sm:py-10">
@@ -406,7 +453,7 @@ export function PainelAtualizacao({
                 </button>
               </div>
               <p className="mt-3 text-[11px] text-muted">
-                “Mais tarde” adia este aviso por 30 minutos.
+                “Mais tarde” (ou Esc) adia este aviso por 30 minutos.
               </p>
             </>
           )}
@@ -423,7 +470,14 @@ export function PainelAtualizacao({
                 {titulo}
               </h2>
 
-              <div className="mt-6">
+              <div
+                className="mt-6"
+                role="progressbar"
+                aria-valuemin={0}
+                aria-valuemax={100}
+                aria-valuenow={Math.floor(progresso)}
+                aria-label="Progresso da atualização"
+              >
                 <BarraCarregamento progresso={progresso} />
                 <p className="mt-2 font-mono text-sm font-semibold tabular-nums text-primary">{Math.floor(progresso)}%</p>
               </div>
@@ -474,8 +528,10 @@ export function PainelAtualizacao({
                 Não foi possível atualizar
               </h2>
               <p className="mt-2 text-sm leading-relaxed text-muted">
-                Verifique a conexão com a internet e tente de novo. Nada foi perdido: o sistema continua funcionando na
-                versão atual.
+                {semInternet
+                  ? "Este aparelho está sem internet. Reconecte e tente de novo."
+                  : "Não conseguimos baixar a nova versão agora. Verifique a conexão e tente de novo."}{" "}
+                Nada foi perdido: o sistema continua funcionando na versão atual.
               </p>
               <div className="mt-7 flex flex-col-reverse gap-2 sm:flex-row">
                 <button
@@ -534,7 +590,6 @@ export function PainelAtualizacao({
             <span
               className="block h-full origin-left bg-gradient-to-r from-accent to-primary"
               style={{ animation: `aviso-chat-barra ${SEGUNDOS_CONFIRMACAO}s linear forwards` }}
-              onAnimationEnd={onFechar}
             />
           </span>
         )}
