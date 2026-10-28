@@ -16,6 +16,19 @@ export interface Novidade {
 
 export const NOVIDADES: Novidade[] = [
   {
+    id: "2026-10-28-atualizacao-e-chat",
+    data: "2026-10-28",
+    titulo: "Atualizações automáticas e novo chat",
+    itens: [
+      "Ao entrar no sistema, ele confere se há versão nova e se atualiza antes de liberar a operação, com uma barra mostrando o andamento.",
+      "Com o sistema aberto, quando sai uma versão nova aparece o aviso “Há uma nova versão do sistema”. Sem venda em andamento ele reinicia sozinho em 20 segundos; com venda em andamento, só atualiza quando você clicar em “Atualizar agora”.",
+      "Se escolher “Mais tarde”, a caixinha “Atualização disponível” fica na tela até você atualizar.",
+      "Quando o servidor está reiniciando ou atualizando, aparece o aviso “Atualizando o servidor…” e, ao voltar, a confirmação de que já pode continuar as vendas.",
+      "O chat de Conversas ganhou visual no estilo WhatsApp, confirmação de leitura, som e um pop-up mais visível para novas mensagens.",
+      "Abrir o sistema em outra aba não herda mais o login de outra aba.",
+    ],
+  },
+  {
     id: "2026-10-24-conversas-no-menu",
     data: "2026-10-24",
     titulo: "Conversas agora fica no menu",
