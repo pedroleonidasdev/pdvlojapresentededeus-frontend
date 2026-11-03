@@ -13,8 +13,9 @@ import { imprimirCupom } from "@/lib/impressora";
 import PageHeader from "@/components/PageHeader";
 import EditarFormaPagamentoModal from "@/components/EditarFormaPagamentoModal";
 import EditarDataHoraModal from "@/components/EditarDataHoraModal";
+import AdicionarVendaModal from "@/components/AdicionarVendaModal";
 import FiltroCheckbox from "@/components/FiltroCheckbox";
-import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText, Eye, EyeOff, Trash2 } from "lucide-react";
+import { Loader2, Clock, User, Pencil, CalendarClock, Receipt, Search, Printer, Download, FileText, Eye, EyeOff, Trash2, Plus } from "lucide-react";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 
 const FORMAS: FormaPagamento[] = ["PIX", "DINHEIRO", "CARTAO_CREDITO", "CARTAO_DEBITO", "MULTIPLO"];
@@ -60,6 +61,7 @@ function VendasPageConteudo() {
   const [buscou, setBuscou] = useState(false);
   const [vendaEmEdicao, setVendaEmEdicao] = useState<Venda | null>(null);
   const [vendaDataHoraEmEdicao, setVendaDataHoraEmEdicao] = useState<Venda | null>(null);
+  const [adicionandoVenda, setAdicionandoVenda] = useState(false);
   const [excluindoId, setExcluindoId] = useState<number | null>(null);
   const [excluindoTodas, setExcluindoTodas] = useState(false);
   const [erroLista, setErroLista] = useState<string | null>(null);
@@ -363,7 +365,20 @@ function VendasPageConteudo() {
 
   return (
     <div>
-      <PageHeader title="Relatórios de Vendas" subtitle="Consulte, filtre e corrija vendas registradas" />
+      <PageHeader
+        title="Relatórios de Vendas"
+        subtitle="Consulte, filtre e corrija vendas registradas"
+        action={
+          isAdmin && (
+            <button
+              onClick={() => setAdicionandoVenda(true)}
+              className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 transition"
+            >
+              <Plus className="w-4 h-4" strokeWidth={2.25} /> Adicionar venda
+            </button>
+          )
+        }
+      />
 
       <div className="p-4 md:p-8 space-y-4">
         <div className="bg-surface border border-border/70 rounded-2xl shadow-[0_10px_30px_-18px_rgba(15,51,42,0.35)] p-4 space-y-3">
@@ -640,6 +655,14 @@ function VendasPageConteudo() {
           venda={vendaEmEdicao}
           onFechar={() => setVendaEmEdicao(null)}
           onSalvo={() => carregar()}
+        />
+      )}
+
+      {isAdmin && adicionandoVenda && (
+        <AdicionarVendaModal
+          onFechar={() => setAdicionandoVenda(false)}
+          // mostra o dia da venda recém-lançada, mesmo que seja fora do período filtrado
+          onSalvo={(dia) => aplicarPeriodo(dia, dia)}
         />
       )}
 
