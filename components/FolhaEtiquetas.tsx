@@ -7,7 +7,7 @@ import BarcodeSvg from "@/components/BarcodeSvg";
 import PreviewEtiquetaZpl from "@/components/PreviewEtiquetaZpl";
 import {
   EtiquetaParaImprimir,
-  PERFIL_GOLDENSKY,
+  PERFIL_ELGIN,
   PerfilImpressoraEtiquetas,
   consultarImpressoraEtiquetas,
   imprimirEtiquetas,
@@ -95,7 +95,7 @@ export default function FolhaEtiquetas({
 
   // undefined = verificando; null = agente não respondeu; objeto = impressora em uso
   const [perfil, setPerfil] = useState<PerfilImpressoraEtiquetas | null | undefined>(undefined);
-  const impressora = perfil ?? PERFIL_GOLDENSKY;
+  const impressora = perfil ?? PERFIL_ELGIN;
   const ehZpl = impressora.driver === "zpl";
 
   const [enviando, setEnviando] = useState<"lote" | "teste" | null>(null);

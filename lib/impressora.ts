@@ -39,8 +39,8 @@ export async function imprimirCupom(venda: Venda): Promise<void> {
 // --- Etiquetas de preço ------------------------------------------------------
 // O agente local (backend/scripts/goldensky-agente.py) imprime etiquetas em duas
 // impressoras, conforme ETIQUETA_DRIVER no computador da loja:
-//   escpos -> Goldensky 80mm (rasteriza e repete cada item)
-//   zpl    -> Elgin/Bematech L42 Pro Full (ZPL nativo, aceita "quantidade" por item)
+//   zpl    -> Elgin/Bematech L42 Pro Full (ZPL nativo, aceita "quantidade" por item) — padrão
+//   escpos -> modo antigo (Goldensky 80mm); a loja agora usa a Goldensky só para o cupom
 // A tela pergunta ao agente (GET /status) qual está em uso e se adapta.
 
 export const AGENTE_ETIQUETAS_URL =
@@ -63,6 +63,14 @@ export const PERFIL_GOLDENSKY: PerfilImpressoraEtiquetas = {
   nome: "Goldensky 80mm",
   larguraMaxMm: 80,
   suportaQuantidade: false,
+};
+
+// Impressora de etiquetas da loja (a Goldensky imprime só o cupom não fiscal).
+export const PERFIL_ELGIN: PerfilImpressoraEtiquetas = {
+  driver: "zpl",
+  nome: "Elgin L42 Pro Full",
+  larguraMaxMm: 108,
+  suportaQuantidade: true,
 };
 
 /**
