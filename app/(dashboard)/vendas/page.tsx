@@ -49,6 +49,8 @@ export default function VendasPage() {
 function VendasPageConteudo() {
   const { usuario } = useAuth();
   const isAdmin = usuario?.perfil === "ADMIN";
+  // "Adicionar venda" também liberado para a santinha (a regra é validada de novo no backend)
+  const podeAdicionarVenda = isAdmin || usuario?.login?.toLowerCase() === "santinha";
   const searchParams = useSearchParams();
   const inicioDaUrl = searchParams.get("inicio");
   const fimDaUrl = searchParams.get("fim");
@@ -369,7 +371,7 @@ function VendasPageConteudo() {
         title="Relatórios de Vendas"
         subtitle="Consulte, filtre e corrija vendas registradas"
         action={
-          isAdmin && (
+          podeAdicionarVenda && (
             <button
               onClick={() => setAdicionandoVenda(true)}
               className="flex items-center gap-2 bg-gradient-to-r from-primary to-primary-dark text-white text-sm font-semibold px-4 py-2.5 rounded-xl shadow-md shadow-primary/30 ring-1 ring-white/10 hover:brightness-110 hover:-translate-y-0.5 active:translate-y-0 transition"
@@ -658,7 +660,7 @@ function VendasPageConteudo() {
         />
       )}
 
-      {isAdmin && adicionandoVenda && (
+      {podeAdicionarVenda && adicionandoVenda && (
         <AdicionarVendaModal
           onFechar={() => setAdicionandoVenda(false)}
           // mostra o dia da venda recém-lançada, mesmo que seja fora do período filtrado

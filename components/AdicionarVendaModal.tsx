@@ -42,8 +42,9 @@ const arredondar = (n: number) => Math.round(n * 100) / 100;
 
 /**
  * Registra uma venda que aconteceu antes e não foi lançada (ex.: o funcionário
- * fechou o caixa e continuou vendendo). Só ADMIN: o botão que abre este modal só
- * aparece para ADMIN (ver vendas/page.tsx) e o backend valida de novo.
+ * fechou o caixa e continuou vendendo). Só ADMIN e o usuário liberado
+ * ("santinha"): o botão que abre este modal segue essa regra (ver vendas/page.tsx) e o
+ * backend valida de novo.
  * A venda baixa o estoque e usa o preço atual dos produtos, igual a uma venda normal.
  */
 export default function AdicionarVendaModal({
@@ -55,6 +56,8 @@ export default function AdicionarVendaModal({
   onSalvo: (dia: string) => void;
 }) {
   const { usuario } = useAuth();
+  // só ADMIN escolhe o vendedor (e só ADMIN pode listar usuários); os demais lançam no próprio nome
+  const podeEscolherVendedor = usuario?.perfil === "ADMIN";
 
   // horário atual de Brasília no formato do input — serve de padrão e de limite máximo
   const [agoraLocal] = useState(() => paraInputDataHoraLocal(new Date().toISOString()));
@@ -76,14 +79,17 @@ export default function AdicionarVendaModal({
   const [erro, setErro] = useState<string | null>(null);
 
   useEffect(() => {
-    Promise.all([api.get<Produto[]>("/produtos"), api.get<UsuarioListado[]>("/usuarios")])
+    Promise.all([
+      api.get<Produto[]>("/produtos"),
+      podeEscolherVendedor ? api.get<UsuarioListado[]>("/usuarios") : Promise.resolve(null),
+    ])
       .then(([resProdutos, resUsuarios]) => {
         setProdutos(resProdutos.data.filter((p) => p.ativo !== false));
-        setUsuarios(resUsuarios.data.filter((u) => u.ativo));
+        if (resUsuarios) setUsuarios(resUsuarios.data.filter((u) => u.ativo));
       })
       .catch(() => setErro("Não foi possível carregar produtos e usuários. Feche e tente de novo."))
       .finally(() => setCarregandoDados(false));
-  }, []);
+  }, [podeEscolherVendedor]);
 
   const sugestoes = useMemo(() => {
     const termo = busca.trim().toLowerCase();
@@ -210,14 +216,18 @@ export default function AdicionarVendaModal({
                 <User className="w-3.5 h-3.5" />
                 Vendedor
               </label>
-              <select value={vendedorId} onChange={(e) => setVendedorId(e.target.value)} className="input w-full">
-                <option value="">Eu mesmo ({usuario?.nome})</option>
-                {usuarios.map((u) => (
-                  <option key={u.id} value={u.id}>
-                    {u.nome}
-                  </option>
-                ))}
-              </select>
+              {podeEscolherVendedor ? (
+                <select value={vendedorId} onChange={(e) => setVendedorId(e.target.value)} className="input w-full">
+                  <option value="">Eu mesmo ({usuario?.nome})</option>
+                  {usuarios.map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.nome}
+                    </option>
+                  ))}
+                </select>
+              ) : (
+                <p className="input w-full bg-background text-muted">{usuario?.nome}</p>
+              )}
             </div>
           </div>
 
