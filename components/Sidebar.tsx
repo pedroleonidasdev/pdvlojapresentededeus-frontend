@@ -40,6 +40,7 @@ const GRUPO_POR_ROTA: Record<string, string> = {
   "/fechar-caixa": "Caixa",
   "/reabrir-caixa": "Caixa",
   "/estoque": "Gestão",
+  "/etiquetas": "Gestão",
   "/categorias": "Gestão",
   "/relatorios": "Gestão",
   "/financas": "Gestão",

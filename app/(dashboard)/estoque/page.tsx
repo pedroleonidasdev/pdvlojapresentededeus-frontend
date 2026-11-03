@@ -7,8 +7,7 @@ import { formatarMoeda } from "@/lib/format";
 import { situacaoEstoque, pesoSituacao } from "@/lib/estoque";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, Printer, ClipboardList, Copy, Tag, PackageX, Package, Layers, Wallet, FilterX, Boxes } from "lucide-react";
-import FolhaEtiquetas from "@/components/FolhaEtiquetas";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, ClipboardList, Copy, Tag, PackageX, Package, Layers, Wallet, FilterX, Boxes } from "lucide-react";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 import { CartaoIndicador, ChipFiltro, BOTAO_SECUNDARIO } from "@/components/ui";
@@ -29,7 +28,6 @@ export default function EstoquePage() {
   const [ordenacao, setOrdenacao] = useState<"nome-asc" | "nome-desc" | "criticos" | "padrao">("nome-asc");
   const [filtroEspecial, setFiltroEspecial] = useState<"todos" | "em-falta" | "estoque-baixo" | "duplicados">("todos");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
-  const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
   const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
   const [gerandoCodigos, setGerandoCodigos] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
@@ -419,12 +417,6 @@ export default function EstoquePage() {
                 Gerar códigos faltantes ({semCodigoCount})
               </button>
             )}
-            {selecionados.size > 0 && (
-              <button onClick={() => setFolhaEtiquetasAberta(true)} className={BOTAO_SECUNDARIO}>
-                <Printer className="w-4 h-4" />
-                Imprimir etiquetas ({selecionados.size})
-              </button>
-            )}
             <button
               onClick={() => setFolhaEstoqueAberta(true)}
               disabled={produtosFiltrados.length === 0}
@@ -710,13 +702,6 @@ export default function EstoquePage() {
             if (!manterAberto) setModalAberto(false);
             carregar();
           }}
-        />
-      )}
-
-      {folhaEtiquetasAberta && (
-        <FolhaEtiquetas
-          produtos={produtos.filter((p) => selecionados.has(p.id))}
-          onFechar={() => setFolhaEtiquetasAberta(false)}
         />
       )}
 

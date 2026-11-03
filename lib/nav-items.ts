@@ -1,4 +1,4 @@
-import { LayoutGrid, Home, Package, Tag, BarChart3, Users, ShoppingCart, Repeat, Receipt, Vault, Wallet, RotateCcw, Handshake, type LucideIcon } from "lucide-react";
+import { LayoutGrid, Home, Package, Tag, BarChart3, Users, ShoppingCart, Repeat, Receipt, Vault, Wallet, RotateCcw, Handshake, Printer, type LucideIcon } from "lucide-react";
 import { Perfil } from "./types";
 
 export interface NavItem {
@@ -19,6 +19,7 @@ export const NAV_ITEMS: NavItem[] = [
   { href: "/fechar-caixa", label: "Fechar Caixa", icon: Vault, perfis: ["ADMIN", "CAIXA"], descricao: "Conferir e fechar o caixa do dia" },
   { href: "/reabrir-caixa", label: "Reabrir Caixa", icon: RotateCcw, perfis: ["ADMIN"], descricao: "Reabrir um caixa já fechado" },
   { href: "/estoque", label: "Estoque", icon: Package, perfis: ["ADMIN", "CAIXA"], descricao: "Produtos, preços e estoque" },
+  { href: "/etiquetas", label: "Imprimir Etiquetas", icon: Printer, perfis: ["ADMIN", "CAIXA"], descricao: "Imprimir etiquetas com código de barras dos produtos" },
   { href: "/categorias", label: "Categorias", icon: Tag, perfis: ["ADMIN"], descricao: "Organizar os produtos por categoria" },
   { href: "/relatorios", label: "Faturamento", icon: BarChart3, perfis: ["ADMIN"], descricao: "Faturamento e desempenho de vendas" },
   { href: "/financas", label: "Controle Finanças", icon: Wallet, perfis: ["ADMIN"], descricao: "Despesas e fluxo financeiro" },
