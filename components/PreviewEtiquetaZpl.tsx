@@ -27,7 +27,7 @@ export default function PreviewEtiquetaZpl({
   larguraMm: number;
   alturaMm: number;
 }) {
-  const layout = useMemo(() => calcularLayoutZpl(larguraMm, alturaMm, codigo), [larguraMm, alturaMm, codigo]);
+  const layout = useMemo(() => calcularLayoutZpl(larguraMm, alturaMm, codigo, nome), [larguraMm, alturaMm, codigo, nome]);
 
   const escala = LARGURA_TELA_PX / layout.larguraDots; // px por dot
   const px = (dots: number) => dots * escala;

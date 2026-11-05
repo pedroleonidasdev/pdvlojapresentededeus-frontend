@@ -40,15 +40,39 @@ export interface LayoutEtiquetaZpl {
   alturaBarras: number;
 }
 
-export function calcularLayoutZpl(larguraMm: number, alturaMm: number, codigo: string): LayoutEtiquetaZpl {
+export function calcularLayoutZpl(
+  larguraMm: number,
+  alturaMm: number,
+  codigo: string,
+  nome: string = ""
+): LayoutEtiquetaZpl {
   const W = mmParaDots(larguraMm);
   const H = mmParaDots(alturaMm);
+
   const margem = Math.max(6, Math.round(W * 0.02));
   const util = W - 2 * margem;
 
   const modulos = modulosCode128(codigo);
   const moduloBarras = modulos * 2 <= util ? 2 : 1;
   const barrasLarguraDots = modulos * moduloBarras;
+
+  const fonteNome = Math.max(18, Math.round(H * 0.11));
+  const fontePreco = Math.max(24, Math.round(H * 0.17));
+
+  const yBarras = Math.round(H * 0.56);
+  const alturaBarras = Math.max(24, Math.round(H * 0.22));
+
+  const nomeLimitado = nome.slice(0, MAX_NOME_CHARS);
+  const linhasNome = nomeLimitado.length * fonteNome * 0.62 > util ? 2 : 1;
+  const gapNomePreco = Math.max(4, Math.round(H * 0.03));
+
+  const bloco = linhasNome * fonteNome + gapNomePreco + fontePreco;
+  const areaTopo = Math.round(H * 0.04);
+  const areaH = yBarras - Math.round(H * 0.04) - areaTopo;
+
+  const deslocamento = Math.round(H * 0.04);
+  const yNome = areaTopo + Math.max(0, Math.floor((areaH - bloco) / 2)) + deslocamento;
+  const yPreco = yNome + linhasNome * fonteNome + gapNomePreco;
 
   return {
     larguraDots: W,
@@ -59,11 +83,11 @@ export function calcularLayoutZpl(larguraMm: number, alturaMm: number, codigo: s
     barrasLarguraDots,
     barrasX: Math.max(margem, Math.floor((W - barrasLarguraDots) / 2)),
     cabe: barrasLarguraDots <= util,
-    yNome: Math.round(H * 0.04),
-    fonteNome: Math.max(18, Math.round(H * 0.11)),
-    yPreco: Math.round(H * 0.34),
-    fontePreco: Math.max(24, Math.round(H * 0.17)),
-    yBarras: Math.round(H * 0.56),
-    alturaBarras: Math.max(24, Math.round(H * 0.22)),
+    yNome,
+    fonteNome,
+    yPreco,
+    fontePreco,
+    yBarras,
+    alturaBarras,
   };
 }
