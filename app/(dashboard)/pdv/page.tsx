@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
 import { avisarCaixaMudou } from "@/lib/caixa-eventos";
@@ -965,21 +965,36 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
   const [imprimindo, setImprimindo] = useState(false);
   const [erroImpressao, setErroImpressao] = useState<string | null>(null);
   const [impressaoOk, setImpressaoOk] = useState(false);
+  const impressaoAutomaticaRef = useRef<number | null>(null);
 
-  async function imprimir() {
+  const imprimir = useCallback(async () => {
     if (imprimindo) return;
+
     setImprimindo(true);
     setErroImpressao(null);
     setImpressaoOk(false);
+
     try {
       await imprimirCupom(venda);
       setImpressaoOk(true);
     } catch (error) {
-      setErroImpressao(error instanceof Error ? error.message : "Não foi possível imprimir o cupom.");
+      setErroImpressao(
+        error instanceof Error
+          ? error.message
+          : "Não foi possível imprimir o cupom."
+      );
     } finally {
       setImprimindo(false);
     }
-  }
+  }, [imprimindo, venda]);
+
+  // Envia o cupom automaticamente uma única vez para cada venda.
+  useEffect(() => {
+    if (impressaoAutomaticaRef.current === venda.id) return;
+
+    impressaoAutomaticaRef.current = venda.id;
+    void imprimir();
+  }, [venda.id, imprimir]);
 
   return (
     <div className="min-h-full flex flex-col items-center justify-center bg-background p-6">
@@ -1048,6 +1063,21 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
       </div>
 
       <div className="w-full max-w-sm mt-4 no-print space-y-2">
+        {imprimindo && (
+          <div
+            className="rounded-lg border border-border bg-surface px-3 py-3 space-y-2"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              Enviando cupom para a Goldensky...
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-background">
+              <div className="h-full w-2/3 rounded-full bg-primary animate-pulse" />
+            </div>
+          </div>
+        )}
         {erroImpressao && (
           <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erroImpressao}</div>
         )}
@@ -1067,12 +1097,13 @@ function ComprovanteVenda({ venda, onNovaVenda }: { venda: Venda; onNovaVenda: (
             ) : (
               <Printer className="w-4 h-4" />
             )}
-            {imprimindo ? "Imprimindo..." : "Imprimir"}
+            {imprimindo ? "Enviando..." : impressaoOk ? "Imprimir novamente" : erroImpressao ? "Tentar novamente" : "Imprimir"}
           </button>
 
           <button
             onClick={onNovaVenda}
-            className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
+            disabled={imprimindo}
+            className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
           >
             Nova venda
           </button>
