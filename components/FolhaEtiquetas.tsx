@@ -79,8 +79,7 @@ function paraNumero(texto: string, padrao: string): number {
 
 /**
  * Tela de etiquetas para impressão: cada produto selecionado vira uma etiqueta
- * (nome + preço + código de barras), repetida pela quantidade escolhida — a
- * mesma quantidade vale igualmente para todos os produtos selecionados.
+ * (nome + preço + código de barras), com seleção e quantidade individuais.
  *
  * Funciona com as duas impressoras da loja. A tela pergunta ao agente local
  * qual está em uso (lib/impressora.ts):
@@ -114,9 +113,59 @@ export default function FolhaEtiquetas({
   const [colunas, setColunas] = useState(COLUNAS_PADRAO);
   const [gapColunas, setGapColunas] = useState(GAP_COLUNAS_PADRAO);
 
-  // quantidade de etiquetas por produto — vale igualmente para todos os
-  // produtos selecionados (ex: 3 produtos × quantidade 5 = 15 etiquetas)
-  const [quantidade, setQuantidade] = useState(QUANTIDADE_MIN);
+  // Cada produto tem seleção e quantidade próprias.
+  const [configuracoesProdutos, setConfiguracoesProdutos] = useState<
+    Record<number, { selecionado: boolean; quantidade: number }>
+  >({});
+
+  useEffect(() => {
+    setConfiguracoesProdutos((atuais) => {
+      const novas: typeof atuais = {};
+      for (const produto of comCodigo) {
+        novas[produto.id] = atuais[produto.id] ?? {
+          selecionado: true,
+          quantidade: QUANTIDADE_MIN,
+        };
+      }
+      return novas;
+    });
+  }, [produtos]);
+
+  const produtosSelecionados = comCodigo.filter(
+    (produto) => configuracoesProdutos[produto.id]?.selecionado
+  );
+
+  function atualizarProduto(
+    id: number,
+    alteracao: Partial<{ selecionado: boolean; quantidade: number }>
+  ) {
+    setConfiguracoesProdutos((atuais) => ({
+      ...atuais,
+      [id]: {
+        selecionado: atuais[id]?.selecionado ?? true,
+        quantidade: atuais[id]?.quantidade ?? QUANTIDADE_MIN,
+        ...alteracao,
+      },
+    }));
+  }
+
+  function definirQuantidadeProduto(id: number, valor: number) {
+    atualizarProduto(id, {
+      quantidade: Math.min(QUANTIDADE_MAX, Math.max(QUANTIDADE_MIN, valor)),
+    });
+  }
+
+  function handleQuantidadeProduto(id: number, valor: string) {
+    if (valor === "") {
+      atualizarProduto(id, { quantidade: 0 });
+      return;
+    }
+
+    const numero = Number(valor.replace(/\D/g, ""));
+    if (!Number.isNaN(numero)) {
+      definirQuantidadeProduto(id, numero);
+    }
+  }
 
   // qual produto aparece na pré-visualização
   const [indicePreview, setIndicePreview] = useState(0);
@@ -161,13 +210,16 @@ export default function FolhaEtiquetas({
   }, [larguraNum, alturaNum, larguraLinhaMm, colunasEfetivas, impressora.larguraMaxMm, impressora.nome]);
 
   const totalEtiquetas = useMemo(
-    () => comCodigo.length * quantidade,
-    [comCodigo.length, quantidade]
+    () => produtosSelecionados.reduce(
+      (total, produto) => total + (configuracoesProdutos[produto.id]?.quantidade ?? 1),
+      0
+    ),
+    [produtosSelecionados, configuracoesProdutos]
   );
 
   const mensagemLimite = useMemo(() => {
     if (ehZpl) {
-      if (comCodigo.length > MAX_PRODUTOS_POR_ENVIO_ZPL) {
+      if (produtosSelecionados.length > MAX_PRODUTOS_POR_ENVIO_ZPL) {
         return `Cada impressão aceita no máximo ${MAX_PRODUTOS_POR_ENVIO_ZPL} produtos — selecione menos produtos ou imprima em duas vezes.`;
       }
       if (totalEtiquetas > MAX_ETIQUETAS_TOTAL_ZPL) {
@@ -179,20 +231,7 @@ export default function FolhaEtiquetas({
       return `O lote aceita no máximo ${MAX_ETIQUETAS_POR_LOTE} etiquetas por impressão — reduza a quantidade, selecione menos produtos, ou imprima em duas vezes.`;
     }
     return null;
-  }, [ehZpl, comCodigo.length, totalEtiquetas]);
-
-  function definirQuantidade(valor: number) {
-    setQuantidade(Math.min(QUANTIDADE_MAX, Math.max(QUANTIDADE_MIN, valor)));
-  }
-
-  function handleQuantidadeInput(valor: string) {
-    if (valor === "") {
-      setQuantidade(QUANTIDADE_MIN);
-      return;
-    }
-    const numero = Number(valor.replace(/\D/g, ""));
-    if (!Number.isNaN(numero)) definirQuantidade(numero);
-  }
+  }, [ehZpl, produtosSelecionados.length, totalEtiquetas]);
 
   function handleDimensaoChange(valor: string, setter: (v: string) => void) {
     if (valor === "" || /^[0-9]*[.,]?[0-9]*$/.test(valor)) setter(valor);
@@ -220,21 +259,24 @@ export default function FolhaEtiquetas({
         ];
       } else if (impressora.suportaQuantidade) {
         // a própria impressora repete (^PQ): 1 item por produto, com a quantidade
-        etiquetas = comCodigo.map((produto) => ({
+        etiquetas = produtosSelecionados.map((produto) => ({
           nome: produto.nome,
           precoVenda: produto.precoVenda,
           codigoBarras: produto.codigoBarras!,
-          quantidade,
+          quantidade: configuracoesProdutos[produto.id]?.quantidade ?? 1,
         }));
       } else {
         // o agente só entende "uma etiqueta por item da lista", então a
         // multiplicação é feita aqui antes de montar o payload.
-        etiquetas = comCodigo.flatMap((produto) =>
-          Array.from({ length: quantidade }, () => ({
-            nome: produto.nome,
-            precoVenda: produto.precoVenda,
-            codigoBarras: produto.codigoBarras!,
-          }))
+        etiquetas = produtosSelecionados.flatMap((produto) =>
+          Array.from(
+            { length: configuracoesProdutos[produto.id]?.quantidade ?? 1 },
+            () => ({
+              nome: produto.nome,
+              precoVenda: produto.precoVenda,
+              codigoBarras: produto.codigoBarras!,
+            })
+          )
         );
       }
 
@@ -271,7 +313,7 @@ export default function FolhaEtiquetas({
 
   const agenteOffline = perfil === null;
   const bloqueado =
-    comCodigo.length === 0 || enviando !== null || !!mensagemLimite || !!erroDimensao || agenteOffline;
+    produtosSelecionados.length === 0 || enviando !== null || !!mensagemLimite || !!erroDimensao || agenteOffline;
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-50">
@@ -323,37 +365,16 @@ export default function FolhaEtiquetas({
         )}
 
         <div className="px-5 pt-3 space-y-3">
-          <div>
-            <label className="block text-[11px] text-muted mb-1">
-              Quantidade por produto{comCodigo.length > 1 ? ` (aplicada aos ${comCodigo.length} selecionados)` : ""}
-            </label>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => definirQuantidade(quantidade - 1)}
-                disabled={quantidade <= QUANTIDADE_MIN}
-                className="w-8 h-8 flex items-center justify-center rounded-md border border-border hover:bg-background text-muted disabled:opacity-40 disabled:hover:bg-transparent transition"
-                aria-label="Diminuir quantidade"
-              >
-                <Minus className="w-3.5 h-3.5" />
-              </button>
-              <input
-                inputMode="numeric"
-                value={quantidade}
-                onChange={(e) => handleQuantidadeInput(e.target.value)}
-                className="w-14 text-center text-sm py-1.5 rounded-md border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition"
-                aria-label="Quantidade de etiquetas por produto"
-              />
-              <button
-                type="button"
-                onClick={() => definirQuantidade(quantidade + 1)}
-                disabled={quantidade >= QUANTIDADE_MAX}
-                className="w-8 h-8 flex items-center justify-center rounded-md border border-border hover:bg-background text-muted disabled:opacity-40 disabled:hover:bg-transparent transition"
-                aria-label="Aumentar quantidade"
-              >
-                <Plus className="w-3.5 h-3.5" />
-              </button>
+          <div className="rounded-lg border border-border bg-background px-3 py-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-medium">Produtos para imprimir</span>
+              <span className="text-[11px] text-muted tabular-nums">
+                {produtosSelecionados.length} selecionado(s) · {totalEtiquetas} etiqueta(s)
+              </span>
             </div>
+            <p className="text-[10px] text-muted mt-1">
+              Marque os produtos e defina quantas etiquetas deseja de cada um.
+            </p>
           </div>
 
           <div>
@@ -510,7 +531,7 @@ export default function FolhaEtiquetas({
                 {comCodigo.length > 1
                   ? "Pré-visualização do produto escolhido acima — os outros seguem o mesmo modelo."
                   : "Pré-visualização da etiqueta — as demais cópias seguem o mesmo modelo."}{" "}
-                {quantidade > 1 && `Cada produto será impresso ${quantidade}× conforme a quantidade acima.`}
+                A quantidade de cada produto é definida individualmente na lista abaixo.
               </p>
 
               {ehZpl && (
@@ -520,26 +541,111 @@ export default function FolhaEtiquetas({
                 </p>
               )}
 
-              {comCodigo.length > 1 && (
-                <ul className="mt-3 space-y-1">
-                  {comCodigo.map((produto, i) => (
-                    <li key={produto.id}>
-                      <button
-                        type="button"
-                        onClick={() => setIndicePreview(i)}
-                        className={`w-full flex items-center justify-between gap-3 text-xs border rounded-lg px-3 py-1.5 text-left transition ${
-                          i === indiceAtual
-                            ? "border-primary bg-primary-soft"
-                            : "border-border hover:bg-background"
-                        }`}
-                      >
-                        <span className="truncate">{produto.nome}</span>
-                        <span className="text-muted shrink-0">{quantidade}×</span>
-                      </button>
-                    </li>
-                  ))}
-                </ul>
-              )}
+              <div className="mt-3 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-semibold">Selecionar produtos</span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setConfiguracoesProdutos((atuais) => {
+                        const novas = { ...atuais };
+                        for (const produto of comCodigo) {
+                          novas[produto.id] = {
+                            selecionado: true,
+                            quantidade: atuais[produto.id]?.quantidade ?? 1,
+                          };
+                        }
+                        return novas;
+                      });
+                    }}
+                    className="text-[11px] text-primary hover:underline"
+                  >
+                    Marcar todos
+                  </button>
+                </div>
+
+                {comCodigo.map((produto, i) => {
+                  const config = configuracoesProdutos[produto.id] ?? {
+                    selecionado: true,
+                    quantidade: 1,
+                  };
+
+                  return (
+                    <div
+                      key={produto.id}
+                      className={`rounded-lg border p-2 transition ${
+                        config.selecionado
+                          ? "border-primary/50 bg-primary-soft"
+                          : "border-border opacity-70"
+                      }`}
+                    >
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={config.selecionado}
+                          onChange={(e) => atualizarProduto(produto.id, {
+                            selecionado: e.target.checked,
+                          })}
+                          className="w-4 h-4 accent-current shrink-0"
+                          aria-label={`Selecionar ${produto.nome}`}
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => setIndicePreview(i)}
+                          className="flex-1 min-w-0 text-left"
+                        >
+                          <span className="block text-xs font-medium truncate">
+                            {produto.nome}
+                          </span>
+                          <span className="block text-[10px] text-muted">
+                            {formatarMoeda(produto.precoVenda)}
+                            {i === indiceAtual ? " · Pré-visualizando" : ""}
+                          </span>
+                        </button>
+
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => definirQuantidadeProduto(produto.id, config.quantidade - 1)}
+                            disabled={!config.selecionado || config.quantidade <= QUANTIDADE_MIN}
+                            className="w-7 h-7 flex items-center justify-center rounded border border-border disabled:opacity-30"
+                            aria-label={`Diminuir quantidade de ${produto.nome}`}
+                          >
+                            <Minus className="w-3 h-3" />
+                          </button>
+
+                          <input
+                            type="number"
+                            min={QUANTIDADE_MIN}
+                            max={QUANTIDADE_MAX}
+                            value={config.quantidade}
+                            disabled={!config.selecionado}
+                            onChange={(e) => handleQuantidadeProduto(produto.id, e.target.value)}
+                            onBlur={() => {
+                              if (config.quantidade < QUANTIDADE_MIN) {
+                                definirQuantidadeProduto(produto.id, QUANTIDADE_MIN);
+                              }
+                            }}
+                            className="w-11 h-7 text-center text-xs rounded border border-border bg-background disabled:opacity-40"
+                            aria-label={`Quantidade de etiquetas para ${produto.nome}`}
+                          />
+
+                          <button
+                            type="button"
+                            onClick={() => definirQuantidadeProduto(produto.id, config.quantidade + 1)}
+                            disabled={!config.selecionado || config.quantidade >= QUANTIDADE_MAX}
+                            className="w-7 h-7 flex items-center justify-center rounded border border-border disabled:opacity-30"
+                            aria-label={`Aumentar quantidade de ${produto.nome}`}
+                          >
+                            <Plus className="w-3 h-3" />
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </>
           ) : (
             <p className="text-sm text-muted text-center py-6">Nenhum produto com código de barras selecionado.</p>
