@@ -41,8 +41,13 @@ const CHAVES_DIMENSAO = {
   escpos: { largura: "goldensky_etiqueta_largura_mm", altura: "goldensky_etiqueta_altura_mm" },
   zpl: { largura: "elgin_l42_etiqueta_largura_mm", altura: "elgin_l42_etiqueta_altura_mm" },
 } as const;
-const LARGURA_PADRAO = "60";
-const ALTURA_PADRAO = "30";
+// bobina dupla da loja: 2 etiquetas de 40 x 25 mm lado a lado
+const CHAVE_COLUNAS = "elgin_l42_etiqueta_colunas";
+const CHAVE_GAP_COLUNAS = "elgin_l42_etiqueta_gap_colunas_mm";
+const LARGURA_PADRAO = "40";
+const ALTURA_PADRAO = "25";
+const COLUNAS_PADRAO = 2;
+const GAP_COLUNAS_PADRAO = "3";
 
 // limites de sanidade — os mesmos do backend (goldensky_core.py), replicados aqui
 // só para avisar antes de enviar, evitando um erro 422 seco.
@@ -62,9 +67,9 @@ const QUANTIDADE_MAX = 99;
 
 // tamanhos de etiqueta mais comuns — atalhos para não digitar
 const TAMANHOS_PRONTOS = [
+  { largura: 40, altura: 25 },
   { largura: 60, altura: 30 },
   { largura: 50, altura: 30 },
-  { largura: 40, altura: 25 },
   { largura: 100, altura: 50 },
 ];
 
@@ -105,6 +110,9 @@ export default function FolhaEtiquetas({
   const [mostrarDimensao, setMostrarDimensao] = useState(false);
   const [largura, setLargura] = useState(LARGURA_PADRAO);
   const [altura, setAltura] = useState(ALTURA_PADRAO);
+  // etiquetas lado a lado na bobina (2 = bobina dupla) e espaço entre elas
+  const [colunas, setColunas] = useState(COLUNAS_PADRAO);
+  const [gapColunas, setGapColunas] = useState(GAP_COLUNAS_PADRAO);
 
   // quantidade de etiquetas por produto — vale igualmente para todos os
   // produtos selecionados (ex: 3 produtos × quantidade 5 = 15 etiquetas)
@@ -129,10 +137,15 @@ export default function FolhaEtiquetas({
     const chaves = CHAVES_DIMENSAO[impressora.driver];
     setLargura(localStorage.getItem(chaves.largura) ?? LARGURA_PADRAO);
     setAltura(localStorage.getItem(chaves.altura) ?? ALTURA_PADRAO);
+    setColunas(Number(localStorage.getItem(CHAVE_COLUNAS)) || COLUNAS_PADRAO);
+    setGapColunas(localStorage.getItem(CHAVE_GAP_COLUNAS) ?? GAP_COLUNAS_PADRAO);
   }, [impressora.driver]);
 
   const larguraNum = paraNumero(largura, LARGURA_PADRAO);
   const alturaNum = paraNumero(altura, ALTURA_PADRAO);
+  const colunasEfetivas = ehZpl ? colunas : 1;
+  const gapNum = paraNumero(gapColunas, GAP_COLUNAS_PADRAO);
+  const larguraLinhaMm = colunasEfetivas * larguraNum + (colunasEfetivas - 1) * gapNum;
 
   const erroDimensao = useMemo(() => {
     if (larguraNum < LARGURA_MIN_MM || larguraNum > impressora.larguraMaxMm) {
@@ -141,8 +154,11 @@ export default function FolhaEtiquetas({
     if (alturaNum < ALTURA_MIN_MM || alturaNum > ALTURA_MAX_MM) {
       return `A altura deve ficar entre ${ALTURA_MIN_MM} e ${ALTURA_MAX_MM} mm.`;
     }
+    if (larguraLinhaMm > impressora.larguraMaxMm) {
+      return `${colunasEfetivas} colunas de ${larguraNum} mm + espaços = ${larguraLinhaMm} mm; a ${impressora.nome} imprime no máximo ${impressora.larguraMaxMm} mm.`;
+    }
     return null;
-  }, [larguraNum, alturaNum, impressora.larguraMaxMm, impressora.nome]);
+  }, [larguraNum, alturaNum, larguraLinhaMm, colunasEfetivas, impressora.larguraMaxMm, impressora.nome]);
 
   const totalEtiquetas = useMemo(
     () => comCodigo.length * quantidade,
@@ -222,12 +238,21 @@ export default function FolhaEtiquetas({
         );
       }
 
-      await imprimirEtiquetas({ etiquetas, largura: larguraNum, altura: alturaNum });
+      await imprimirEtiquetas({
+        etiquetas,
+        largura: larguraNum,
+        altura: alturaNum,
+        ...(ehZpl ? { colunas: colunasEfetivas, espacamentoColunas: gapNum } : {}),
+      });
 
       // deu certo com essa dimensão — guarda pra próxima vez
       const chaves = CHAVES_DIMENSAO[impressora.driver];
       localStorage.setItem(chaves.largura, String(larguraNum));
       localStorage.setItem(chaves.altura, String(alturaNum));
+      if (ehZpl) {
+        localStorage.setItem(CHAVE_COLUNAS, String(colunasEfetivas));
+        localStorage.setItem(CHAVE_GAP_COLUNAS, String(gapNum));
+      }
 
       if (modo === "teste") {
         // teste não fecha a tela: dá pra conferir a etiqueta impressa e imprimir o lote
@@ -338,7 +363,7 @@ export default function FolhaEtiquetas({
               className="flex items-center gap-1.5 text-xs text-muted hover:text-foreground transition"
             >
               <Ruler className="w-3.5 h-3.5" />
-              Tamanho da etiqueta: {largura} × {altura} mm
+              Tamanho da etiqueta: {largura} × {altura} mm{colunasEfetivas > 1 ? ` · ${colunasEfetivas} colunas` : ""}
               <ChevronDown className={`w-3.5 h-3.5 transition-transform ${mostrarDimensao ? "rotate-180" : ""}`} />
             </button>
 
@@ -363,6 +388,41 @@ export default function FolhaEtiquetas({
                     );
                   })}
                 </div>
+
+                {ehZpl && (
+                  <div className="flex items-end gap-3">
+                    <div>
+                      <label className="block text-[11px] text-muted mb-1">Etiquetas lado a lado</label>
+                      <div className="flex gap-1.5">
+                        {[1, 2, 3].map((n) => (
+                          <button
+                            key={n}
+                            type="button"
+                            onClick={() => setColunas(n)}
+                            className={`text-[11px] px-3 py-1 rounded-full border transition ${
+                              colunas === n
+                                ? "bg-primary text-white border-primary"
+                                : "border-border text-muted hover:bg-background hover:text-foreground"
+                            }`}
+                          >
+                            {n === 1 ? "1 (bobina simples)" : n === 2 ? "2 (bobina dupla)" : "3"}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                    {colunas > 1 && (
+                      <div>
+                        <label className="block text-[11px] text-muted mb-1">Espaço entre colunas (mm)</label>
+                        <input
+                          inputMode="decimal"
+                          value={gapColunas}
+                          onChange={(e) => handleDimensaoChange(e.target.value, setGapColunas)}
+                          className="w-20 px-2 py-1.5 rounded-md border border-border bg-background text-sm focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="flex items-end gap-3">
                   <div>

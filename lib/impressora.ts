@@ -108,6 +108,10 @@ export async function imprimirEtiquetas(payload: {
   largura: number;
   altura: number;
   espacamento?: number;
+  /** etiquetas lado a lado na bobina (dupla = 2). Só a Elgin (ZPL) usa. */
+  colunas?: number;
+  /** espaço horizontal entre colunas, em mm */
+  espacamentoColunas?: number;
 }): Promise<void> {
   let resposta: Response;
   try {
