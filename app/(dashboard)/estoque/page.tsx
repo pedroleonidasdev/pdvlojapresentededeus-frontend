@@ -166,13 +166,13 @@ export default function EstoquePage() {
   }, [produtos]);
 
   const produtosFiltrados = useMemo(() => {
-    const termo = busca.trim().toLowerCase();
+    const termo = nomeNormalizado(busca);
     let lista = !termo
       ? produtos
       : produtos.filter((produto) => {
-          const nome = produto.nome?.toLowerCase() ?? "";
-          const codigo = produto.codigoBarras?.toLowerCase() ?? "";
-          const categoria = produto.categoria?.nome?.toLowerCase() ?? "";
+          const nome = nomeNormalizado(produto.nome ?? "");
+          const codigo = nomeNormalizado(produto.codigoBarras ?? "");
+          const categoria = nomeNormalizado(produto.categoria?.nome ?? "");
           return nome.includes(termo) || codigo.includes(termo) || categoria.includes(termo);
         });
 
