@@ -8,8 +8,9 @@ import { produtoCorrespondeBuscaPreco } from "@/lib/busca-produtos";
 import { situacaoEstoque, pesoSituacao } from "@/lib/estoque";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
-import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, ClipboardList, Copy, Tag, PackageX, Package, Layers, Wallet, FilterX, Boxes } from "lucide-react";
+import { Plus, Pencil, Trash2, AlertTriangle, X, Loader2, Search, CheckCircle2, ArrowUpDown, Barcode, ClipboardList, Copy, Tag, Printer, PackageX, Package, Layers, Wallet, FilterX, Boxes } from "lucide-react";
 import FolhaConferenciaEstoque from "@/components/FolhaConferenciaEstoque";
+import FolhaEtiquetas from "@/components/FolhaEtiquetas";
 import { CarregandoSecao } from "@/components/CarregamentoCatolico";
 import { CartaoIndicador, ChipFiltro, BOTAO_SECUNDARIO } from "@/components/ui";
 
@@ -30,6 +31,7 @@ export default function EstoquePage() {
   const [filtroEspecial, setFiltroEspecial] = useState<"todos" | "em-falta" | "estoque-baixo" | "duplicados">("todos");
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
+  const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
   const [gerandoCodigos, setGerandoCodigos] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   // troca de categoria em lote: "" = nada escolhido, "sem-categoria" = remover a categoria
@@ -449,6 +451,14 @@ export default function EstoquePage() {
                 <span className="text-muted font-normal"> ({selecionadosForaDoFiltro} fora do filtro atual)</span>
               )}
             </span>
+            <button
+              onClick={() => setFolhaEtiquetasAberta(true)}
+              className={BOTAO_SECUNDARIO}
+              title="Imprimir etiquetas dos produtos selecionados"
+            >
+              <Printer className="w-4 h-4" />
+              Imprimir etiquetas
+            </button>
             <select
               value={categoriaLote}
               onChange={(e) => setCategoriaLote(e.target.value)}
@@ -710,6 +720,13 @@ export default function EstoquePage() {
         <FolhaConferenciaEstoque
           produtos={produtosFiltrados}
           onFechar={() => setFolhaEstoqueAberta(false)}
+        />
+      )}
+
+      {folhaEtiquetasAberta && (
+        <FolhaEtiquetas
+          produtos={produtos.filter((produto) => selecionados.has(produto.id))}
+          onFechar={() => setFolhaEtiquetasAberta(false)}
         />
       )}
     </div>
