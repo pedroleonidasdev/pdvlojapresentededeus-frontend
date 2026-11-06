@@ -406,6 +406,42 @@ export default function PdvPage() {
     setErro(null);
   }
 
+  useEffect(() => {
+    function handleAtalhosPdv(event: KeyboardEvent) {
+      const atalhos = ["F1", "F2", "F3", "F4", "F5", "F8"];
+      if (!atalhos.includes(event.key)) return;
+
+      event.preventDefault();
+      if (event.repeat || finalizando) return;
+
+      switch (event.key) {
+        case "F1":
+          if (!pagamentoMultiplo) setFormaPagamento("CARTAO_DEBITO");
+          break;
+        case "F2":
+          if (!pagamentoMultiplo) setFormaPagamento("CARTAO_CREDITO");
+          break;
+        case "F3":
+          if (!pagamentoMultiplo) setFormaPagamento("PIX");
+          break;
+        case "F4":
+          if (!pagamentoMultiplo) setFormaPagamento("DINHEIRO");
+          break;
+        case "F5":
+          if (carrinho.length > 0 && !pagamentoInsuficiente && pagamentosCompletos) {
+            void finalizarVenda();
+          }
+          break;
+        case "F8":
+          if (carrinho.length > 0) cancelarVenda();
+          break;
+      }
+    }
+
+    window.addEventListener("keydown", handleAtalhosPdv);
+    return () => window.removeEventListener("keydown", handleAtalhosPdv);
+  });
+
   if (vendaConcluida) {
     return <ComprovanteVenda venda={vendaConcluida} onNovaVenda={() => setVendaConcluida(null)} />;
   }
@@ -705,6 +741,9 @@ export default function PdvPage() {
                         return <Icone className="w-4 h-4 shrink-0" />;
                       })()}
                       <span className="truncate">{LABEL_FORMA_PAGAMENTO[forma]}</span>
+                      <kbd className="ml-auto shrink-0 rounded border border-current/20 px-1.5 py-0.5 text-[10px] font-semibold opacity-70">
+                        {forma === "CARTAO_DEBITO" ? "F1" : forma === "CARTAO_CREDITO" ? "F2" : forma === "PIX" ? "F3" : "F4"}
+                      </kbd>
                       {formaPagamento === forma && (
                         <span className={`ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-white ${COR_FORMA_PAGAMENTO[forma].ponto}`}>
                           <Check className="w-3 h-3" strokeWidth={3} />
@@ -850,7 +889,7 @@ export default function PdvPage() {
                 className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-accent-dark hover:brightness-105 active:scale-[0.99] text-white text-base font-bold py-3 rounded-xl shadow-lg shadow-accent/30 ring-1 ring-white/20 transition disabled:bg-none disabled:bg-surface-alt disabled:text-muted disabled:shadow-none disabled:ring-0 disabled:border disabled:border-border disabled:cursor-not-allowed"
               >
                 {finalizando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                Finalizar venda
+                Finalizar venda <kbd className="ml-1 rounded border border-white/40 px-1.5 py-0.5 text-[10px]">F5</kbd>
               </button>
 
               <button
@@ -858,7 +897,7 @@ export default function PdvPage() {
                 disabled={carrinho.length === 0 || finalizando}
                 className="w-full flex items-center justify-center gap-2 border border-danger/25 bg-transparent hover:bg-danger-light text-danger text-sm font-medium py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Cancelar venda
+                Cancelar venda <kbd className="ml-1 rounded border border-danger/30 px-1.5 py-0.5 text-[10px]">F8</kbd>
               </button>
             </div>
           </div>
