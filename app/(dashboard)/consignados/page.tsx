@@ -1,5 +1,6 @@
 "use client";
 
+import { produtoCorrespondeBuscaPreco } from "@/lib/busca-produtos";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -454,7 +455,8 @@ function ModalConsignacaoForm({
           // 1-2 letras só casam no INÍCIO de uma palavra, senão o "g" de "camiseta agape g"
           // acharia qualquer coisa que tenha a letra g no meio
           const inicios = texto.split(/[^a-z0-9]+/);
-          return palavras.every((w) => (w.length >= 3 ? texto.includes(w) : inicios.some((x) => x.startsWith(w))));
+          return palavras.every((w) => (w.length >= 3 ? texto.includes(w) : inicios.some((x) => x.startsWith(w)))) ||
+            (palavras.length === 1 && produtoCorrespondeBuscaPreco(p.precoVenda, busca));
         })
         .sort((a, b) => a.nome.localeCompare(b.nome, "pt-BR", { sensitivity: "base" }));
 
@@ -684,7 +686,7 @@ function ModalConsignacaoForm({
                   ref={buscaRef}
                   className="input"
                   style={{ paddingLeft: "2.5rem", paddingRight: busca ? "2.5rem" : undefined }}
-                  placeholder="Nome, categoria ou código de barras"
+                  placeholder="Nome, categoria, código ou preço (ex.: 10,50)"
                   value={busca}
                   onChange={(e) => alterarBusca(e.target.value)}
                   onKeyDown={(e) => e.key === "Enter" && aoApertarEnter()}

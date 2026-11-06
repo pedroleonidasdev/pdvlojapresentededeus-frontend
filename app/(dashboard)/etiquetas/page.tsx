@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
+import { produtoCorrespondeBuscaPreco } from "@/lib/busca-produtos";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
 import FolhaEtiquetas from "@/components/FolhaEtiquetas";
@@ -62,7 +63,8 @@ export default function EtiquetasPage() {
         return (
           normalizar(p.nome ?? "").includes(termo) ||
           (p.codigoBarras ?? "").toLowerCase().includes(termo) ||
-          normalizar(p.categoria?.nome ?? "").includes(termo)
+          normalizar(p.categoria?.nome ?? "").includes(termo) ||
+          produtoCorrespondeBuscaPreco(p.precoVenda, busca)
         );
       })
       .sort((a, b) => (a.nome ?? "").localeCompare(b.nome ?? "", "pt-BR", { sensitivity: "base" }));
@@ -125,7 +127,7 @@ export default function EtiquetasPage() {
                 type="text"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome, código ou categoria..."
+                placeholder="Buscar por nome, código, categoria ou preço (ex.: 10,50)..."
                 className="input pl-10! pr-9! py-2.5! w-full"
               />
               {busca && (

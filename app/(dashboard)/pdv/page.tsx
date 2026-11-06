@@ -1,5 +1,6 @@
 "use client";
 
+import { interpretarBuscaPreco } from "@/lib/busca-produtos";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -151,6 +152,7 @@ export default function PdvPage() {
       return;
     }
     const somenteNumeros = /^[0-9]+$/.test(termo);
+    const precoBusca = interpretarBuscaPreco(termo);
 
     const timeout = setTimeout(async () => {
       setBuscando(true);
@@ -162,6 +164,9 @@ export default function PdvPage() {
           } catch {
             setResultados([]);
           }
+        } else if (precoBusca !== null) {
+          const { data } = await api.get<Produto[]>("/produtos", { params: { preco: precoBusca } });
+          setResultados(data);
         } else {
           const { data } = await api.get<Produto[]>("/produtos", { params: { nome: termo } });
           setResultados(data);
@@ -439,7 +444,7 @@ export default function PdvPage() {
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={handleBuscaKeyDown}
-              placeholder="Nome do produto ou código de barras + Enter"
+              placeholder="Nome, código de barras ou preço (ex.: 10,50 ou R$ 10) + Enter"
               className="w-full pl-12 pr-12 py-3.5 rounded-2xl border-2 border-border bg-surface shadow-[0_8px_24px_-14px_rgba(15,51,42,0.5)] placeholder:text-muted/70 focus:outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition text-base"
             />
             {buscando ? (

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { Produto, Categoria } from "@/lib/types";
 import { formatarMoeda } from "@/lib/format";
+import { produtoCorrespondeBuscaPreco } from "@/lib/busca-produtos";
 import { situacaoEstoque, pesoSituacao } from "@/lib/estoque";
 import { useAuth } from "@/lib/auth-context";
 import PageHeader from "@/components/PageHeader";
@@ -173,7 +174,7 @@ export default function EstoquePage() {
           const nome = nomeNormalizado(produto.nome ?? "");
           const codigo = nomeNormalizado(produto.codigoBarras ?? "");
           const categoria = nomeNormalizado(produto.categoria?.nome ?? "");
-          return nome.includes(termo) || codigo.includes(termo) || categoria.includes(termo);
+          return nome.includes(termo) || codigo.includes(termo) || categoria.includes(termo) || produtoCorrespondeBuscaPreco(produto.precoVenda, busca);
         });
 
     if (categoriaFiltro === "sem-categoria") {
@@ -310,7 +311,7 @@ export default function EstoquePage() {
                 type="text"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder="Buscar por nome, código ou categoria..."
+                placeholder="Buscar por nome, código, categoria ou preço (ex.: 10,50)..."
                 className="input pl-10! pr-9! py-2.5! w-full"
               />
               {busca && (

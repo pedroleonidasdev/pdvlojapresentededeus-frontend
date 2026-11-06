@@ -1,5 +1,6 @@
 "use client";
 
+import { produtoCorrespondeBuscaPreco } from "@/lib/busca-produtos";
 import { useEffect, useMemo, useState } from "react";
 import api from "@/lib/api";
 import { useAuth } from "@/lib/auth-context";
@@ -95,7 +96,7 @@ export default function AdicionarVendaModal({
     const termo = busca.trim().toLowerCase();
     if (!termo) return [];
     return produtos
-      .filter((p) => p.nome.toLowerCase().includes(termo) || (p.codigoBarras ?? "").includes(termo))
+      .filter((p) => p.nome.toLowerCase().includes(termo) || (p.codigoBarras ?? "").includes(termo) || produtoCorrespondeBuscaPreco(p.precoVenda, busca))
       .slice(0, 8);
   }, [busca, produtos]);
 
@@ -240,7 +241,7 @@ export default function AdicionarVendaModal({
                 type="text"
                 value={busca}
                 onChange={(e) => setBusca(e.target.value)}
-                placeholder={carregandoDados ? "Carregando produtos..." : "Buscar produto por nome ou código..."}
+                placeholder={carregandoDados ? "Carregando produtos..." : "Buscar por nome, código ou preço (ex.: 10,50)..."}
                 disabled={carregandoDados}
                 className="input w-full pl-10!"
               />
