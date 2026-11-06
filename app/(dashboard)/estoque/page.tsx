@@ -32,6 +32,8 @@ export default function EstoquePage() {
   const [selecionados, setSelecionados] = useState<Set<number>>(new Set());
   const [folhaEstoqueAberta, setFolhaEstoqueAberta] = useState(false);
   const [folhaEtiquetasAberta, setFolhaEtiquetasAberta] = useState(false);
+  const [produtosParaEtiquetas, setProdutosParaEtiquetas] = useState<Produto[] | null>(null);
+  const [quantidadeInicialEtiqueta, setQuantidadeInicialEtiqueta] = useState(1);
   const [gerandoCodigos, setGerandoCodigos] = useState(false);
   const [mensagem, setMensagem] = useState<string | null>(null);
   // troca de categoria em lote: "" = nada escolhido, "sem-categoria" = remover a categoria
@@ -709,8 +711,15 @@ export default function EstoquePage() {
           produto={produtoEmEdicao}
           categorias={categorias}
           onClose={() => setModalAberto(false)}
-          onSaved={(manterAberto) => {
+          onSaved={(manterAberto, produtoCriado, imprimirEtiqueta, quantidadeEtiqueta) => {
             if (!manterAberto) setModalAberto(false);
+
+            if (produtoCriado && imprimirEtiqueta) {
+              setProdutosParaEtiquetas([produtoCriado]);
+              setQuantidadeInicialEtiqueta(quantidadeEtiqueta ?? 1);
+              setFolhaEtiquetasAberta(true);
+            }
+
             carregar();
           }}
         />
@@ -725,8 +734,13 @@ export default function EstoquePage() {
 
       {folhaEtiquetasAberta && (
         <FolhaEtiquetas
-          produtos={produtos.filter((produto) => selecionados.has(produto.id))}
-          onFechar={() => setFolhaEtiquetasAberta(false)}
+          produtos={produtosParaEtiquetas ?? produtos.filter((produto) => selecionados.has(produto.id))}
+          quantidadeInicial={quantidadeInicialEtiqueta}
+          onFechar={() => {
+            setFolhaEtiquetasAberta(false);
+            setProdutosParaEtiquetas(null);
+            setQuantidadeInicialEtiqueta(1);
+          }}
         />
       )}
     </div>
@@ -742,7 +756,12 @@ function ModalProduto({
   produto: Produto | null;
   categorias: Categoria[];
   onClose: () => void;
-  onSaved: (manterAberto?: boolean) => void;
+  onSaved: (
+    manterAberto?: boolean,
+    produtoCriado?: Produto,
+    imprimirEtiqueta?: boolean,
+    quantidadeEtiqueta?: number
+  ) => void;
 }) {
   const vazio = {
     nome: "",
@@ -768,6 +787,8 @@ function ModalProduto({
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
   const [produtoSalvoComSucesso, setProdutoSalvoComSucesso] = useState(false);
+  const [imprimirEtiqueta, setImprimirEtiqueta] = useState(false);
+  const [quantidadeEtiqueta, setQuantidadeEtiqueta] = useState("1");
 
   function limparFormulario() {
     setNome(vazio.nome);
@@ -782,6 +803,18 @@ function ModalProduto({
   async function salvar() {
     setSalvando(true);
     setErro(null);
+
+    if (
+      imprimirEtiqueta &&
+      (!Number.isInteger(Number(quantidadeEtiqueta)) ||
+        Number(quantidadeEtiqueta) < 1 ||
+        Number(quantidadeEtiqueta) > 99)
+    ) {
+      setErro("Informe uma quantidade de etiquetas entre 1 e 99.");
+      setSalvando(false);
+      return;
+    }
+
     const payload = {
       nome,
       codigoBarras: codigoBarras || null,
@@ -796,8 +829,12 @@ function ModalProduto({
         await api.put(`/produtos/${produto.id}`, payload);
         onSaved();
       } else {
-        await api.post("/produtos", payload);
-        setProdutoSalvoComSucesso(true);
+        const resposta = await api.post<Produto>("/produtos", payload);
+        if (imprimirEtiqueta) {
+          onSaved(false, resposta.data, true, Number(quantidadeEtiqueta));
+        } else {
+          setProdutoSalvoComSucesso(true);
+        }
       }
     } catch {
       setErro("Não foi possível salvar o produto.");
@@ -930,6 +967,34 @@ function ModalProduto({
               />
             </Campo>
           </div>
+
+          {!produto && (
+            <div className="rounded-xl border border-border bg-background/60 p-3 space-y-3">
+              <label className="flex items-center gap-2 text-sm font-medium cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={imprimirEtiqueta}
+                  onChange={(e) => setImprimirEtiqueta(e.target.checked)}
+                  className="w-4 h-4 accent-current"
+                />
+                Imprimir etiqueta após cadastrar
+              </label>
+
+              {imprimirEtiqueta && (
+                <Campo label="Quantidade de etiquetas">
+                  <input
+                    type="number"
+                    min="1"
+                    max="99"
+                    step="1"
+                    value={quantidadeEtiqueta}
+                    onChange={(e) => setQuantidadeEtiqueta(e.target.value)}
+                    className="input"
+                  />
+                </Campo>
+              )}
+            </div>
+          )}
 
           {(() => {
             const qtd = Number(quantidadeEstoque);

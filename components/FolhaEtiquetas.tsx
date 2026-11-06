@@ -91,9 +91,11 @@ function paraNumero(texto: string, padrao: string): number {
 export default function FolhaEtiquetas({
   produtos,
   onFechar,
+  quantidadeInicial = 1,
 }: {
   produtos: Produto[];
   onFechar: () => void;
+  quantidadeInicial?: number;
 }) {
   const comCodigo = produtos.filter((p) => p.codigoBarras);
 
@@ -124,12 +126,15 @@ export default function FolhaEtiquetas({
       for (const produto of comCodigo) {
         novas[produto.id] = atuais[produto.id] ?? {
           selecionado: true,
-          quantidade: QUANTIDADE_MIN,
+          quantidade: Math.min(
+            QUANTIDADE_MAX,
+            Math.max(QUANTIDADE_MIN, quantidadeInicial)
+          ),
         };
       }
       return novas;
     });
-  }, [produtos]);
+  }, [produtos, quantidadeInicial]);
 
   const produtosSelecionados = comCodigo.filter(
     (produto) => configuracoesProdutos[produto.id]?.selecionado
