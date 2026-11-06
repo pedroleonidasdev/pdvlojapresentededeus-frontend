@@ -731,17 +731,17 @@ export default function PdvPage() {
                       key={forma}
                       onClick={() => setFormaPagamento(forma)}
                       aria-pressed={formaPagamento === forma}
-                      className={`relative flex items-center gap-2 text-sm py-2.5 px-3 rounded-xl border-2 transition ${formaPagamento === forma
+                      className={`relative flex items-center gap-3 text-base font-bold py-3.5 px-4 rounded-xl border-2 transition ${formaPagamento === forma
                           ? COR_FORMA_PAGAMENTO[forma].ativo
                           : "border-border bg-surface text-muted hover:border-primary/40 hover:bg-background"
                         }`}
                     >
                       {(() => {
                         const Icone = ICONE_FORMA[forma];
-                        return <Icone className="w-4 h-4 shrink-0" />;
+                        return <Icone className="w-5 h-5 shrink-0" />;
                       })()}
                       <span className="truncate">{LABEL_FORMA_PAGAMENTO[forma]}</span>
-                      <kbd className="ml-auto shrink-0 rounded border border-current/20 px-1.5 py-0.5 text-[10px] font-semibold opacity-70">
+                      <kbd className="ml-auto shrink-0 rounded border border-current/20 px-2 py-1 text-xs font-bold opacity-80">
                         {forma === "CARTAO_DEBITO" ? "F1" : forma === "CARTAO_CREDITO" ? "F2" : forma === "PIX" ? "F3" : "F4"}
                       </kbd>
                       {formaPagamento === forma && (
@@ -831,9 +831,9 @@ export default function PdvPage() {
                           : "bg-success-light"
                     }`}
                   >
-                    <span className="text-[11px] font-medium text-muted leading-tight">Troco</span>
+                    <span className="text-sm font-semibold text-muted leading-tight">Troco</span>
                     <span
-                      className={`text-lg font-bold font-mono tabular-nums leading-tight truncate ${
+                      className={`text-2xl font-extrabold font-mono tabular-nums leading-tight truncate ${
                         valorRecebidoValido === 0
                           ? "text-muted"
                           : pagamentoInsuficiente
@@ -871,7 +871,7 @@ export default function PdvPage() {
               )}
               <div className="relative flex items-end justify-between gap-3">
                 <span className="text-sm font-bold uppercase tracking-[0.18em] text-white/80 pb-1.5">Total</span>
-                <span className="text-3xl xl:text-4xl font-extrabold tabular-nums tracking-tight leading-tight">
+                <span className="text-4xl xl:text-5xl font-extrabold tabular-nums tracking-tight leading-tight">
                   {formatarMoeda(total)}
                 </span>
               </div>
