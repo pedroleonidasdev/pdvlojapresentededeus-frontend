@@ -543,7 +543,7 @@ export default function PdvPage() {
                 >
                   <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-primary to-primary-dark opacity-60 group-hover:opacity-100 group-disabled:hidden transition" />
                   <span aria-hidden className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white shadow-md opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 group-disabled:hidden transition">
-                    <Plus className="w-4 h-4" />
+                    <Plus className="w-5 h-5" />
                   </span>
                   <p className="pr-8 font-semibold text-[15px] text-foreground leading-snug line-clamp-2 break-words">{produto.nome}</p>
                   <p className="self-start text-[11px] mt-2 px-2 py-0.5 rounded-full bg-secondary-light text-secondary-dark">
@@ -582,27 +582,27 @@ export default function PdvPage() {
         </div>
 
         {/* Coluna do carrinho / recibo — painel fixo à direita em telas md+ */}
-        <div className="w-full md:w-[380px] md:min-w-[380px] md:max-w-[380px] xl:w-[420px] xl:min-w-[420px] xl:max-w-[420px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border md:shadow-[-6px_0_14px_-8px_rgba(15,51,42,0.25)] flex flex-col min-h-0">
-          <div className="px-5 py-3 border-b border-border flex items-center gap-2 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
+        <div className="w-full md:w-[460px] md:min-w-[460px] md:max-w-[460px] xl:w-[500px] xl:min-w-[500px] xl:max-w-[500px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border md:shadow-[-6px_0_14px_-8px_rgba(15,51,42,0.25)] flex flex-col min-h-0">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-3 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
             <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/30 ring-1 ring-white/30">
-              <ShoppingCart className="w-5 h-5" />
+              <ShoppingCart className="w-6 h-6" />
             </span>
             <div className="min-w-0">
-              <h2 className="font-bold text-lg leading-tight">Carrinho</h2>
+              <h2 className="font-bold text-xl leading-tight">Carrinho</h2>
               {carrinho.length > 0 && (
-                <p className="text-xs text-muted leading-tight">
+                <p className="text-sm text-muted leading-tight">
                   {carrinho.length} {carrinho.length === 1 ? "produto" : "produtos"} · {unidadesNoCarrinho}{" "}
                   {unidadesNoCarrinho === 1 ? "unidade" : "unidades"}
                 </p>
               )}
             </div>
-            <span className="ml-auto rounded-full bg-primary text-white px-3 py-1 text-sm font-semibold shadow-sm">
+            <span className="ml-auto rounded-full bg-primary text-white px-4 py-2 text-base font-bold shadow-sm">
               {carrinho.length} {carrinho.length === 1 ? "item" : "itens"}
             </span>
           </div>
 
           {/* Lista de produtos: ocupa todo o espaço livre entre o cabeçalho e o bloco de desconto/pagamento. */}
-          <div className="flex flex-col flex-1 min-h-[96px] max-h-[240px] md:max-h-none overflow-y-auto px-5 py-2 bg-surface-alt/50 receipt-dashed">
+          <div className="flex flex-col flex-1 min-h-[96px] max-h-[240px] md:max-h-none overflow-y-auto px-6 py-3 bg-surface-alt/50 receipt-dashed">
             {carrinho.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-3 text-center">
                 <span className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-primary/30 bg-surface text-primary/50">
@@ -612,12 +612,12 @@ export default function PdvPage() {
                 <p className="text-xs text-muted mt-0.5">Os produtos adicionados aparecem aqui.</p>
               </div>
             ) : (
-              <ul className="divide-y divide-accent/25 text-sm">
+              <ul className="divide-y divide-accent/25 text-base">
                 {carrinho.map((item) => (
-                  <li key={item.produto.id} className="py-2.5">
+                  <li key={item.produto.id} className="py-4">
                     <div className="flex items-start gap-2">
                       <p
-                        className="min-w-0 flex-1 text-sm font-bold leading-snug text-foreground line-clamp-2 break-words"
+                        className="min-w-0 flex-1 text-base md:text-lg font-bold leading-snug text-foreground line-clamp-2 break-words"
                         title={item.produto.nome}
                       >
                         {item.produto.nome}
@@ -631,16 +631,16 @@ export default function PdvPage() {
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="mt-1.5 flex items-center justify-between gap-2">
-                      <div className="inline-flex items-center overflow-hidden rounded-lg border border-border bg-surface shadow-sm">
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="inline-flex items-center overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
                         <button
                           onClick={() => alterarQuantidade(item.produto.id, -1)}
-                          className="w-8 h-8 flex items-center justify-center text-foreground hover:bg-primary-light active:bg-primary/20 transition"
+                          className="w-10 h-10 flex items-center justify-center text-foreground hover:bg-primary-light active:bg-primary/20 transition"
                           aria-label={`Diminuir quantidade de ${item.produto.nome}`}
                         >
-                          <Minus className="w-4 h-4" />
+                          <Minus className="w-5 h-5" />
                         </button>
-                        <span className="min-w-[2.25rem] px-1 text-center font-mono text-sm font-bold tabular-nums text-primary-dark border-x border-border bg-primary-soft leading-8">
+                        <span className="min-w-[3rem] px-2 text-center font-mono text-lg font-extrabold tabular-nums text-primary-dark border-x border-border bg-primary-soft leading-10">
                           {item.quantidade}
                         </span>
                         <button
@@ -651,10 +651,10 @@ export default function PdvPage() {
                           <Plus className="w-4 h-4" />
                         </button>
                       </div>
-                      <span className="min-w-0 flex-1 truncate text-xs text-muted">
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-muted">
                         × {formatarMoeda(item.produto.precoVenda)}
                       </span>
-                      <span className="font-mono text-base font-bold text-foreground whitespace-nowrap tabular-nums">
+                      <span className="font-mono text-lg md:text-xl font-extrabold text-primary-dark whitespace-nowrap tabular-nums">
                         {formatarMoeda(item.produto.precoVenda * item.quantidade)}
                       </span>
                     </div>
