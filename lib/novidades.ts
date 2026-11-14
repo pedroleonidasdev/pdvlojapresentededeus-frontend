@@ -16,6 +16,16 @@ export interface Novidade {
 
 export const NOVIDADES: Novidade[] = [
   {
+    id: "2026-11-14-cupom-de-troca",
+    data: "2026-11-14",
+    titulo: "Cupom de troca na impressora",
+    itens: [
+      "Ao registrar uma troca, o cupom é enviado sozinho para a impressora Goldensky, como já acontece com a venda.",
+      "O cupom mostra o que foi devolvido, o que o cliente levou e a diferença, com a forma de pagamento ou do troco.",
+      "Se a impressora não responder, aparece o aviso com o botão “Tentar novamente”. Também dá para imprimir pelo navegador.",
+    ],
+  },
+  {
     id: "2026-10-28-atualizacao-e-chat",
     data: "2026-10-28",
     titulo: "Atualização obrigatória, caixinha de aviso e chat estilo WhatsApp",
