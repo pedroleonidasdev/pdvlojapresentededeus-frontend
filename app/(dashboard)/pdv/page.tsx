@@ -459,21 +459,21 @@ export default function PdvPage() {
   const caixaFechado = caixa === null;
 
   return (
-    <div className="flex flex-col h-full bg-gradient-to-bl from-[#CFE1F4] via-[#D6E6F4] to-[#DAECF0]">
-      <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" compact espelhado />
+    <div className="flex flex-col h-full bg-gradient-to-br from-[#CFE1F4] via-[#D6E6F4] to-[#DAECF0]">
+      <PageHeader title="Venda" subtitle="Busque um produto pelo nome ou código de barras" compact />
 
       <div className="relative flex-1 min-h-0 flex flex-col">
       <div
         inert={caixaFechado}
         aria-hidden={caixaFechado}
-        className={`flex-1 min-h-0 flex flex-col md:flex-row-reverse overflow-y-auto md:overflow-hidden ${
+        className={`flex-1 min-h-0 flex flex-col md:flex-row overflow-y-auto md:overflow-hidden ${
           caixaFechado ? "select-none" : ""
         }`}
       >
-        {/* Coluna de busca de produtos — fica à direita em telas md+ (o container usa flex-row-reverse) */}
+        {/* Coluna de busca de produtos */}
         <div className="w-full md:flex-1 flex flex-col p-4 md:p-6 md:overflow-hidden">
           <div className="relative mb-3">
-            <Search className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 text-primary/70" />
+            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-primary/70" />
             <input
               autoFocus
               ref={buscaInputRef}
@@ -481,10 +481,10 @@ export default function PdvPage() {
               onChange={(e) => setBusca(e.target.value)}
               onKeyDown={handleBuscaKeyDown}
               placeholder="Nome, código de barras ou preço (ex.: 10,50 ou R$ 10) + Enter"
-              className="w-full pl-12 pr-12 text-right py-3.5 rounded-2xl border-2 border-border bg-surface shadow-[0_8px_24px_-14px_rgba(15,51,42,0.5)] placeholder:text-muted/70 focus:outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition text-base"
+              className="w-full pl-12 pr-12 py-3.5 rounded-2xl border-2 border-border bg-surface shadow-[0_8px_24px_-14px_rgba(15,51,42,0.5)] placeholder:text-muted/70 focus:outline-none focus:ring-4 focus:ring-primary/15 focus:border-primary transition text-base"
             />
             {buscando ? (
-              <Loader2 className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-muted" />
+              <Loader2 className="absolute right-4 top-1/2 -translate-y-1/2 w-5 h-5 animate-spin text-muted" />
             ) : (
               busca.length > 0 && (
                 <button
@@ -494,7 +494,7 @@ export default function PdvPage() {
                     setResultados([]);
                     buscaInputRef.current?.focus();
                   }}
-                  className="absolute left-4 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition"
+                  className="absolute right-4 top-1/2 -translate-y-1/2 text-muted hover:text-foreground transition"
                   title="Limpar busca"
                 >
                   <X className="w-5 h-5" />
@@ -509,27 +509,27 @@ export default function PdvPage() {
             )}
             {resultados.length === 0 && busca.trim().length < 2 && (
               <div className="mt-1 flex flex-col items-center justify-center text-center rounded-3xl border-2 border-dashed border-primary/25 bg-surface/60 px-6 py-10 md:py-14">
-                <div className="w-16 h-16 rounded-2xl bg-gradient-to-bl from-primary to-primary-dark text-white flex items-center justify-center mb-4 shadow-lg shadow-primary/30 ring-1 ring-white/30">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-primary to-primary-dark text-white flex items-center justify-center mb-4 shadow-lg shadow-primary/30 ring-1 ring-white/30">
                   <Barcode className="w-8 h-8" />
                 </div>
                 <p className="text-lg font-bold text-foreground">Pronto para vender</p>
                 <p className="text-sm text-muted mt-1 max-w-xs">Escolha como adicionar o primeiro produto ao carrinho.</p>
-                <div className="mt-5 flex flex-row-reverse flex-wrap items-center justify-center gap-2">
-                  <span className="inline-flex flex-row-reverse items-center gap-1.5 rounded-full border border-primary/20 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary-dark">
+                <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-primary/20 bg-primary-soft px-3 py-1.5 text-xs font-medium text-primary-dark">
                     <Barcode className="w-3.5 h-3.5" /> Passe o leitor no código de barras
                   </span>
-                  <span className="inline-flex flex-row-reverse items-center gap-1.5 rounded-full border border-info/25 bg-info-light px-3 py-1.5 text-xs font-medium text-info-dark">
+                  <span className="inline-flex items-center gap-1.5 rounded-full border border-info/25 bg-info-light px-3 py-1.5 text-xs font-medium text-info-dark">
                     <Keyboard className="w-3.5 h-3.5" /> Digite o nome (2+ letras)
                   </span>
                 </div>
               </div>
             )}
             {resultados.length > 0 && (
-              <p className="mb-2 px-1 text-right text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
+              <p className="mb-2 px-1 text-[11px] font-semibold uppercase tracking-[0.14em] text-muted">
                 {resultados.length} {resultados.length === 1 ? "produto" : "produtos"} · clique para adicionar
               </p>
             )}
-            <div className="grid [direction:rtl] grid-cols-2 xl:grid-cols-3 gap-3">
+            <div className="grid grid-cols-2 xl:grid-cols-3 gap-3">
               {resultados.map((produto) => (
                 <button
                   key={produto.id}
@@ -539,22 +539,22 @@ export default function PdvPage() {
                   }}
                   disabled={produto.quantidadeEstoque < 1}
                   title={produto.nome}
-                  className="group relative overflow-hidden [direction:ltr] text-right p-3.5 pr-4 rounded-2xl border border-border bg-surface shadow-sm hover:border-primary hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition flex flex-col disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-sm disabled:hover:border-border"
+                  className="group relative overflow-hidden text-left p-3.5 pl-4 rounded-2xl border border-border bg-surface shadow-sm hover:border-primary hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.98] transition flex flex-col disabled:opacity-45 disabled:cursor-not-allowed disabled:hover:translate-y-0 disabled:hover:shadow-sm disabled:hover:border-border"
                 >
-                  <span aria-hidden className="absolute inset-y-0 right-0 w-1 bg-gradient-to-b from-primary to-primary-dark opacity-60 group-hover:opacity-100 group-disabled:hidden transition" />
-                  <span aria-hidden className="absolute left-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white shadow-md opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 group-disabled:hidden transition">
+                  <span aria-hidden className="absolute inset-y-0 left-0 w-1 bg-gradient-to-b from-primary to-primary-dark opacity-60 group-hover:opacity-100 group-disabled:hidden transition" />
+                  <span aria-hidden className="absolute right-2.5 top-2.5 flex h-7 w-7 items-center justify-center rounded-full bg-primary text-white shadow-md opacity-0 scale-90 group-hover:opacity-100 group-hover:scale-100 group-disabled:hidden transition">
                     <Plus className="w-5 h-5" />
                   </span>
-                  <p className="pl-8 font-semibold text-[15px] text-foreground leading-snug line-clamp-2 break-words">{produto.nome}</p>
-                  <p className="self-end text-[11px] mt-2 px-2 py-0.5 rounded-full bg-secondary-light text-secondary-dark">
+                  <p className="pr-8 font-semibold text-[15px] text-foreground leading-snug line-clamp-2 break-words">{produto.nome}</p>
+                  <p className="self-start text-[11px] mt-2 px-2 py-0.5 rounded-full bg-secondary-light text-secondary-dark">
                     {produto.categoria?.nome ?? "Sem categoria"}
                   </p>
-                  <div className="flex flex-row-reverse flex-wrap items-end justify-between gap-x-2 gap-y-1 mt-auto pt-3">
+                  <div className="flex flex-wrap items-end justify-between gap-x-2 gap-y-1 mt-auto pt-3">
                     <span className="font-mono text-xl font-bold text-primary tabular-nums">
                       {formatarMoeda(produto.precoVenda)}
                     </span>
                     <span
-                      className={`inline-flex flex-row-reverse items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
+                      className={`inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full ${
                         produto.quantidadeEstoque < 1
                           ? "bg-danger-light text-danger"
                           : situacaoEstoque(produto) === "baixo"
@@ -581,13 +581,13 @@ export default function PdvPage() {
           </div>
         </div>
 
-        {/* Coluna do carrinho / recibo — painel fixo à esquerda em telas md+ (o container usa flex-row-reverse) */}
-        <div className="w-full md:w-[460px] md:min-w-[460px] md:max-w-[460px] xl:w-[500px] xl:min-w-[500px] xl:max-w-[500px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-r border-border md:shadow-[6px_0_14px_-8px_rgba(15,51,42,0.25)] flex flex-col min-h-0">
-          <div className="px-6 py-4 border-b border-border flex flex-row-reverse items-center gap-3 shrink-0 bg-gradient-to-l from-primary-soft to-surface">
-            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-bl from-primary to-primary-dark text-white shadow-md shadow-primary/30 ring-1 ring-white/30">
+        {/* Coluna do carrinho / recibo — painel fixo à direita em telas md+ */}
+        <div className="w-full md:w-[460px] md:min-w-[460px] md:max-w-[460px] xl:w-[500px] xl:min-w-[500px] xl:max-w-[500px] md:shrink-0 bg-surface border-t md:border-t-0 md:border-l border-border md:shadow-[-6px_0_14px_-8px_rgba(15,51,42,0.25)] flex flex-col min-h-0">
+          <div className="px-6 py-4 border-b border-border flex items-center gap-3 shrink-0 bg-gradient-to-r from-primary-soft to-surface">
+            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-primary to-primary-dark text-white shadow-md shadow-primary/30 ring-1 ring-white/30">
               <ShoppingCart className="w-6 h-6" />
             </span>
-            <div className="min-w-0 text-right">
+            <div className="min-w-0">
               <h2 className="font-bold text-xl leading-tight">Carrinho</h2>
               {carrinho.length > 0 && (
                 <p className="text-sm text-muted leading-tight">
@@ -596,13 +596,13 @@ export default function PdvPage() {
                 </p>
               )}
             </div>
-            <span className="mr-auto rounded-full bg-primary text-white px-4 py-2 text-base font-bold shadow-sm">
+            <span className="ml-auto rounded-full bg-primary text-white px-4 py-2 text-base font-bold shadow-sm">
               {carrinho.length} {carrinho.length === 1 ? "item" : "itens"}
             </span>
           </div>
 
           {/* Lista de produtos: ocupa todo o espaço livre entre o cabeçalho e o bloco de desconto/pagamento. */}
-          <div className="flex flex-col flex-1 min-h-[96px] max-h-[240px] md:max-h-none overflow-y-auto px-6 py-3 bg-surface-alt/50 bg-right receipt-dashed">
+          <div className="flex flex-col flex-1 min-h-[96px] max-h-[240px] md:max-h-none overflow-y-auto px-6 py-3 bg-surface-alt/50 receipt-dashed">
             {carrinho.length === 0 ? (
               <div className="flex-1 flex flex-col items-center justify-center py-3 text-center">
                 <span className="mb-2 flex h-12 w-12 items-center justify-center rounded-full border-2 border-dashed border-primary/30 bg-surface text-primary/50">
@@ -615,24 +615,24 @@ export default function PdvPage() {
               <ul className="divide-y divide-accent/25 text-base">
                 {carrinho.map((item) => (
                   <li key={item.produto.id} className="py-4">
-                    <div className="flex flex-row-reverse items-start gap-2">
+                    <div className="flex items-start gap-2">
                       <p
-                        className="min-w-0 flex-1 text-right text-base md:text-lg font-bold leading-snug text-foreground line-clamp-2 break-words"
+                        className="min-w-0 flex-1 text-base md:text-lg font-bold leading-snug text-foreground line-clamp-2 break-words"
                         title={item.produto.nome}
                       >
                         {item.produto.nome}
                       </p>
                       <button
                         onClick={() => removerItem(item.produto.id)}
-                        className="shrink-0 -ml-1 -mt-0.5 p-1.5 rounded-lg text-danger/60 hover:text-danger hover:bg-danger-light transition"
+                        className="shrink-0 -mr-1 -mt-0.5 p-1.5 rounded-lg text-danger/60 hover:text-danger hover:bg-danger-light transition"
                         aria-label={`Remover ${item.produto.nome}`}
                         title="Remover"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>
                     </div>
-                    <div className="mt-3 flex flex-row-reverse items-center justify-between gap-3">
-                      <div className="inline-flex flex-row-reverse items-center overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
+                    <div className="mt-3 flex items-center justify-between gap-3">
+                      <div className="inline-flex items-center overflow-hidden rounded-xl border border-border bg-surface shadow-sm">
                         <button
                           onClick={() => alterarQuantidade(item.produto.id, -1)}
                           className="w-10 h-10 flex items-center justify-center text-foreground hover:bg-primary-light active:bg-primary/20 transition"
@@ -651,7 +651,7 @@ export default function PdvPage() {
                           <Plus className="w-4 h-4" />
                         </button>
                       </div>
-                      <span className="min-w-0 flex-1 truncate text-right text-sm font-medium text-muted">
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-muted">
                         × {formatarMoeda(item.produto.precoVenda)}
                       </span>
                       <span className="font-mono text-lg md:text-xl font-extrabold text-primary-dark whitespace-nowrap tabular-nums">
@@ -669,12 +669,12 @@ export default function PdvPage() {
           <div className="flex-1 min-h-0 overflow-y-auto px-5 py-3 space-y-3">
             {/* Desconto */}
             <div>
-              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center justify-end gap-1.5">
-                <Tag className="w-3.5 h-3.5 order-last" />
+              <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1.5">
+                <Tag className="w-3.5 h-3.5" />
                 Desconto
                 <span className="normal-case font-normal tracking-normal text-[11px]">· pode usar os dois juntos</span>
               </p>
-              <div className="flex flex-row-reverse gap-2">
+              <div className="flex gap-2">
                 <div className="relative flex-1">
                   <input
                     inputMode="decimal"
@@ -682,19 +682,19 @@ export default function PdvPage() {
                     onChange={(e) => handleDescontoChange(e.target.value)}
                     placeholder="0"
                     disabled={carrinho.length === 0}
-                    className="w-full pl-8 pr-3 text-right py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
+                    className="w-full pl-3 pr-8 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
                   />
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
+                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">%</span>
                 </div>
                 <div className="relative flex-1">
-                  <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted">R$</span>
                   <input
                     inputMode="decimal"
                     value={descontoDinheiro}
                     onChange={(e) => handleDescontoDinheiroChange(e.target.value)}
                     placeholder="0,00"
                     disabled={carrinho.length === 0}
-                    className="w-full pl-3 pr-9 text-right py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
+                    className="w-full pl-9 pr-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-base font-mono disabled:opacity-50"
                   />
                 </div>
               </div>
@@ -702,7 +702,7 @@ export default function PdvPage() {
 
             {/* Forma de pagamento */}
             <div>
-              <div className="flex flex-row-reverse items-center justify-between mb-1.5">
+              <div className="flex items-center justify-between mb-1.5">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted">Forma de pagamento</p>
                 {!pagamentoMultiplo ? (
                   <button
@@ -725,13 +725,13 @@ export default function PdvPage() {
               </div>
 
               {!pagamentoMultiplo ? (
-                <div className="grid [direction:rtl] grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   {FORMAS.map((forma) => (
                     <button
                       key={forma}
                       onClick={() => setFormaPagamento(forma)}
                       aria-pressed={formaPagamento === forma}
-                      className={`relative flex flex-row-reverse [direction:ltr] items-center gap-3 text-base font-bold py-3.5 px-4 rounded-xl border-2 transition ${formaPagamento === forma
+                      className={`relative flex items-center gap-3 text-base font-bold py-3.5 px-4 rounded-xl border-2 transition ${formaPagamento === forma
                           ? COR_FORMA_PAGAMENTO[forma].ativo
                           : "border-border bg-surface text-muted hover:border-primary/40 hover:bg-background"
                         }`}
@@ -741,11 +741,11 @@ export default function PdvPage() {
                         return <Icone className="w-5 h-5 shrink-0" />;
                       })()}
                       <span className="truncate">{LABEL_FORMA_PAGAMENTO[forma]}</span>
-                      <kbd className="mr-auto shrink-0 rounded border border-current/20 px-2 py-1 text-xs font-bold opacity-80">
+                      <kbd className="ml-auto shrink-0 rounded border border-current/20 px-2 py-1 text-xs font-bold opacity-80">
                         {forma === "CARTAO_DEBITO" ? "F1" : forma === "CARTAO_CREDITO" ? "F2" : forma === "PIX" ? "F3" : "F4"}
                       </kbd>
                       {formaPagamento === forma && (
-                        <span className={`mr-auto flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-white ${COR_FORMA_PAGAMENTO[forma].ponto}`}>
+                        <span className={`ml-auto flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-white ${COR_FORMA_PAGAMENTO[forma].ponto}`}>
                           <Check className="w-3 h-3" strokeWidth={3} />
                         </span>
                       )}
@@ -755,7 +755,7 @@ export default function PdvPage() {
               ) : (
                 <div className="space-y-1.5">
                   {pagamentos.map((pagamento, index) => (
-                    <div key={index} className="flex flex-row-reverse gap-2 items-center">
+                    <div key={index} className="flex gap-2 items-center">
                       <select
                         value={pagamento.formaPagamento}
                         onChange={(e) => atualizarPagamento(index, "formaPagamento", e.target.value as FormaPdv)}
@@ -766,13 +766,13 @@ export default function PdvPage() {
                         ))}
                       </select>
                       <div className="relative w-32">
-                        <span className="absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-muted">R$</span>
+                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs text-muted">R$</span>
                         <input
                           inputMode="decimal"
                           value={pagamento.valor}
                           onChange={(e) => atualizarPagamento(index, "valor", e.target.value)}
                           placeholder="0,00"
-                          className="w-full pl-2 pr-8 text-right py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
+                          className="w-full pl-8 pr-2 py-2 rounded-lg border border-border bg-background text-sm font-mono focus:outline-none focus:ring-2 focus:ring-primary/40"
                         />
                       </div>
                       <button
@@ -795,7 +795,7 @@ export default function PdvPage() {
                       + Adicionar outra forma
                     </button>
                   )}
-                  <div className="flex flex-row-reverse items-center justify-between gap-2 rounded-lg bg-background border border-border px-3 py-2 text-sm">
+                  <div className="flex items-center justify-between gap-2 rounded-lg bg-background border border-border px-3 py-2 text-sm">
                     <span className="text-muted">Pago</span>
                     <span className="font-mono font-semibold tabular-nums">{formatarMoeda(totalPagamentos)}</span>
                     <span className={`font-semibold ${restantePagamento > 0.005 ? "text-danger" : "text-primary"}`}>
@@ -809,21 +809,21 @@ export default function PdvPage() {
             {/* Dinheiro */}
             {!pagamentoMultiplo && formaPagamento === "DINHEIRO" && (
               <div>
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center justify-end gap-1.5">
-                  <DollarSign className="w-3.5 h-3.5 order-last" />
+                <p className="text-xs font-semibold uppercase tracking-wide text-muted mb-1.5 flex items-center gap-1.5">
+                  <DollarSign className="w-3.5 h-3.5" />
                   Valor recebido e troco
                 </p>
-                <div className="grid [direction:rtl] grid-cols-2 gap-2">
+                <div className="grid grid-cols-2 gap-2">
                   <input
                     inputMode="decimal"
                     value={valorRecebido}
                     onChange={(e) => handleValorRecebidoChange(e.target.value)}
                     placeholder="0,00"
                     disabled={carrinho.length === 0}
-                    className="w-full min-w-0 [direction:ltr] text-right px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-lg font-mono font-semibold disabled:opacity-50"
+                    className="w-full min-w-0 px-3 py-2 rounded-lg border border-border bg-background focus:outline-none focus:ring-2 focus:ring-primary/40 focus:border-primary transition text-lg font-mono font-semibold disabled:opacity-50"
                   />
                   <div
-                    className={`min-w-0 [direction:ltr] text-right flex flex-col justify-center rounded-lg px-3 py-1 ${
+                    className={`min-w-0 flex flex-col justify-center rounded-lg px-3 py-1 ${
                       valorRecebidoValido === 0
                         ? "bg-background border border-border"
                         : pagamentoInsuficiente
@@ -855,21 +855,21 @@ export default function PdvPage() {
 
           <div className="shrink-0 sticky bottom-0 md:static bg-surface border-t border-border px-5 py-3 space-y-2 shadow-[0_-8px_14px_-10px_rgba(15,51,42,0.3)]">
             {/* Totais */}
-            <div className="relative overflow-hidden rounded-xl bg-gradient-to-bl from-primary to-primary-dark px-4 py-2.5 font-mono text-white shadow-md shadow-primary/30">
-              <div aria-hidden className="absolute -left-8 -top-10 h-24 w-24 rounded-full bg-accent/25 blur-2xl" />
+            <div className="relative overflow-hidden rounded-xl bg-gradient-to-br from-primary to-primary-dark px-4 py-2.5 font-mono text-white shadow-md shadow-primary/30">
+              <div aria-hidden className="absolute -right-8 -top-10 h-24 w-24 rounded-full bg-accent/25 blur-2xl" />
               {valorDesconto > 0 && (
                 <div className="relative space-y-0.5 pb-1.5 mb-1.5 border-b border-white/15">
-                  <div className="flex flex-row-reverse items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <span className="text-sm text-white/70">Subtotal</span>
                     <span className="text-base tabular-nums">{formatarMoeda(subtotal)}</span>
                   </div>
-                  <div className="flex flex-row-reverse items-center justify-between">
+                  <div className="flex items-center justify-between">
                     <span className="text-sm text-white/70">Desconto</span>
                     <span className="text-base text-amber-200 tabular-nums">- {formatarMoeda(valorDesconto)}</span>
                   </div>
                 </div>
               )}
-              <div className="relative flex flex-row-reverse items-end justify-between gap-3">
+              <div className="relative flex items-end justify-between gap-3">
                 <span className="text-sm font-bold uppercase tracking-[0.18em] text-white/80 pb-1.5">Total</span>
                 <span className="text-4xl xl:text-5xl font-extrabold tabular-nums tracking-tight leading-tight">
                   {formatarMoeda(total)}
@@ -878,7 +878,7 @@ export default function PdvPage() {
             </div>
 
             {erro && (
-              <div className="rounded-lg bg-danger-light text-danger text-right text-sm font-medium px-3 py-2">{erro}</div>
+              <div className="rounded-lg bg-danger-light text-danger text-sm font-medium px-3 py-2">{erro}</div>
             )}
 
             {/* Ações */}
@@ -886,18 +886,18 @@ export default function PdvPage() {
               <button
                 onClick={finalizarVenda}
                 disabled={carrinho.length === 0 || finalizando || pagamentoInsuficiente || !pagamentosCompletos}
-                className="w-full flex flex-row-reverse items-center justify-center gap-2 bg-gradient-to-l from-accent to-accent-dark hover:brightness-105 active:scale-[0.99] text-white text-base font-bold py-3 rounded-xl shadow-lg shadow-accent/30 ring-1 ring-white/20 transition disabled:bg-none disabled:bg-surface-alt disabled:text-muted disabled:shadow-none disabled:ring-0 disabled:border disabled:border-border disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 bg-gradient-to-r from-accent to-accent-dark hover:brightness-105 active:scale-[0.99] text-white text-base font-bold py-3 rounded-xl shadow-lg shadow-accent/30 ring-1 ring-white/20 transition disabled:bg-none disabled:bg-surface-alt disabled:text-muted disabled:shadow-none disabled:ring-0 disabled:border disabled:border-border disabled:cursor-not-allowed"
               >
                 {finalizando ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle2 className="w-5 h-5" />}
-                Finalizar venda <kbd className="mr-1 rounded border border-white/40 px-1.5 py-0.5 text-[10px]">F5</kbd>
+                Finalizar venda <kbd className="ml-1 rounded border border-white/40 px-1.5 py-0.5 text-[10px]">F5</kbd>
               </button>
 
               <button
                 onClick={cancelarVenda}
                 disabled={carrinho.length === 0 || finalizando}
-                className="w-full flex flex-row-reverse items-center justify-center gap-2 border border-danger/25 bg-transparent hover:bg-danger-light text-danger text-sm font-medium py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
+                className="w-full flex items-center justify-center gap-2 border border-danger/25 bg-transparent hover:bg-danger-light text-danger text-sm font-medium py-2 rounded-xl transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
-                Cancelar venda <kbd className="mr-1 rounded border border-danger/30 px-1.5 py-0.5 text-[10px]">F8</kbd>
+                Cancelar venda <kbd className="ml-1 rounded border border-danger/30 px-1.5 py-0.5 text-[10px]">F8</kbd>
               </button>
             </div>
           </div>
