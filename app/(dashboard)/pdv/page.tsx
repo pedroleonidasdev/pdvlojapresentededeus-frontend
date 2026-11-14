@@ -907,7 +907,7 @@ export default function PdvPage() {
 
       {caixaFechado && (
         // véu desfocado: a tela de venda fica ao fundo, sem competir com a janela
-        <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-primary-dark/25 backdrop-blur-md">
+        <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-primary-dark/25">
           <div
             role="dialog"
             aria-modal="true"
