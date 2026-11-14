@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import api from "@/lib/api";
 import { Produto, FormaPagamento, Troca } from "@/lib/types";
 import { formatarMoeda, formatarDataHora, LABEL_FORMA_PAGAMENTO } from "@/lib/format";
+import { imprimirCupomTroca } from "@/lib/impressora";
 import PageHeader from "@/components/PageHeader";
 import {
   Search,
@@ -472,6 +473,39 @@ function ItemLinha({
 }
 
 function ComprovanteTroca({ troca, onNovaTroca }: { troca: Troca; onNovaTroca: () => void }) {
+  const [imprimindo, setImprimindo] = useState(false);
+  const [erroImpressao, setErroImpressao] = useState<string | null>(null);
+  const [impressaoOk, setImpressaoOk] = useState(false);
+  const impressaoAutomaticaRef = useRef<number | null>(null);
+
+  // Envia o cupom de troca para a térmica Goldensky (mesmo agente local do cupom de venda).
+  const imprimir = useCallback(async () => {
+    if (imprimindo) return;
+
+    setImprimindo(true);
+    setErroImpressao(null);
+    setImpressaoOk(false);
+
+    try {
+      await imprimirCupomTroca(troca);
+      setImpressaoOk(true);
+    } catch (error) {
+      setErroImpressao(
+        error instanceof Error ? error.message : "Não foi possível imprimir o cupom de troca."
+      );
+    } finally {
+      setImprimindo(false);
+    }
+  }, [imprimindo, troca]);
+
+  // Imprime automaticamente uma única vez para cada troca, como o PDV faz com a venda.
+  useEffect(() => {
+    if (impressaoAutomaticaRef.current === troca.id) return;
+
+    impressaoAutomaticaRef.current = troca.id;
+    void imprimir();
+  }, [troca.id, imprimir]);
+
   return (
     <div className="min-h-full flex flex-col items-center justify-center bg-background p-6">
       <div className="w-full max-w-sm bg-surface border border-border rounded-2xl overflow-hidden receipt-print">
@@ -545,19 +579,60 @@ function ComprovanteTroca({ troca, onNovaTroca }: { troca: Troca; onNovaTroca: (
         </div>
       </div>
 
-      <div className="w-full max-w-sm flex gap-2 mt-4 no-print">
+      <div className="w-full max-w-sm mt-4 no-print space-y-2">
+        {imprimindo && (
+          <div
+            className="rounded-lg border border-border bg-surface px-3 py-3 space-y-2"
+            role="status"
+            aria-live="polite"
+          >
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <Loader2 className="w-4 h-4 animate-spin text-primary" />
+              Enviando cupom de troca para a Goldensky...
+            </div>
+            <div className="h-2 w-full overflow-hidden rounded-full bg-background">
+              <div className="h-full w-2/3 rounded-full bg-primary animate-pulse" />
+            </div>
+          </div>
+        )}
+        {erroImpressao && (
+          <div className="rounded-lg bg-danger-light text-danger text-sm px-3 py-2">{erroImpressao}</div>
+        )}
+        {impressaoOk && (
+          <div className="rounded-lg bg-primary-light text-primary-dark text-sm px-3 py-2">
+            Cupom de troca enviado para a Goldensky.
+          </div>
+        )}
+        <div className="flex gap-2">
+          <button
+            onClick={imprimir}
+            disabled={imprimindo}
+            className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border hover:bg-background text-foreground font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+          >
+            {imprimindo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Printer className="w-4 h-4" />}
+            {imprimindo
+              ? "Enviando..."
+              : impressaoOk
+                ? "Imprimir novamente"
+                : erroImpressao
+                  ? "Tentar novamente"
+                  : "Imprimir"}
+          </button>
+          <button
+            onClick={onNovaTroca}
+            disabled={imprimindo}
+            className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition disabled:opacity-50"
+          >
+            Nova troca
+          </button>
+        </div>
+        {/* alternativa quando o agente não está disponível (ex: outro computador) */}
         <button
           onClick={() => window.print()}
-          className="flex-1 flex items-center justify-center gap-2 bg-surface border border-border hover:bg-background text-foreground font-medium py-2.5 rounded-lg transition"
+          disabled={imprimindo}
+          className="w-full text-xs text-muted hover:text-primary underline-offset-2 hover:underline disabled:opacity-50"
         >
-          <Printer className="w-4 h-4" />
-          Imprimir
-        </button>
-        <button
-          onClick={onNovaTroca}
-          className="flex-1 bg-primary hover:bg-primary-dark text-white font-medium py-2.5 rounded-lg transition"
-        >
-          Nova troca
+          Imprimir pelo navegador
         </button>
       </div>
     </div>

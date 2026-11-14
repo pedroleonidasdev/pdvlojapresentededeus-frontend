@@ -1,4 +1,4 @@
-import { Venda } from "@/lib/types";
+import { Troca, Venda } from "@/lib/types";
 
 const AGENTE_CUPOM_URL =
   process.env.NEXT_PUBLIC_GOLDENSKY_CUPOM_URL ?? "http://localhost:9100/imprimir-cupom";
@@ -32,6 +32,59 @@ export async function imprimirCupom(venda: Venda): Promise<void> {
     throw new Error(
       dados?.mensagem ??
         "Não foi possível imprimir o cupom. Verifique se o agente Goldensky está em execução."
+    );
+  }
+}
+
+const AGENTE_CUPOM_TROCA_URL =
+  process.env.NEXT_PUBLIC_GOLDENSKY_CUPOM_TROCA_URL ??
+  AGENTE_CUPOM_URL.replace(/\/imprimir-cupom\/?$/, "/imprimir-cupom-troca");
+
+/** Imprime o cupom não fiscal de uma troca na Goldensky (via agente local). */
+export async function imprimirCupomTroca(troca: Troca): Promise<void> {
+  let resposta: Response;
+  try {
+    resposta = await fetch(AGENTE_CUPOM_TROCA_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        id: troca.id,
+        usuarioNome: troca.usuarioNome,
+        dataHora: troca.dataHora,
+        vendaOrigemId: troca.vendaOrigemId,
+        observacao: troca.observacao,
+        valorDevolvido: troca.valorDevolvido,
+        valorNovo: troca.valorNovo,
+        diferenca: troca.diferenca,
+        formaPagamentoDiferenca: troca.formaPagamentoDiferenca,
+        itensDevolvidos: troca.itensDevolvidos.map((item) => ({
+          id: item.id,
+          produtoNome: item.produtoNome,
+          quantidade: item.quantidade,
+          precoUnitario: item.precoUnitario,
+          subtotal: item.subtotal,
+        })),
+        itensNovos: troca.itensNovos.map((item) => ({
+          id: item.id,
+          produtoNome: item.produtoNome,
+          quantidade: item.quantidade,
+          precoUnitario: item.precoUnitario,
+          subtotal: item.subtotal,
+        })),
+      }),
+    });
+  } catch {
+    throw new Error(
+      "Não foi possível conectar ao agente de impressão neste computador. " +
+        "Verifique se o agente Goldensky está em execução."
+    );
+  }
+
+  const dados = await resposta.json().catch(() => null);
+  if (!resposta.ok) {
+    throw new Error(
+      dados?.mensagem ??
+        "Não foi possível imprimir o cupom de troca. Verifique se o agente Goldensky está em execução."
     );
   }
 }
